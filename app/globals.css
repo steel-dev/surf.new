@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Radix Gray scale */
+@import '@radix-ui/colors/gray.css';
+@import '@radix-ui/colors/gray-dark.css';
+@import '@radix-ui/colors/blue.css';
+@import '@radix-ui/colors/blue-dark.css';
+@import '@radix-ui/colors/green.css';
+@import '@radix-ui/colors/green-dark.css';
+
+@layer base {
+  :root {
+    --background: var(--gray-1);
+    --foreground: var(--gray-12);
+    
+    --card: var(--gray-2);
+    --card-foreground: var(--gray-12);
+    
+    --popover: var(--gray-2);
+    --popover-foreground: var(--gray-12);
+    
+    --primary: var(--gray-9);
+    --primary-foreground: var(--gray-12);
+    
+    --secondary: var(--gray-4);
+    --secondary-foreground: var(--gray-11);
+    
+    --muted: var(--gray-3);
+    --muted-foreground: var(--gray-10);
+    
+    --accent: var(--gray-9);
+    --accent-foreground: var(--gray-12);
+    
+    --destructive: var(--gray-9);
+    --destructive-foreground: var(--gray-12);
+    
+    --border: var(--gray-7);
+    --input: var(--gray-7);
+    --ring: var(--gray-8);
+    
+    --radius: 0.5rem;
+  }
+}
+/* Force dark mode color-scheme if you wish */
+:root {
+  color-scheme: dark;
+}
+
+.settings-input {
+  @apply
+    flex
+    p-[12px]
+    items-center
+    gap-[10px]
+    self-stretch
+    rounded-[20px]
+    border
+    border-[--gray-3]
+    bg-[--gray-2]
+    text-[--gray-12]
+    text-sm;
+}
+
