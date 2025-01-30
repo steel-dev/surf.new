@@ -3,17 +3,5 @@
         "api/index.py": {
             "runtime": "python"
         }
-    },
-    "excludeFiles": [
-        "**/*.pyc",
-        "**/__pycache__/**",
-        ".env",
-        ".git/**",
-        ".venv/**",
-        "automations/**",
-        "docs/**",
-        "logdir/**",
-        "tests/**",
-        "package.json"
-    ]
+    }
 }
