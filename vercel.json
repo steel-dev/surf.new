@@ -1,0 +1,26 @@
+{
+    "builds": [
+        {
+            "src": "api/index.py",
+            "use": "@vercel/python"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/(.*)",
+            "dest": "api/index.py"
+        }
+    ],
+    "excludeFiles": [
+        "**/*.pyc",
+        "**/__pycache__/**",
+        ".env",
+        ".git/**",
+        ".venv/**",
+        "automations/**",
+        "docs/**",
+        "logdir/**",
+        "tests/**",
+        "package.json"
+    ]
+}
