@@ -1,7 +1,7 @@
 {
     "functions": {
         "api/index.py": {
-            "runtime": "python"
+            "runtime": "python@3.12"
         }
     }
 }
