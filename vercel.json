@@ -1,16 +1,9 @@
 {
-    "builds": [
-        {
-            "src": "api/index.py",
-            "use": "@vercel/python"
+    "functions": {
+        "api/index.py": {
+            "runtime": "python"
         }
-    ],
-    "routes": [
-        {
-            "src": "/(.*)",
-            "dest": "api/index.py"
-        }
-    ],
+    },
     "excludeFiles": [
         "**/*.pyc",
         "**/__pycache__/**",
