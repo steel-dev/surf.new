@@ -283,7 +283,7 @@ async def claude_steel_agent(
         ]
 
         try:
-            print("Initializing base_agent...")  # Debug log
+            print("Initializing claude_steel_agent...")  # Debug log
             llm = create_llm(
                 ModelConfig(
                     provider=ModelProvider.ANTHROPIC_COMPUTER_USE,
