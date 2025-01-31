@@ -73,7 +73,7 @@ def create_llm(config: ModelConfig) -> BaseChatModel | Client:
             model=config.model_name or "claude-3-5-sonnet-20241022",
             max_tokens_to_sample=config.max_tokens,
             temperature=config.temperature,
-            api_key=config.api_key,
+            anthropic_api_key=config.api_key,
             **config.extra_params,
         )
     else:

@@ -69,7 +69,8 @@ def trim_images_from_messages(
     image_messages = []
     for msg in reversed(messages):
         if isinstance(msg, ToolMessage):
-            contents = msg.content if isinstance(msg.content, list) else [msg.content]
+            contents = msg.content if isinstance(
+                msg.content, list) else [msg.content]
             has_image = any(
                 c.get("type") == "image" for c in contents if isinstance(c, dict)
             )
@@ -167,7 +168,8 @@ async def claude_steel_agent(
     print("🔥 🔥 🔥 Initializing Steel client... 🔥 🔥 🔥 ")  # Debug log
     print("agent_settings - ", agent_settings)
     print("agent_settings.system_prompt - ", agent_settings.system_prompt)
-    print("agent_settings.num_images_to_keep - ", agent_settings.num_images_to_keep)
+    print("agent_settings.num_images_to_keep - ",
+          agent_settings.num_images_to_keep)
     print(
         "agent_settings.wait_time_between_steps - ",
         agent_settings.wait_time_between_steps,
@@ -195,9 +197,7 @@ async def claude_steel_agent(
 
     print("Connecting to Playwright...")  # Debug log
     async with async_playwright() as p:
-        browser = await p.chromium.connect_over_cdp(
-            f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session.id}"
-        )
+        browser = await p.chromium.connect_over_cdp(f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session.id}")
         print("Playwright connected successfully")  # Debug log
 
         print("Creating page at existing context...")  # Debug log
@@ -291,7 +291,8 @@ async def claude_steel_agent(
                     temperature=model_config.temperature,
                     max_tokens=model_config.max_tokens,
                     api_key=model_config.api_key,
-                    extra_headers={"anthropic-beta": "computer-use-2024-10-22"},
+                    extra_headers={
+                        "anthropic-beta": "computer-use-2024-10-22"},
                 )
             )
             # llm = BetaChatAnthropic(
@@ -358,7 +359,8 @@ async def claude_steel_agent(
                         print(f"========== Result ==========")
                         # print(f"{str(result)[:1000]}")
                         print(f"================================")
-                        message = ToolMessage(content=[result], tool_call_id=tool["id"])
+                        message = ToolMessage(
+                            content=[result], tool_call_id=tool["id"])
                         print(f"=============== MESSAGE ==================")
                         # print(f"{str(message)[:1000]}")
                         print(f"============================================")

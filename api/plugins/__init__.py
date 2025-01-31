@@ -97,7 +97,7 @@ AGENT_CONFIGS = {
         "model_settings": {
             "max_tokens": {
                 "type": SettingType.INTEGER.value,
-                "default": 4096,
+                "default": 4090,
                 "min": 1,
                 "max": 4096,
                 "description": "Maximum number of tokens to generate",

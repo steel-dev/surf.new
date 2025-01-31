@@ -127,9 +127,8 @@ function SettingInput({
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 
-  // Use config.default if value is undefined or [object Object]
-  const currentValue =
-    value === undefined || typeof value === "object" ? config.default : value;
+  // Use config.default if value is undefined
+  const currentValue = value ?? config.default;
 
   // Sanitize number inputs
   const sanitizeNumber = (value: number) => {
@@ -172,7 +171,7 @@ function SettingInput({
                        [&_.absolute]:bg-[--gray-12]"
           />
           <div className="text-sm text-[--gray-11] text-right">
-            {currentValue.toFixed(2)}
+            {Number(currentValue).toFixed(2)}
           </div>
         </div>
       )}
@@ -316,28 +315,42 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
     if (agents && selectedAgent) {
       setSelectedProvider(agents[selectedAgent].supported_models[0].provider);
       setSelectedModel(agents[selectedAgent].supported_models[0].models[0]);
+
+      // Initialize model settings with all default values from the config
       const defaultModelSettings = Object.entries(
         agents[selectedAgent].model_settings
-      ).reduce((acc, [key, value]) => {
-        acc[key] = value.default;
+      ).reduce((acc, [key, config]) => {
+        acc[key] = config.default;
         return acc;
       }, {} as ModelSettings);
+
+      // Initialize agent settings with all default values from the config
       const defaultAgentSettings = Object.entries(
         agents[selectedAgent].agent_settings
-      ).reduce((acc, [key, value]) => {
-        acc[key] = value.default;
+      ).reduce((acc, [key, config]) => {
+        acc[key] = config.default;
         return acc;
       }, {} as AgentSettings);
+
       setModelSettings(defaultModelSettings);
       setAgentSettings(defaultAgentSettings);
     }
-  }, [selectedAgent]);
+  }, [selectedAgent, agents]);
 
-  useEffect(() => {}, [
-    agents,
-    currentSettings?.selectedAgent,
-    selectedProvider,
-  ]);
+  // Effect to update selected model when provider changes
+  useEffect(() => {
+    if (agents && selectedAgent && selectedProvider) {
+      // Find the supported models for the selected provider
+      const providerModels = agents[selectedAgent].supported_models.find(
+        (m) => m.provider === selectedProvider
+      );
+
+      // If we found models for this provider, set the first one as default
+      if (providerModels && providerModels.models.length > 0) {
+        setSelectedModel(providerModels.models[0]);
+      }
+    }
+  }, [selectedProvider, selectedAgent, agents]);
 
   // When setting agent/model settings, store only the values, not the config objects
   const handleSettingChange = (
@@ -346,12 +359,21 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
     value: any
   ) => {
     if (settingType === "model") {
-      setSelectedModel(value);
+      setModelSettings(
+        (prev) =>
+          ({
+            ...(prev || {}),
+            [key]: value,
+          } as ModelSettings)
+      );
     } else {
-      setAgentSettings((prev) => ({
-        ...prev,
-        [key]: value,
-      }));
+      setAgentSettings(
+        (prev) =>
+          ({
+            ...(prev || {}),
+            [key]: value,
+          } as AgentSettings)
+      );
     }
   };
 
