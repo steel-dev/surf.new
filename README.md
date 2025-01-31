@@ -90,7 +90,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Shadcn UI](https://ui.shadcn.com/) - UI Components
 - [Tailwind CSS](https://tailwindcss.com/) - Styling
 - [Vercel AI SDK](https://sdk.vercel.ai/) - AI Chat Interface
-- [Langchain] ()
+- [Langchain](https://python.langchain.com/docs/introduction/) - Agent Framework
 
 ---
 
