@@ -40,6 +40,7 @@ async def browser_use_agent(
     id = 0
     last_tool_call_ids = []
     finished = False
+    tool_call_batches = []
     while True:
         # Process all new thoughts
         thoughts = agent.history.model_thoughts()
@@ -53,18 +54,21 @@ async def browser_use_agent(
 
         # Process all new actions
         actions = agent.history.model_actions()
-        for action in actions[last_action_index + 1 :]:
-            if not action.get("done"):
-                tool_calls = []
-                for index, key in enumerate(action.keys()):
-                    tool_call_id = f"tool_call_{id + index}"
-                    tool_calls.append(
-                        ToolCall(name=key, args=action[key], id=tool_call_id)
-                    )
-                    last_tool_call_ids.append(tool_call_id)
-                    id += 1
-                tool_call_message = AIMessage(content="", tool_calls=tool_calls)
-                yield tool_call_message
+        if actions[last_action_index + 1 :]:
+            tool_calls = []
+            print(f"New actions: {len(actions[last_action_index + 1 :])}")
+            for action in actions[last_action_index + 1 :]:
+                if not action.get("done"):
+                    for index, key in enumerate(action.keys()):
+                        tool_call_id = f"tool_call_{id + index}"
+                        tool_calls.append(
+                            ToolCall(name=key, args=action[key], id=tool_call_id)
+                        )
+                        last_tool_call_ids.append(tool_call_id)
+                        id += 1
+            tool_call_message = AIMessage(content="", tool_calls=tool_calls)
+            print(f"Tool call length: {len(tool_call_message.tool_calls)}")
+            yield tool_call_message
         last_action_index = len(actions) - 1 if actions else -1
 
         # Process all new results
@@ -81,6 +85,8 @@ async def browser_use_agent(
                 )
         last_result_index = len(results) - 1 if results else -1
         if finished and agent_task.done():
+            break
+        if agent.consecutive_failures == agent.max_failures:
             break
         if cancel_event and cancel_event.is_set():
             agent.stop()

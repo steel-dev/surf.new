@@ -81,7 +81,9 @@ async def handle_chat(request: ChatRequest):
 
         if not request.session_id:
             return Response(
-                status_code=400, content="Session ID is required", media_type="text/plain"
+                status_code=400,
+                content="Session ID is required",
+                media_type="text/plain",
             )
 
         model_config_args = {
@@ -103,7 +105,9 @@ async def handle_chat(request: ChatRequest):
                 request.model_settings.frequency_penalty
             )
         if hasattr(request.model_settings, "presence_penalty"):
-            model_config_args["presence_penalty"] = request.model_settings.presence_penalty
+            model_config_args["presence_penalty"] = (
+                request.model_settings.presence_penalty
+            )
 
         model_config = ModelConfig(**model_config_args)
 
@@ -127,11 +131,13 @@ async def handle_chat(request: ChatRequest):
         )
 
         # Directly wrap the agent stream with the Vercel AI format
-        streaming_response = stream_vercel_format(stream=web_agent_stream)
+        streaming_response = stream_vercel_format(
+            stream=web_agent_stream,
+            is_browser_use=request.agent_type == WebAgentType.BROWSER_USE,
+        )
 
         # Use background=on_disconnect to catch client-aborted requests
-        response = StreamingResponse(
-            streaming_response, background=on_disconnect)
+        response = StreamingResponse(streaming_response, background=on_disconnect)
         response.headers["x-vercel-ai-data-stream"] = "v1"
         # response.headers["model_used"] = request.model_name
         return response
@@ -141,13 +147,10 @@ async def handle_chat(request: ChatRequest):
             "error": {
                 "message": str(e),
                 "type": type(e).__name__,
-                "code": getattr(e, 'code', 500)
+                "code": getattr(e, "code", 500),
             }
         }
-        raise HTTPException(
-            status_code=getattr(e, 'code', 500),
-            detail=error_response
-        )
+        raise HTTPException(status_code=getattr(e, "code", 500), detail=error_response)
 
 
 @app.get("/api/agents")

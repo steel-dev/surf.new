@@ -13,6 +13,7 @@ https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
 
 async def stream_vercel_format(
     stream: AsyncGenerator[str, None],
+    is_browser_use: bool = False,
 ) -> AsyncGenerator[str, None]:
     """
     stream: yields partial text chunks from the LLM in the Vercel AI Data Stream Protocol format
@@ -83,6 +84,7 @@ async def stream_vercel_format(
                     else:
                         yield f"0:{json.dumps(chunk.content)}\n"
                 for tool_call in chunk.tool_calls:
+                    print(f"Emitting tool call: {tool_call.get('id')}")
                     pending_tool_calls.add(tool_call.get("id"))
                     yield f'9:{{"toolCallId":"{tool_call.get("id")}","toolName":"{tool_call.get("name")}","args":{json.dumps(tool_call.get("args"))}}}\n'
 
@@ -94,6 +96,13 @@ async def stream_vercel_format(
                 if chunk.tool_call_id in pending_tool_calls:
                     pending_tool_calls.remove(chunk.tool_call_id)
                 yield f'a:{{"toolCallId":"{chunk.tool_call_id}","result":{json.dumps(chunk.content)}}}\n'
+
+                print(f"Browser use: {is_browser_use}")
+                if is_browser_use:
+                    print(f"Emitting remaining tool calls: {pending_tool_calls}")
+                    for tool_call in pending_tool_calls:
+                        yield f'a:{{"toolCallId":"{tool_call}","result":{json.dumps(chunk.content)}}}\n'
+                        pending_tool_calls.remove(tool_call)
 
                 # Check if this is the last tool result by looking at stop_reason
                 if len(pending_tool_calls) == 0:
