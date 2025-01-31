@@ -47,7 +47,10 @@ STEEL_API_KEY = os.getenv("STEEL_API_KEY")
 STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
 STEEL_API_URL = os.getenv("STEEL_API_URL")
 
-def trim_images_from_messages(messages: List[BaseMessage], num_images_to_keep: int) -> List[BaseMessage]:
+
+def trim_images_from_messages(
+    messages: List[BaseMessage], num_images_to_keep: int
+) -> List[BaseMessage]:
     """
     Trim images from message history keeping only the N most recent ones.
     Replaces removed images with placeholder text.
@@ -66,12 +69,9 @@ def trim_images_from_messages(messages: List[BaseMessage], num_images_to_keep: i
     image_messages = []
     for msg in reversed(messages):
         if isinstance(msg, ToolMessage):
-            contents = msg.content if isinstance(
-                msg.content, list) else [msg.content]
+            contents = msg.content if isinstance(msg.content, list) else [msg.content]
             has_image = any(
-                c.get('type') == 'image'
-                for c in contents
-                if isinstance(c, dict)
+                c.get("type") == "image" for c in contents if isinstance(c, dict)
             )
             if has_image:
                 image_messages.append(msg)
@@ -90,26 +90,28 @@ def trim_images_from_messages(messages: List[BaseMessage], num_images_to_keep: i
         if isinstance(msg.content, list):
             new_content = []
             for content in msg.content:
-                if isinstance(content, dict) and content.get('type') == 'image':
+                if isinstance(content, dict) and content.get("type") == "image":
                     if keep_count > 0:
                         new_content.append(content)
                         keep_count -= 1
                     else:
                         # Replace image with placeholder
-                        new_content.append({
-                            'type': 'text',
-                            'text': '[Previous image removed to conserve context window]'
-                        })
+                        new_content.append(
+                            {
+                                "type": "text",
+                                "text": "[Previous image removed to conserve context window]",
+                            }
+                        )
                 else:
                     new_content.append(content)
             msg.content = new_content
-        elif isinstance(msg.content, dict) and msg.content.get('type') == 'image':
+        elif isinstance(msg.content, dict) and msg.content.get("type") == "image":
             if keep_count > 0:
                 keep_count -= 1
             else:
                 msg.content = {
-                    'type': 'text',
-                    'text': '[Previous image removed to conserve context window]'
+                    "type": "text",
+                    "text": "[Previous image removed to conserve context window]",
                 }
 
     return messages_copy
@@ -165,10 +167,11 @@ async def claude_steel_agent(
     print("🔥 🔥 🔥 Initializing Steel client... 🔥 🔥 🔥 ")  # Debug log
     print("agent_settings - ", agent_settings)
     print("agent_settings.system_prompt - ", agent_settings.system_prompt)
-    print("agent_settings.num_images_to_keep - ",
-          agent_settings.num_images_to_keep)
-    print("agent_settings.wait_time_between_steps - ",
-          agent_settings.wait_time_between_steps)
+    print("agent_settings.num_images_to_keep - ", agent_settings.num_images_to_keep)
+    print(
+        "agent_settings.wait_time_between_steps - ",
+        agent_settings.wait_time_between_steps,
+    )
     print("model_config - ", model_config)
     print("model_config.model_name - ", model_config.model_name)
     print("model_config.temperature - ", model_config.temperature)
@@ -204,10 +207,14 @@ async def claude_steel_agent(
         print("Page created successfully")  # Debug log
 
         tools_to_use = {
-            "go_to_url": GoToUrlTool(page, wait_time=agent_settings.wait_time_between_steps),
+            "go_to_url": GoToUrlTool(
+                page, wait_time=agent_settings.wait_time_between_steps
+            ),
             "get_current_url": GetCurrentUrlTool(page),
             "save_to_memory": SaveToMemoryTool(),
-            "computer": ClaudeComputerTool(page, wait_time=agent_settings.wait_time_between_steps),
+            "computer": ClaudeComputerTool(
+                page, wait_time=agent_settings.wait_time_between_steps
+            ),
             "wait": WaitTool(page),
         }
         computer_tools = [
@@ -267,11 +274,11 @@ async def claude_steel_agent(
                             "description": "Number of seconds to wait",
                             "minimum": 0,
                             "maximum": 30,
-                            "default": 2
+                            "default": 2,
                         }
                     },
-                    "required": ["seconds"]
-                }
+                    "required": ["seconds"],
+                },
             },
         ]
 
@@ -283,8 +290,8 @@ async def claude_steel_agent(
                     model_name="claude-3-5-sonnet-20241022",
                     temperature=model_config.temperature,
                     max_tokens=model_config.max_tokens,
-                    extra_headers={
-                        "anthropic-beta": "computer-use-2024-10-22"},
+                    api_key=model_config.api_key,
+                    extra_headers={"anthropic-beta": "computer-use-2024-10-22"},
                 )
             )
             # llm = BetaChatAnthropic(
@@ -302,13 +309,12 @@ async def claude_steel_agent(
 
             print("Converting chat history to base messages...")  # Debug log
             base_messages = chat_dict_to_base_messages(history)
-            
-            
 
             # Add system message if provided in agent_settings
             if agent_settings.system_prompt:
-                base_messages.insert(0, SystemMessage(
-                    content=agent_settings.system_prompt))
+                base_messages.insert(
+                    0, SystemMessage(content=agent_settings.system_prompt)
+                )
 
             print(f"Base messages created: {base_messages}")  # Debug log
 
