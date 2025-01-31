@@ -8,7 +8,7 @@ interface SteelContextType {
   currentSession: Steel.Session | null;
   createSession: () => Promise<Steel.Session | null>;
   isCreatingSession: boolean;
-  resetSession: () => void;
+  resetSession: () => Promise<void>;
   sessionTimeElapsed: number;
   isExpired: boolean;
   maxSessionDuration: number;
@@ -52,6 +52,37 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
     };
   }, [currentSession, isExpired]);
 
+  // Helper function to release a session
+  const releaseSession = async (sessionId: string) => {
+    try {
+      await fetch(`/api/sessions/${sessionId}/release`, {
+        method: "POST",
+      });
+    } catch (error) {
+      console.error("Failed to release session:", error);
+    }
+  };
+
+  // Cleanup effect when page is closed/unloaded
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (currentSession?.id) {
+        // Use sendBeacon which is designed specifically for cleanup calls that need to survive page unload
+        navigator.sendBeacon(`/api/sessions/${currentSession.id}/release`);
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      // Handle normal unmounting separately
+      if (currentSession?.id) {
+        releaseSession(currentSession.id);
+      }
+    };
+  }, [currentSession?.id]);
+
   async function createSession() {
     try {
       if (currentSettings) {
@@ -80,7 +111,11 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const resetSession = () => {
+  const resetSession = async () => {
+    if (currentSession?.id) {
+      await releaseSession(currentSession.id);
+    }
+
     setCurrentSession(null);
     setIsCreatingSession(false);
     setSessionTimeElapsed(0);

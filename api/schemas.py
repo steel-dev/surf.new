@@ -10,7 +10,7 @@ from .utils.types import AgentSettings, ModelSettings
 class SessionRequest(BaseModel):
     agent_type: WebAgentType
     api_key: Optional[str] = None
-    timeout: Optional[int] = 1000
+    timeout: Optional[int] = 90000
 
 
 class ChatRequest(BaseModel):
