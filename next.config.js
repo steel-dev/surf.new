@@ -17,24 +17,19 @@ const nextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination:
-          process.env.NODE_ENV === "development"
-            ? `http://localhost:8000/api/:path*`
-            : `http://${process.env.API_URL}/api/:path*`,
+        destination: `${
+          process.env.API_URL || "http://localhost:8000"
+        }/api/:path*`,
       },
       {
         source: "/docs",
-        destination:
-          process.env.NODE_ENV === "development"
-            ? `http://localhost:8000/docs`
-            : `http://${process.env.API_URL}/docs`,
+        destination: `${process.env.API_URL || "http://localhost:8000"}/docs`,
       },
       {
         source: "/openapi.json",
-        destination:
-          process.env.NODE_ENV === "development"
-            ? `http://localhost:8000/openapi.json`
-            : `http://${process.env.API_URL}/openapi.json`,
+        destination: `${
+          process.env.API_URL || "http://localhost:8000"
+        }/openapi.json`,
       },
     ];
   },
