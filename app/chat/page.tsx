@@ -81,14 +81,12 @@ function UserMessage({ content }: UserMessageProps) {
   const isLongMessage = longestLine > 60;
 
   return (
-    <div className="flex justify-end">
+    <div className="flex justify-end w-full">
       <div
         className={`
-          inline-flex p-3
+          inline-flex p-3 max-w-[85%] w-fit
           ${
-            isLongMessage || hasLineBreaks
-              ? "rounded-3xl max-w-[85%]"
-              : "rounded-full px-4"
+            isLongMessage || hasLineBreaks ? "rounded-3xl" : "rounded-full px-4"
           }
           bg-[--blue-9] shrink-0
         `}
@@ -97,7 +95,7 @@ function UserMessage({ content }: UserMessageProps) {
           className={`
             text-[--gray-12] text-base font-normal 
             font-['Geist'] leading-normal whitespace-pre-wrap
-            break-words max-w-full
+            break-words w-full overflow-hidden
           `}
         >
           <MarkdownText content={content} />

@@ -72,12 +72,12 @@ export function NavBar() {
               <span className="px-1 font-geist">New Chat</span>
             </Button>
 
-            <Button
+            {/* <Button
               size="sm"
               className="bg-[--gray-12] rounded-full hover:bg-[--gray-12]/90 h-8"
             >
               <span className="px-1 text-[--gray-1] font-geist">Sign In</span>
-            </Button>
+            </Button> */}
           </div>
 
           {/* Mobile Menu Button */}
@@ -125,9 +125,9 @@ export function NavBar() {
             <span className="px-1 font-geist">New Chat</span>
           </Button>
 
-          <Button className="w-full bg-[#ededed] rounded-full hover:bg-[#ededed]/90 justify-center h-8">
+          {/* <Button className="w-full bg-[#ededed] rounded-full hover:bg-[#ededed]/90 justify-center h-8">
             <span className="px-1 text-neutral-900 font-geist">Sign In</span>
-          </Button>
+          </Button> */}
 
           {/* Footer */}
           <div className="mt-6 flex flex-col gap-2">

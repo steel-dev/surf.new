@@ -121,7 +121,21 @@ export default function Home() {
           {/* Starter Buttons */}
           <div className="flex flex-col gap-2 mt-4">
             <Link
-              href="/chat"
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                const text =
+                  "Find me the cheapest flight from San Francisco to Tokyo during the second week of February.";
+                if (!loading) {
+                  resetSession();
+                  if (!checkApiKey()) {
+                    pendingQueryRef.current = text;
+                    setShowApiKeyModal(true);
+                    return;
+                  }
+                  proceedToChat(text);
+                }
+              }}
               className="w-full p-4 bg-[--gray-1] rounded-[20px] border border-[--gray-3] hover:bg-[--gray-2] transition-colors"
             >
               <div className="flex items-start gap-2">
@@ -133,15 +147,29 @@ export default function Home() {
                     Scrape & Compare
                   </div>
                   <div className="text-[--gray-11] text-sm font-medium leading-tight">
-                    Give me a list of one way flights today from Chicago to
-                    Paris in business class
+                    Find me the cheapest flight from San Francisco to Tokyo the
+                    2nd week of February.
                   </div>
                 </div>
               </div>
             </Link>
 
             <Link
-              href="/chat"
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                const text =
+                  "Go to Hacker News and summarize the top 5 stories for me. Format your response in markdown.";
+                if (!loading) {
+                  resetSession();
+                  if (!checkApiKey()) {
+                    pendingQueryRef.current = text;
+                    setShowApiKeyModal(true);
+                    return;
+                  }
+                  proceedToChat(text);
+                }
+              }}
               className="w-full p-4 bg-[--gray-1] rounded-[20px] border border-[--gray-3] hover:bg-[--gray-2] transition-colors"
             >
               <div className="flex items-start gap-2">
@@ -153,15 +181,28 @@ export default function Home() {
                     Collect a List
                   </div>
                   <div className="text-[--gray-11] text-sm font-medium leading-tight">
-                    Assemble a Halloween Costume, I want to dress up as Luffy
-                    from One Piece
+                    Go to Hacker News and summarize the top 5 stories for me.
                   </div>
                 </div>
               </div>
             </Link>
 
             <Link
-              href="/chat"
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                const text =
+                  "Investigate the trade-in value for iPhone 13 Pro Max on apple.com";
+                if (!loading) {
+                  resetSession();
+                  if (!checkApiKey()) {
+                    pendingQueryRef.current = text;
+                    setShowApiKeyModal(true);
+                    return;
+                  }
+                  proceedToChat(text);
+                }
+              }}
               className="w-full p-4 bg-[--gray-1] rounded-[20px] border border-[--gray-3] hover:bg-[--gray-2] transition-colors"
             >
               <div className="flex items-start gap-2">
@@ -173,8 +214,7 @@ export default function Home() {
                     Investigate for me
                   </div>
                   <div className="text-[--gray-11] text-sm font-medium leading-tight">
-                    Investigate the trade-in value for iPhone 13 Pro Max on
-                    apple.com
+                    Investigate the trade-in value for iPhone 13 Pro Max on apple.com
                   </div>
                 </div>
               </div>
