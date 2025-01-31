@@ -5,7 +5,6 @@ from typing import (
     Dict,
     List,
     Mapping,
-    Iterator,
     Optional,
     Sequence,
     Type,
@@ -20,8 +19,6 @@ from .tools import (
     GoToUrlTool,
     GetCurrentUrlTool,
     ClaudeComputerTool,
-    GoToUrlParams,
-    GetCurrentUrlParams,
     SaveToMemoryTool,
     WaitTool,
 )
@@ -171,9 +168,6 @@ async def claude_steel_agent(
         steel_api_key=STEEL_API_KEY,
         base_url=STEEL_API_URL,
     )
-    print("Steel client initialized successfully")  # Debug log
-
-    print("Creating Steel session...")  # Debug log
     session = client.sessions.retrieve(session_id)
     print(f"Session retrieved successfully with Session ID: {session.id}.")
     print(f"You can view the session live at {session.session_viewer_url}\n")

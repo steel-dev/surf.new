@@ -20,21 +20,21 @@ const nextConfig = {
         destination:
           process.env.NODE_ENV === "development"
             ? `http://localhost:8000/api/:path*`
-            : `https://${process.env.API_URL}/api/:path*`,
+            : `http://${process.env.API_URL}/api/:path*`,
       },
       {
         source: "/docs",
         destination:
           process.env.NODE_ENV === "development"
             ? `http://localhost:8000/docs`
-            : `https://${process.env.API_URL}/docs`,
+            : `http://${process.env.API_URL}/docs`,
       },
       {
         source: "/openapi.json",
         destination:
           process.env.NODE_ENV === "development"
             ? `http://localhost:8000/openapi.json`
-            : `https://${process.env.API_URL}/openapi.json`,
+            : `http://${process.env.API_URL}/openapi.json`,
       },
     ];
   },
