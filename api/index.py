@@ -53,11 +53,11 @@ async def create_session(request: SessionRequest):
                 "width": 1280,
                 "height": 800,
             },
-            timeout=request.timeout,
+            api_timeout=request.timeout,
         )
     else:
         return steel_client.sessions.create(
-            timeout=request.timeout,
+            api_timeout=request.timeout,
         )
 
 
