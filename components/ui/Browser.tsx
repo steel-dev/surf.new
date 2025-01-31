@@ -117,12 +117,7 @@ export function Browser() {
             className="w-full h-full rounded-sm border border-[--gray-3]"
           />
         ) : (
-          <Image
-            src="/placeholder-screenshot.png"
-            alt="Browser placeholder"
-            fill
-            className="object-cover"
-          />
+          <div className="w-full h-full" />
         )}
 
         <div className="absolute left-[372px] top-[236px] text-white text-base font-normal font-['Geist'] leading-normal opacity-0">
