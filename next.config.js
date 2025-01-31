@@ -17,15 +17,15 @@ const nextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: `${process.env.API_URL}/api/:path*`,
+        destination: `http://${process.env.API_URL}/api/:path*`,
       },
       {
         source: "/docs",
-        destination: `${process.env.API_URL}/docs`,
+        destination: `http://${process.env.API_URL}/docs`,
       },
       {
         source: "/openapi.json",
-        destination: `${process.env.API_URL}/openapi.json`,
+        destination: `http://${process.env.API_URL}/openapi.json`,
       },
     ];
   },
