@@ -100,7 +100,8 @@ async def stream_vercel_format(
                 print(f"Browser use: {is_browser_use}")
                 if is_browser_use:
                     print(f"Emitting remaining tool calls: {pending_tool_calls}")
-                    for tool_call in pending_tool_calls:
+                    tools_to_emit = sorted(list(pending_tool_calls))
+                    for tool_call in tools_to_emit:
                         yield f'a:{{"toolCallId":"{tool_call}","result":{json.dumps(chunk.content)}}}\n'
                         pending_tool_calls.remove(tool_call)
 
