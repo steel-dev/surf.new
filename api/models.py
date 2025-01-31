@@ -26,6 +26,7 @@ class ModelConfig:
         top_p: Optional[float] = None,
         frequency_penalty: Optional[float] = None,
         presence_penalty: Optional[float] = None,
+        api_key: Optional[str] = None,
         **kwargs,
     ):
         self.provider = provider
@@ -37,6 +38,7 @@ class ModelConfig:
         self.top_p = top_p
         self.frequency_penalty = frequency_penalty
         self.presence_penalty = presence_penalty
+        self.api_key = api_key
 
     def __repr__(self):
         return (
@@ -48,7 +50,8 @@ class ModelConfig:
             f"top_k={self.top_k}, "
             f"top_p={self.top_p}, "
             f"frequency_penalty={self.frequency_penalty}, "
-            f"presence_penalty={self.presence_penalty})"
+            f"presence_penalty={self.presence_penalty}, "
+            f"api_key={'[SET]' if self.api_key else '[NOT SET]'})"
         )
 
     def model_dump(self):

@@ -1,3 +1,4 @@
+
 from api.plugins import WebAgentType
 from .utils.prompt import ClientMessage
 from pydantic import BaseModel
@@ -17,5 +18,6 @@ class ChatRequest(BaseModel):
     agent_type: WebAgentType
     provider: ModelProvider = ModelProvider.ANTHROPIC
     messages: List[ClientMessage]
+    api_key: str = ""
     agent_settings: AgentSettings
     model_settings: ModelSettings

@@ -34,6 +34,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Info } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useChatContext } from "@/app/contexts/ChatContext";
+import { useSteelContext } from "@/app/contexts/SteelContext";
 
 interface AgentConfig {
   name: string;
@@ -75,6 +78,7 @@ interface SettingConfig {
 export function SettingsButton() {
   const { currentSettings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
+  const router = useRouter();
   return (
     <Sheet open={showSettings} onOpenChange={setShowSettings}>
       <SheetTrigger asChild>
@@ -225,6 +229,9 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
   const { currentSettings, updateSettings } = useSettings();
   const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const { clearInitialState } = useChatContext();
+  const { resetSession } = useSteelContext();
 
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -287,6 +294,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
             selectedModel: defaultModel,
             modelSettings: defaultModelSettings,
             agentSettings: defaultAgentSettings,
+            providerApiKeys: {}, // Start with empty object for new settings
           });
           setSelectedAgent(firstAgentKey);
           setSelectedProvider(defaultProvider);
@@ -361,14 +369,26 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
     ) {
       return;
     }
+
+    // Update settings first
     updateSettings({
       selectedAgent,
       selectedProvider,
       selectedModel,
       modelSettings,
       agentSettings,
+      providerApiKeys: currentSettings?.providerApiKeys || {},
     });
+
+    // Clear all state
+    clearInitialState();
+    resetSession();
+
+    // Close settings drawer
     closeSettings();
+
+    // Navigate to home page
+    router.push("/");
   }
 
   if (loading || !agents) {
@@ -486,6 +506,71 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+          )}
+
+          {/* API Key Management */}
+          {selectedProvider && (
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">
+                  {selectedProvider} API Key
+                </label>
+                {currentSettings?.providerApiKeys?.[selectedProvider] && (
+                  <button
+                    onClick={() => {
+                      // Clear the API key for this provider
+                      const newKeys = { ...currentSettings.providerApiKeys };
+                      delete newKeys[selectedProvider];
+                      updateSettings({
+                        ...currentSettings,
+                        providerApiKeys: newKeys,
+                      });
+                    }}
+                    className="text-sm text-[--gray-11] hover:text-[--gray-12]"
+                  >
+                    Clear Key
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <Input
+                  type="password"
+                  placeholder={
+                    currentSettings?.providerApiKeys?.[selectedProvider]
+                      ? "••••••••••••••••"
+                      : `Enter ${selectedProvider} API Key`
+                  }
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="settings-input pr-20"
+                />
+                {apiKey && (
+                  <button
+                    onClick={() => {
+                      // Save the API key
+                      const currentKeys =
+                        currentSettings?.providerApiKeys || {};
+                      updateSettings({
+                        ...currentSettings!,
+                        providerApiKeys: {
+                          ...currentKeys,
+                          [selectedProvider]: apiKey,
+                        },
+                      });
+                      setApiKey(""); // Clear input after saving
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 
+                             px-3 py-1 text-sm bg-[--gray-3] hover:bg-[--gray-4] 
+                             text-[--gray-12] rounded-full transition-colors"
+                  >
+                    Save
+                  </button>
+                )}
+              </div>
+              <p className="text-sm text-[--gray-11]">
+                Your API key will be stored locally and never shared
+              </p>
             </div>
           )}
 

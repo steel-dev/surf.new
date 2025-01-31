@@ -57,6 +57,7 @@ def create_llm(config: ModelConfig) -> BaseChatModel | Client:
             model_name=config.model_name or "gpt-4o-mini",
             temperature=config.temperature,
             max_tokens=config.max_tokens,
+            api_key=config.api_key,
             **config.extra_params,
         )
     elif config.provider == ModelProvider.ANTHROPIC:
@@ -64,14 +65,15 @@ def create_llm(config: ModelConfig) -> BaseChatModel | Client:
             model=config.model_name or "claude-3-5-sonnet-latest",
             max_tokens_to_sample=config.max_tokens,
             temperature=config.temperature,
+            api_key=config.api_key,
             **config.extra_params,
-
         )
     elif config.provider == ModelProvider.ANTHROPIC_COMPUTER_USE:
         return BetaChatAnthropic(
             model=config.model_name or "claude-3-5-sonnet-20241022",
             max_tokens_to_sample=config.max_tokens,
             temperature=config.temperature,
+            api_key=config.api_key,
             **config.extra_params,
         )
     else:

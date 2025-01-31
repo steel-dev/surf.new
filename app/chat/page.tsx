@@ -14,6 +14,11 @@ import { Browser } from "@/components/ui/Browser";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { AuthModal } from "@/components/ui/AuthModal";
+import { AlertCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface UserMessageProps {
   content: string;
@@ -92,7 +97,7 @@ function ChatScrollAnchor({
 }
 
 export default function ChatPage() {
-  const { currentSettings } = useSettings();
+  const { currentSettings, updateSettings } = useSettings();
   const {
     currentSession,
     createSession,
@@ -105,6 +110,39 @@ export default function ChatPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasShownConnection, setHasShownConnection] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
+
+  // Add API key modal state and handlers
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const pendingMessageRef = useRef<string>("");
+
+  const checkApiKey = () => {
+    const provider = currentSettings?.selectedProvider;
+    if (!provider) return false;
+    return !!currentSettings?.providerApiKeys?.[provider];
+  };
+
+  const handleApiKeySubmit = (key: string) => {
+    const provider = currentSettings?.selectedProvider;
+    if (!provider) return;
+
+    // Update settings with new API key
+    const currentKeys = currentSettings?.providerApiKeys || {};
+    updateSettings({
+      ...currentSettings!,
+      providerApiKeys: {
+        ...currentKeys,
+        [provider]: key,
+      },
+    });
+    setShowApiKeyModal(false);
+
+    // Instead of calling handleSend again, set the initial message directly
+    if (pendingMessageRef.current) {
+      setInitialMessage(pendingMessageRef.current);
+      pendingMessageRef.current = "";
+    }
+  };
 
   const {
     messages,
@@ -126,6 +164,10 @@ export default function ChatPage() {
       session_id: currentSession?.id,
       agent_type: currentSettings?.selectedAgent,
       provider: currentSettings?.selectedProvider,
+      api_key:
+        currentSettings?.providerApiKeys?.[
+          currentSettings?.selectedProvider || ""
+        ] || "",
       model_settings: {
         model_choice: currentSettings?.selectedModel,
         max_tokens: Number(currentSettings?.modelSettings.max_tokens),
@@ -158,7 +200,14 @@ export default function ChatPage() {
       console.log("Chat FINISHED:", message);
     },
     onError: (error) => {
-      console.error("Chat error:", error);
+      // console.error("Chat error:", error);
+      // Display destructive toast with error message
+      toast({
+        title: "Error",
+        description: error?.message || "An unexpected error occurred",
+        className:
+          "text-[var(--gray-12)] border border-[var(--red-11)] bg-[var(--red-2)] text-sm",
+      });
     },
     onToolCall: (toolCall) => {
       console.log("Chat tool call:", toolCall);
@@ -207,6 +256,12 @@ export default function ChatPage() {
     attachments: File[]
   ) {
     e.preventDefault();
+    // Check for API key first
+    if (!checkApiKey()) {
+      pendingMessageRef.current = messageText;
+      setShowApiKeyModal(true);
+      return;
+    }
     setIsSubmitting(true);
     if (messages.length === 0) {
       setInitialMessage(messageText);
@@ -499,6 +554,13 @@ export default function ChatPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* API Key Modal */}
+      <AuthModal
+        provider={currentSettings?.selectedProvider || ""}
+        isOpen={showApiKeyModal}
+        onSubmit={handleApiKeySubmit}
+      />
     </>
   );
 }

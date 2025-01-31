@@ -27,6 +27,9 @@ export interface SurfSettings {
   selectedModel: string;
   modelSettings: ModelSettings;
   agentSettings: AgentSettings;
+  providerApiKeys: {
+    [provider: string]: string;
+  };
 }
 
 interface SettingsContextType {

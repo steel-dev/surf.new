@@ -5,17 +5,24 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useChatContext } from "./contexts/ChatContext";
 import { ChatInput } from "@/components/ui/ChatInput";
+import { AuthModal } from "@/components/ui/AuthModal";
 import Link from "next/link";
 import { SearchIcon, ListIcon, Search } from "lucide-react";
+import { useSettings } from "./contexts/SettingsContext";
 import { useSteelContext } from "./contexts/SteelContext";
+import { cn } from "@/lib/utils";
 
 export default function Home() {
   const router = useRouter();
   const { resetSession } = useSteelContext();
   const { setInitialMessage, clearInitialState } = useChatContext();
+  const { currentSettings, updateSettings } = useSettings();
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  // Store the pending query when waiting for API key
+  const pendingQueryRef = useRef<string>("");
 
   // Clear all state on mount
   useEffect(() => {
@@ -30,6 +37,33 @@ export default function Home() {
     return () => clearTimeout(focusTimer);
   }, []); // Empty deps array means this runs once on mount
 
+  const checkApiKey = () => {
+    const provider = currentSettings?.selectedProvider;
+    if (!provider) return false;
+    return !!currentSettings?.providerApiKeys?.[provider];
+  };
+  const handleApiKeySubmit = (key: string) => {
+    const provider = currentSettings?.selectedProvider;
+    if (!provider) return;
+    // Update settings with new API key
+    const currentKeys = currentSettings?.providerApiKeys || {};
+    updateSettings({
+      ...currentSettings!,
+      providerApiKeys: {
+        ...currentKeys,
+        [provider]: key,
+      },
+    });
+    setShowApiKeyModal(false);
+    // Process the pending query
+    if (pendingQueryRef.current) {
+      proceedToChat(pendingQueryRef.current);
+    }
+  };
+  const proceedToChat = (queryText: string) => {
+    setInitialMessage(queryText);
+    router.push(`/chat`);
+  };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() || loading) return;
@@ -37,9 +71,13 @@ export default function Home() {
     try {
       setLoading(true);
       resetSession();
-      setInitialMessage(query);
-      // Finally navigate to /chat
-      router.push(`/chat`);
+      // Check if we have the API key
+      if (!checkApiKey()) {
+        pendingQueryRef.current = query;
+        setShowApiKeyModal(true);
+        return;
+      }
+      proceedToChat(query);
     } catch (err) {
       console.error("Error creating session:", err);
       alert("Failed to create session. Please try again.");
@@ -144,6 +182,12 @@ export default function Home() {
           </div>
         </div>
       </div>
+      {/* Add API Key Modal */}
+      <AuthModal
+        provider={currentSettings?.selectedProvider || ""}
+        isOpen={showApiKeyModal}
+        onSubmit={handleApiKeySubmit}
+      />
     </main>
   );
 }

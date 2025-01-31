@@ -10,6 +10,7 @@ import { ChatProvider } from "./contexts/ChatContext";
 import { NavBar } from "@/components/ui/navbar";
 import localFont from "next/font/local";
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/toaster";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -54,6 +55,7 @@ export default function RootLayout({
                 {/* Add padding to account for fixed navbar */}
                 {children}
               </div>
+              <Toaster />
             </SteelProvider>
           </SettingsProvider>
         </ChatProvider>

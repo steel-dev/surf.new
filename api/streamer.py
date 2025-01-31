@@ -62,9 +62,7 @@ async def stream_vercel_format(
                                 try:
                                     # Validate it's valid JSON before emitting
                                     json.loads(tool_call["arguments"])
-                                    print(
-                                        f"DEBUG: Arguments are valid JSON, emitting tool call: {tool_call['id']}"
-                                    )
+
                                     yield '9:{{"toolCallId":"{id}","toolName":"{name}","args":{args}}}\n'.format(
                                         id=tool_call["id"],
                                         name=tool_call["name"],
@@ -116,7 +114,9 @@ async def stream_vercel_format(
                             yield f"0:{json.dumps(item['text'])}\n"
                 else:
                     yield f"0:{json.dumps(chunk.content)}\n"
-
+    except Exception as e:
+        print("🚨 error 🚨", e)
+        yield f"3:{json.dumps(e.__str__())}\n"
     finally:
         finish_reason = "stop"
         # Yield the final finish part
