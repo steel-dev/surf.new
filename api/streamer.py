@@ -25,7 +25,6 @@ async def stream_vercel_format(
         async for chunk in stream:
 
             if isinstance(chunk, dict) and chunk.get("stop"):
-                print("DEBUG: Found stop:", chunk.get("stop"))
                 yield 'e:{{"finishReason":"{reason}","usage":{{"promptTokens":{prompt},"completionTokens":{completion}}}}}\n'.format(
                     reason="tool-calls",
                     prompt=0,
@@ -115,7 +114,6 @@ async def stream_vercel_format(
                 else:
                     yield f"0:{json.dumps(chunk.content)}\n"
     except Exception as e:
-        print("🚨 error 🚨", e)
         yield f"3:{json.dumps(e.__str__())}\n"
     finally:
         finish_reason = "stop"

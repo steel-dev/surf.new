@@ -45,17 +45,57 @@ class SettingConfig(TypedDict):
 
 # Agent configurations
 AGENT_CONFIGS = {
-    WebAgentType.BASE.value: {
-        "name": "Base Agent",
-        "description": "A simple agent with basic functionality",
+    # WebAgentType.BASE.value: {
+    #     "name": "Base Agent",
+    #     "description": "A simple agent with basic functionality",
+    #     "supported_models": [
+    #         {
+    #             "provider": ModelProvider.ANTHROPIC.value,
+    #             "models": ["claude-3-opus-20240229", "claude-3-sonnet-20240229"],
+    #         },
+    #         {
+    #             "provider": ModelProvider.OPENAI.value,
+    #             "models": ["gpt-4-turbo-preview", "gpt-4", "gpt-3.5-turbo"],
+    #         },
+    #     ],
+    #     "model_settings": {
+    #         "max_tokens": {
+    #             "type": SettingType.INTEGER.value,
+    #             "default": 1000,
+    #             "min": 1,
+    #             "max": 4096,
+    #             "description": "Maximum number of tokens to generate",
+    #         },
+    #         "temperature": {
+    #             "type": SettingType.FLOAT.value,
+    #             "default": 0.7,
+    #             "min": 0,
+    #             "max": 1,
+    #             "step": 0.1,
+    #             "description": "Controls randomness in the output",
+    #         },
+    #         "top_p": {
+    #             "type": SettingType.FLOAT.value,
+    #             "default": 0.9,
+    #             "min": 0,
+    #             "max": 1,
+    #             "step": 0.1,
+    #             "description": "Controls diversity via nucleus sampling",
+    #         },
+    #     },
+    #     "agent_settings": {},
+    # },
+    WebAgentType.BROWSER_USE.value: {
+        "name": "Browser Agent",
+        "description": "Agent with web browsing capabilities",
         "supported_models": [
             {
                 "provider": ModelProvider.ANTHROPIC.value,
-                "models": ["claude-3-opus-20240229", "claude-3-sonnet-20240229"],
+                "models": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"],
             },
             {
                 "provider": ModelProvider.OPENAI.value,
-                "models": ["gpt-4-turbo-preview", "gpt-4", "gpt-3.5-turbo"],
+                "models": ["chatgpt-4o", "gpt-4o-mini"],
             },
         ],
         "model_settings": {
@@ -71,7 +111,7 @@ AGENT_CONFIGS = {
                 "default": 0.7,
                 "min": 0,
                 "max": 1,
-                "step": 0.1,
+                "step": 0.05,
                 "description": "Controls randomness in the output",
             },
             "top_p": {
@@ -83,7 +123,15 @@ AGENT_CONFIGS = {
                 "description": "Controls diversity via nucleus sampling",
             },
         },
-        "agent_settings": {},
+        "agent_settings": {
+            "steps": {
+                "type": SettingType.INTEGER.value,
+                "default": 10,
+                "min": 0,
+                "max": 20,
+                "description": "Max number of steps to take",
+            },
+        },
     },
     WebAgentType.CLAUDE_STEEL_USE.value: {
         "name": "Claude Steel Agent",
@@ -104,7 +152,7 @@ AGENT_CONFIGS = {
             },
             "temperature": {
                 "type": SettingType.FLOAT.value,
-                "default": 0.7,
+                "default": 0.6,
                 "min": 0,
                 "max": 1,
                 "step": 0.05,
@@ -142,54 +190,7 @@ AGENT_CONFIGS = {
             },
         },
     },
-    WebAgentType.BROWSER_USE.value: {
-        "name": "Browser Agent",
-        "description": "Agent with web browsing capabilities",
-        "supported_models": [
-            {
-                "provider": ModelProvider.ANTHROPIC.value,
-                "models": ["claude-3-opus-20240229", "claude-3-sonnet-20240229"],
-            },
-            {
-                "provider": ModelProvider.OPENAI.value,
-                "models": ["gpt-4-turbo-preview", "gpt-4"],
-            },
-        ],
-        "model_settings": {
-            "max_tokens": {
-                "type": SettingType.INTEGER.value,
-                "default": 1000,
-                "min": 1,
-                "max": 4096,
-                "description": "Maximum number of tokens to generate",
-            },
-            "temperature": {
-                "type": SettingType.FLOAT.value,
-                "default": 0.7,
-                "min": 0,
-                "max": 1,
-                "step": 0.05,
-                "description": "Controls randomness in the output",
-            },
-            "top_p": {
-                "type": SettingType.FLOAT.value,
-                "default": 0.9,
-                "min": 0,
-                "max": 1,
-                "step": 0.1,
-                "description": "Controls diversity via nucleus sampling",
-            },
-        },
-        "agent_settings": {
-            "steps": {
-                "type": SettingType.INTEGER.value,
-                "default": 10,
-                "min": 0,
-                "max": 20,
-                "description": "Number of steps to take",
-            },
-        },
-    },
+    
 }
 
 

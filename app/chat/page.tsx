@@ -20,6 +20,55 @@ import { useToast } from "@/hooks/use-toast";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+interface MarkdownTextProps {
+  content: string;
+}
+
+function MarkdownText({ content }: MarkdownTextProps) {
+  // Convert the content into React elements
+  const parseMarkdown = (text: string) => {
+    // Split the text into segments that need to be processed
+    const segments = text
+      .split(/(\[.*?\]\(.*?\))|(\*.*?\*)|(_.*?_)/g)
+      .filter(Boolean);
+
+    return segments.map((segment, index) => {
+      // Handle links [text](url)
+      const linkMatch = segment.match(/\[(.*?)\]\((.*?)\)/);
+      if (linkMatch) {
+        return (
+          <a
+            key={index}
+            href={linkMatch[2]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[--blue-11] hover:underline"
+          >
+            {linkMatch[1]}
+          </a>
+        );
+      }
+
+      // Handle bold *text*
+      const boldMatch = segment.match(/\*(.*?)\*/);
+      if (boldMatch) {
+        return <strong key={index}>{boldMatch[1]}</strong>;
+      }
+
+      // Handle italics _text_
+      const italicMatch = segment.match(/_(.*?)_/);
+      if (italicMatch) {
+        return <em key={index}>{italicMatch[1]}</em>;
+      }
+
+      // Return regular text
+      return <span key={index}>{segment}</span>;
+    });
+  };
+
+  return <>{parseMarkdown(content)}</>;
+}
+
 interface UserMessageProps {
   content: string;
 }
@@ -51,7 +100,7 @@ function UserMessage({ content }: UserMessageProps) {
             break-words max-w-full
           `}
         >
-          {content}
+          <MarkdownText content={content} />
         </div>
       </div>
     </div>
@@ -427,8 +476,8 @@ export default function ChatPage() {
                     ) : (
                       <div className="flex flex-col gap-2 text-base text-[--gray-12] w-full max-w-full break-words">
                         {message.content && (
-                          <div className="w-full max-w-full break-words">
-                            {message.content}
+                          <div className="w-full max-w-full break-words whitespace-pre-wrap">
+                            <MarkdownText content={message.content} />
                           </div>
                         )}
                         {message.toolInvocations?.length ? (

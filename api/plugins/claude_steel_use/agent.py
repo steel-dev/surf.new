@@ -165,23 +165,6 @@ async def claude_steel_agent(
     Create and return an agent that can use the defined tools.
     We can use a LangChain agent that can parse tool usage from the model.
     """
-    print("🔥 🔥 🔥 Initializing Steel client... 🔥 🔥 🔥 ")  # Debug log
-    print("agent_settings - ", agent_settings)
-    print("agent_settings.system_prompt - ", agent_settings.system_prompt)
-    print("agent_settings.num_images_to_keep - ",
-          agent_settings.num_images_to_keep)
-    print(
-        "agent_settings.wait_time_between_steps - ",
-        agent_settings.wait_time_between_steps,
-    )
-    print("model_config - ", model_config)
-    print("model_config.model_name - ", model_config.model_name)
-    print("model_config.temperature - ", model_config.temperature)
-    print("model_config.max_tokens - ", model_config.max_tokens)
-    print("model_config.top_p - ", model_config.top_p)
-    print("model_config.top_k - ", model_config.top_k)
-    print("model_config.frequency_penalty - ", model_config.frequency_penalty)
-    print("model_config.presence_penalty - ", model_config.presence_penalty)
 
     client = Steel(
         steel_api_key=STEEL_API_KEY,
@@ -193,7 +176,6 @@ async def claude_steel_agent(
     session = client.sessions.retrieve(session_id)
     print(f"Session retrieved successfully with Session ID: {session.id}.")
     print(f"You can view the session live at {session.session_viewer_url}\n")
-    print("API KEY", STEEL_API_KEY)
 
     print("Connecting to Playwright...")  # Debug log
     async with async_playwright() as p:
@@ -295,11 +277,6 @@ async def claude_steel_agent(
                         "anthropic-beta": "computer-use-2024-10-22"},
                 )
             )
-            # llm = BetaChatAnthropic(
-            #     model="claude-3-5-sonnet-20241022",
-            #     temperature=0.3,
-            #     anthropic_api_key=ANTHROPIC_API_KEY
-            # )
             print("LLM initialized successfully")  # Debug log
             tool_definitions = tools_to_use
             tools = list(tool_definitions.values())
@@ -317,7 +294,7 @@ async def claude_steel_agent(
                     0, SystemMessage(content=agent_settings.system_prompt)
                 )
 
-            print(f"Base messages created: {base_messages}")  # Debug log
+            print(f"Base messages created")  # Debug log
 
             while True:
                 # Check if user/server requested cancellation
@@ -350,23 +327,14 @@ async def claude_steel_agent(
 
                 if tools_called:
                     for tool in tools_called:
-                        print(f"========== Tools called ==========")
-                        print(f"{tool} ")
-                        print(f"================================")
                         result = await tool_definitions[tool["name"]].ainvoke(
                             tool["args"]
                         )
-                        print(f"========== Result ==========")
-                        # print(f"{str(result)[:1000]}")
-                        print(f"================================")
                         message = ToolMessage(
                             content=[result], tool_call_id=tool["id"])
-                        print(f"=============== MESSAGE ==================")
-                        # print(f"{str(message)[:1000]}")
-                        print(f"============================================")
-                        yield message  # IMPORTANT UNCOMMENT LATE
+                        
+                        yield message
                         base_messages.append(message)
-                        print(f"========== LOOP FINISHED, RUNNING IT BACK ==========")
                 else:
                     break
         except Exception as e:

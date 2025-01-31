@@ -39,7 +39,6 @@ async def base_agent(
         async for chunk in llm.bind_tools(tools).astream(input=base_messages):
             # Check for cancellation between tokens
             if cancel_event and cancel_event.is_set():
-                print("🔵 cancel_event.is_set()")
                 break
 
             if first:
@@ -57,7 +56,6 @@ async def base_agent(
         base_messages.append(gathered)
 
         if cancel_event and cancel_event.is_set():
-            print("🔵 cancel_event.is_set()")
             # If canceled after LLM chunk loop
             break
 
@@ -65,7 +63,6 @@ async def base_agent(
         if getattr(gathered, "tool_calls", None):
             for tool in gathered.tool_calls:
                 if cancel_event and cancel_event.is_set():
-                    print("🔵 cancel_event.is_set()")
                     break
                 result = await tool_definitions[tool["name"]].ainvoke(tool["args"])
                 msg = ToolMessage(result, tool_call_id=tool["id"])

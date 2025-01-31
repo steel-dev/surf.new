@@ -190,7 +190,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
                 onChange={handleFileChange}
               />
 
-              {/* Attachment button */}
+              {/* Commenting out attachment button
               <Button
                 variant="ghost"
                 size="icon"
@@ -214,6 +214,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
               >
                 <Paperclip className="w-5 h-5 relative text-[--gray-12]" />
               </Button>
+              */}
 
               <SettingsButton />
             </div>

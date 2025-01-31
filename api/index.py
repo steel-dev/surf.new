@@ -76,11 +76,8 @@ async def handle_chat(request: ChatRequest):
     and then streams the response in the Vercel AI Data Stream Protocol format.
     """
     try:
-        print("request", request)
-        print("🥂🥂🥂🥂🥂🥂🥂API Key received:", request.api_key)
         messages = request.messages
         chat_messages = convert_to_chat_messages(messages)
-        print("request.session_id", request.session_id)
 
         if not request.session_id:
             return Response(
@@ -147,7 +144,6 @@ async def handle_chat(request: ChatRequest):
                 "code": getattr(e, 'code', 500)
             }
         }
-        print("🚨 error_response 🚨", error_response)
         raise HTTPException(
             status_code=getattr(e, 'code', 500),
             detail=error_response
