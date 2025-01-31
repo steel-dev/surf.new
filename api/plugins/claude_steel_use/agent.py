@@ -1,3 +1,4 @@
+import datetime
 from typing import (
     Any,
     Callable,
@@ -290,6 +291,7 @@ async def claude_steel_agent(
 
             # Add system message if provided in agent_settings
             if agent_settings.system_prompt:
+                agent_settings.system_prompt += f"\nCurrent date and time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 base_messages.insert(
                     0, SystemMessage(content=agent_settings.system_prompt)
                 )

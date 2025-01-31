@@ -98,6 +98,7 @@ export function SettingsButton() {
               "w-8 h-8 flex items-center justify-center gap-2.5 border-r",
               "bg-transparent",
               "border-[--gray-3]",
+              "font-geist",
               "group-hover:bg-transparent",
             ].join(" ")}
           >
