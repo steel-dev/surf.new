@@ -83,6 +83,7 @@ async def stream_vercel_format(
                     else:
                         yield f"0:{json.dumps(chunk.content)}\n"
                 for tool_call in chunk.tool_calls:
+                    pending_tool_calls.add(tool_call.get("id"))
                     yield f'9:{{"toolCallId":"{tool_call.get("id")}","toolName":"{tool_call.get("name")}","args":{json.dumps(tool_call.get("args"))}}}\n'
 
             # Handle tool call results (that are not tool_call_chunks)
