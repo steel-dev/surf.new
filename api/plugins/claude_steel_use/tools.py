@@ -6,7 +6,7 @@ import io
 from pydantic import BaseModel, Field
 from playwright.async_api import Page, async_playwright
 from PIL import Image, ImageDraw
-from langchain.tools import BaseTool
+from langchain_core.tools import BaseTool
 
 ################################################################################
 # Pydantic Models
@@ -69,6 +69,7 @@ class ClaudComputerToolParams(BaseModel):
 class ClaudComputerToolResult(BaseModel):
     type: str = "image"
     source: dict = Field(default_factory=dict)
+
 
 class WaitParams(BaseModel):
     seconds: int
@@ -194,8 +195,12 @@ async def _draw_circle_on_screenshot(screenshot_b64: str, x: int, y: int) -> str
 
 
 async def _scale_coordinates(
-    x: int, y: int, original_width: int, original_height: int,
-    target_width: int, target_height: int
+    x: int,
+    y: int,
+    original_width: int,
+    original_height: int,
+    target_width: int,
+    target_height: int,
 ) -> Tuple[int, int]:
     """
     Scale the (x, y) coordinates from the original resolution to the target resolution.
@@ -232,8 +237,7 @@ class GoToUrlTool(BaseTool):
 
     def _run(self, url: str, wait_time: int = 2000) -> str:
         print("GoToUrlTool._run called (sync) - raising NotImplementedError")
-        raise NotImplementedError(
-            "This tool is async-only. Please use `_arun()`.")
+        raise NotImplementedError("This tool is async-only. Please use `_arun()`.")
 
     async def _arun(self, url: str, wait_time: Optional[int] = None) -> str:
         print("GoToUrlTool._arun called (async)")  # Debug log
@@ -246,15 +250,14 @@ class GoToUrlTool(BaseTool):
                 print(f"Waiting for {s}s")
                 await _sleep(s)
                 screenshot_buffer = await self.page.screenshot()
-                screenshot_b64 = base64.b64encode(
-                    screenshot_buffer).decode("utf-8")
+                screenshot_b64 = base64.b64encode(screenshot_buffer).decode("utf-8")
                 return GoToUrlResult(
                     type="image",
                     source={
                         "type": "base64",
                         "media_type": "image/png",
-                        "data": screenshot_b64
-                    }
+                        "data": screenshot_b64,
+                    },
                 ).model_dump()
             else:
                 print(f"Error navigating to {url}: {exc}")
@@ -263,8 +266,8 @@ class GoToUrlTool(BaseTool):
                     source={
                         "type": "base64",
                         "media_type": "image/png",
-                        "data": ERROR_IMAGE
-                    }
+                        "data": ERROR_IMAGE,
+                    },
                 ).model_dump()
 
         s = self.wait_time if self.wait_time is not None else DEFAULT_SCREENSHOT_WAIT_MS
@@ -277,8 +280,8 @@ class GoToUrlTool(BaseTool):
             source={
                 "type": "base64",
                 "media_type": "image/png",
-                "data": screenshot_b64
-            }
+                "data": screenshot_b64,
+            },
         ).model_dump()
 
 
@@ -296,8 +299,7 @@ class GetCurrentUrlTool(BaseTool):
 
     def _run(self) -> str:
         print("GetCurrentUrlTool._run called (sync) - raising NotImplementedError")
-        raise NotImplementedError(
-            "This tool is async-only. Please use `_arun()`.")
+        raise NotImplementedError("This tool is async-only. Please use `_arun()`.")
 
     async def _arun(self) -> str:
         print("GetCurrentUrlTool._arun called (async)")  # Debug log
@@ -318,8 +320,7 @@ class SaveToMemoryTool(BaseTool):
 
     def _run(self, information: str) -> str:
         print("SaveToMemoryTool._run called (sync) - raising NotImplementedError")
-        raise NotImplementedError(
-            "This tool is async-only. Please use `_arun()`.")
+        raise NotImplementedError("This tool is async-only. Please use `_arun()`.")
 
     async def _arun(self, information: str) -> str:
         print(f"Saving {information} to memory (example placeholder).")
@@ -364,8 +365,7 @@ class ClaudeComputerTool(BaseTool):
         target_height: Optional[int] = None,
     ) -> str:
         print("ClaudeComputerTool._run called (sync) - raising NotImplementedError")
-        raise NotImplementedError(
-            "This tool is async-only. Please use `_arun()`.")
+        raise NotImplementedError("This tool is async-only. Please use `_arun()`.")
 
     async def _arun(
         self,
@@ -379,15 +379,17 @@ class ClaudeComputerTool(BaseTool):
         target_height: Optional[int] = None,
     ) -> str:
         # Debug log
-        print(
-            f"ClaudeComputerTool._arun called (async) with action='{action}'")
+        print(f"ClaudeComputerTool._arun called (async) with action='{action}'")
         try:
-            s = self.wait_time if self.wait_time is not None else DEFAULT_SCREENSHOT_WAIT_MS
-            
+            s = (
+                self.wait_time
+                if self.wait_time is not None
+                else DEFAULT_SCREENSHOT_WAIT_MS
+            )
+
             if action in [ActionEnum.mouse_move, ActionEnum.left_click_drag]:
                 if not coordinate:
-                    raise ValueError(
-                        f"coordinate is required for action '{action}'")
+                    raise ValueError(f"coordinate is required for action '{action}'")
                 x, y = coordinate
 
                 # If we want to scale the coordinates
@@ -405,16 +407,15 @@ class ClaudeComputerTool(BaseTool):
                 print(f"Waiting for {s}s")
                 await _sleep(s)
                 screenshot_buffer = await self.page.screenshot()
-                screenshot_b64 = base64.b64encode(
-                    screenshot_buffer).decode("utf-8")
+                screenshot_b64 = base64.b64encode(screenshot_buffer).decode("utf-8")
                 marked_image = await _draw_circle_on_screenshot(screenshot_b64, x, y)
                 return ClaudComputerToolResult(
                     type="image",
                     source={
                         "type": "base64",
                         "media_type": "image/png",
-                        "data": marked_image
-                    }
+                        "data": marked_image,
+                    },
                 ).model_dump()
 
             elif action == ActionEnum.key or action == ActionEnum.type:
@@ -433,15 +434,14 @@ class ClaudeComputerTool(BaseTool):
 
                 await _sleep(s)
                 screenshot_buffer = await self.page.screenshot()
-                screenshot_b64 = base64.b64encode(
-                    screenshot_buffer).decode("utf-8")
+                screenshot_b64 = base64.b64encode(screenshot_buffer).decode("utf-8")
                 return ClaudComputerToolResult(
                     type="image",
                     source={
                         "type": "base64",
                         "media_type": "image/png",
-                        "data": screenshot_b64
-                    }
+                        "data": screenshot_b64,
+                    },
                 ).model_dump()
 
             elif action in [
@@ -455,15 +455,14 @@ class ClaudeComputerTool(BaseTool):
                 if action == ActionEnum.screenshot:
                     await _sleep(s)
                     screenshot_buffer = await self.page.screenshot()
-                    screenshot_b64 = base64.b64encode(
-                        screenshot_buffer).decode("utf-8")
+                    screenshot_b64 = base64.b64encode(screenshot_buffer).decode("utf-8")
                     return ClaudComputerToolResult(
                         type="image",
                         source={
                             "type": "base64",
                             "media_type": "image/png",
-                            "data": screenshot_b64
-                        }
+                            "data": screenshot_b64,
+                        },
                     ).model_dump()
 
                 elif action == ActionEnum.cursor_position:
@@ -493,15 +492,14 @@ class ClaudeComputerTool(BaseTool):
 
                     await _sleep(s)
                     screenshot_buffer = await self.page.screenshot()
-                    screenshot_b64 = base64.b64encode(
-                        screenshot_buffer).decode("utf-8")
+                    screenshot_b64 = base64.b64encode(screenshot_buffer).decode("utf-8")
                     return ClaudComputerToolResult(
                         type="image",
                         source={
                             "type": "base64",
                             "media_type": "image/png",
-                            "data": screenshot_b64
-                        }
+                            "data": screenshot_b64,
+                        },
                     ).model_dump()
             else:
                 raise ValueError(f"Invalid action: '{action}'")
@@ -513,12 +511,14 @@ class ClaudeComputerTool(BaseTool):
                 source={
                     "type": "base64",
                     "media_type": "image/png",
-                    "data": ERROR_IMAGE
-                }
+                    "data": ERROR_IMAGE,
+                },
             ).model_dump()
+
 
 class WaitTool(BaseTool):
     """Tool that waits for a specified number of seconds before continuing."""
+
     name: str = "wait"
     description: str = (
         "Wait for a specified number of seconds before continuing. "
@@ -533,8 +533,7 @@ class WaitTool(BaseTool):
 
     def _run(self, seconds: float) -> str:
         print("WaitTool._run called (sync) - raising NotImplementedError")
-        raise NotImplementedError(
-            "This tool is async-only. Please use `_arun()`.")
+        raise NotImplementedError("This tool is async-only. Please use `_arun()`.")
 
     async def _arun(self, seconds: float) -> str:
         try:
@@ -549,14 +548,14 @@ class WaitTool(BaseTool):
             # Take screenshot after waiting
             screenshot_buffer = await self.page.screenshot()
             screenshot_b64 = base64.b64encode(screenshot_buffer).decode("utf-8")
-            
+
             return ClaudComputerToolResult(
                 type="image",
                 source={
                     "type": "base64",
                     "media_type": "image/png",
-                    "data": screenshot_b64
-                }
+                    "data": screenshot_b64,
+                },
             ).model_dump()
 
         except Exception as exc:
@@ -566,9 +565,10 @@ class WaitTool(BaseTool):
                 source={
                     "type": "base64",
                     "media_type": "image/png",
-                    "data": ERROR_IMAGE
-                }
+                    "data": ERROR_IMAGE,
+                },
             ).model_dump()
+
 
 ################################################################################
 # If you want a quick reference to all tools in this plugin:
@@ -590,6 +590,7 @@ def get_available_tools(page: Page):
         "save_to_memory": SaveToMemoryTool(),
         "claude_computer_tool": ClaudeComputerTool(page),
     }
+
 
 # def main():
 #     """Use async_playwright to create a real Page, then get and print the tools."""

@@ -4,7 +4,7 @@ Real tools might scrape websites, fetch data, or manipulate images.
 """
 
 from typing import Dict, Type
-from langchain.tools import BaseTool
+from langchain_core.tools import BaseTool
 import time
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -51,7 +51,7 @@ class CalculateTool(BaseTool):
         run_manager: Optional[CallbackManagerForToolRun] = None,
     ) -> str:
         """Add two numbers together."""
-        
+
         time.sleep(5)
         return f"Sum of {a} and {b} is {a + b}"
 

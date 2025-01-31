@@ -122,7 +122,6 @@ async def handle_chat(request: ChatRequest):
         agent_settings=request.agent_settings,
         history=chat_messages,
         session_id=request.session_id,
-        # Only base_agent really uses it for now
         cancel_event=cancel_event,
     )
 

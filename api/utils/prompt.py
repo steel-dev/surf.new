@@ -2,8 +2,8 @@ import json
 from pydantic import BaseModel
 from typing import Any, List, Mapping, Optional
 from .types import ToolInvocation
-from langchain.schema import BaseMessage, ChatMessage
-from langchain.schema.messages import ToolMessage, AIMessage, HumanMessage
+from langchain_core.messages import BaseMessage, ChatMessage
+from langchain_core.messages import ToolMessage, AIMessage, HumanMessage
 from langchain_core.tools.structured import ToolCall
 
 
