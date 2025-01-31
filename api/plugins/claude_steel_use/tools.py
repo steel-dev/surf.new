@@ -542,8 +542,7 @@ class WaitTool(BaseTool):
                 raise ValueError("Wait time must be between 0 and 30 seconds")
 
             # Convert to milliseconds and wait
-            ms = int(seconds * 1000)
-            await _sleep(ms)
+            await _sleep(seconds)
 
             # Take screenshot after waiting
             screenshot_buffer = await self.page.screenshot()
