@@ -75,8 +75,8 @@ We welcome contributions! Here's how you can help:
 
 - [Steel.dev](https://steel.dev) - Our main platform
 - [Documentation](https://docs.steel.dev)
-- [Discord Community](https://discord.gg/steel)
-- [Twitter](https://twitter.com/steel_dev)
+- [Discord Community](https://discord.gg/steel-dev)
+- [Twitter](https://twitter.com/steeldotdev)
 
 ## 📝 License
 
