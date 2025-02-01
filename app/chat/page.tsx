@@ -144,6 +144,7 @@ function ChatScrollAnchor({
 }
 
 export default function ChatPage() {
+  console.info("🔄 Initializing ChatPage component");
   const { currentSettings, updateSettings } = useSettings();
   const {
     currentSession,
@@ -164,16 +165,26 @@ export default function ChatPage() {
   const pendingMessageRef = useRef<string>("");
 
   const checkApiKey = () => {
+    console.info(
+      "🔑 Checking API key for provider:",
+      currentSettings?.selectedProvider
+    );
     const provider = currentSettings?.selectedProvider;
     if (!provider) return false;
-    return !!currentSettings?.providerApiKeys?.[provider];
+    const hasKey = !!currentSettings?.providerApiKeys?.[provider];
+    console.info(hasKey ? "✅ API key found" : "❌ No API key found");
+    return hasKey;
   };
 
   const handleApiKeySubmit = (key: string) => {
+    console.info("🔑 Handling API key submission");
     const provider = currentSettings?.selectedProvider;
     if (!provider) return;
 
-    // Update settings with new API key
+    console.info(
+      "⚙️ Updating settings with new API key for provider:",
+      provider
+    );
     const currentKeys = currentSettings?.providerApiKeys || {};
     updateSettings({
       ...currentSettings!,
@@ -184,8 +195,11 @@ export default function ChatPage() {
     });
     setShowApiKeyModal(false);
 
-    // Instead of calling handleSend again, set the initial message directly
     if (pendingMessageRef.current) {
+      console.info(
+        "📝 Setting initial message from pending ref:",
+        pendingMessageRef.current
+      );
       setInitialMessage(pendingMessageRef.current);
       pendingMessageRef.current = "";
     }
@@ -244,11 +258,10 @@ export default function ChatPage() {
       ),
     },
     onFinish: (message) => {
-      console.log("Chat FINISHED:", message);
+      console.info("✅ Chat finished:", message);
     },
     onError: (error) => {
-      // console.error("Chat error:", error);
-      // Display destructive toast with error message
+      console.error("❌ Chat error:", error);
       toast({
         title: "Error",
         description: error?.message || "An unexpected error occurred",
@@ -257,13 +270,12 @@ export default function ChatPage() {
       });
     },
     onToolCall: (toolCall) => {
-      console.log("Chat tool call:", toolCall);
+      console.info("🛠️ Tool call received:", toolCall);
     },
   });
 
   // Track whether user is at the bottom
   const [isAtBottom, setIsAtBottom] = useState<boolean>(false);
-  // Reference to the scroll container
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   function handleScroll() {
@@ -273,14 +285,18 @@ export default function ChatPage() {
       scrollAreaRef.current.children[0];
     const atBottom = scrollHeight - clientHeight <= scrollTop + 1;
 
-    setIsAtBottom(atBottom);
+    if (atBottom !== isAtBottom) {
+      console.info("📜 Scroll position changed:", { atBottom });
+      setIsAtBottom(atBottom);
+    }
   }
 
   // If user is sending a message (isLoading = true), scroll to bottom
   useEffect(() => {
+    console.info("📜 Loading state changed:", { isLoading });
     if (isLoading) {
       if (!scrollAreaRef.current?.children[0]) {
-        console.log("messages container is null; cannot scroll");
+        console.warn("⚠️ Messages container is null; cannot scroll");
         return;
       }
       const messagesContainer = scrollAreaRef.current.children[0];
@@ -296,31 +312,117 @@ export default function ChatPage() {
     setSelectedImage(imageSrc);
   };
 
-  // Unified handleSend: create session if needed, then submit the message
+  // Log key context and state changes
+  useEffect(() => {
+    console.info("📊 Current session state:", {
+      sessionId: currentSession?.id,
+      isCreating: isCreatingSession,
+      isExpired,
+      hasShownConnection,
+      isSubmitting,
+    });
+  }, [
+    currentSession?.id,
+    isCreatingSession,
+    isExpired,
+    hasShownConnection,
+    isSubmitting,
+  ]);
+
+  useEffect(() => {
+    console.info("⚙️ Current settings state:", {
+      provider: currentSettings?.selectedProvider,
+      model: currentSettings?.selectedModel,
+      agent: currentSettings?.selectedAgent,
+      hasApiKey:
+        !!currentSettings?.providerApiKeys?.[
+          currentSettings?.selectedProvider || ""
+        ],
+    });
+  }, [currentSettings]);
+
+  // Track message state changes
+  useEffect(() => {
+    if (messages.length > 0) {
+      console.info("💬 Messages state updated:", {
+        count: messages.length,
+        lastMessage: {
+          role: messages[messages.length - 1].role,
+          hasContent: !!messages[messages.length - 1].content,
+          hasToolCalls: !!messages[messages.length - 1].toolInvocations?.length,
+        },
+        allMessages: messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          hasContent: !!m.content,
+          toolCallsCount: m.toolInvocations?.length || 0,
+        })),
+      });
+    }
+  }, [messages]);
+
+  // Track loading and submission states
+  useEffect(() => {
+    console.info("🔄 Chat interaction state:", {
+      isLoading,
+      isSubmitting,
+      hasInput: !!input,
+      messagesCount: messages.length,
+    });
+  }, [isLoading, isSubmitting, input, messages.length]);
+
+  // Enhanced handleSend with more logging
   async function handleSend(
     e: React.FormEvent,
     messageText: string,
     attachments: File[]
   ) {
+    console.info("📤 Handling message send:", {
+      messageText,
+      attachments,
+      currentState: {
+        hasSession: !!currentSession?.id,
+        messagesCount: messages.length,
+        isFirstMessage: messages.length === 0,
+        isSubmitting,
+        hasApiKey: checkApiKey(),
+      },
+    });
+
     e.preventDefault();
-    // Check for API key first
+
     if (!checkApiKey()) {
+      console.info("🔑 No API key found, storing message and showing modal");
       pendingMessageRef.current = messageText;
       setShowApiKeyModal(true);
       return;
     }
+
     setIsSubmitting(true);
     if (messages.length === 0) {
+      console.info("📝 Setting initial message with context:", {
+        messageText,
+        sessionId: currentSession?.id,
+        provider: currentSettings?.selectedProvider,
+        agent: currentSettings?.selectedAgent,
+      });
       setInitialMessage(messageText);
       handleInputChange({ target: { value: "" } } as any);
     } else {
+      console.info("📤 Submitting message to existing chat:", {
+        messageText,
+        sessionId: currentSession?.id,
+        existingMessages: messages.length,
+      });
       handleSubmit(e);
       return;
     }
-    // Ensure we have a session first
+
     let session = currentSession;
     if (!session?.id) {
+      console.info("🔄 Creating new session for message");
       session = await createSession();
+      console.info("✅ New session created:", session);
     }
   }
 
@@ -348,47 +450,68 @@ export default function ChatPage() {
     }
   }, [currentSession?.id, hasShownConnection]);
 
-  // Example callback to remove incomplete tool calls
+  // Enhanced removeIncompleteToolCalls with more detailed logging
   function removeIncompleteToolCalls() {
-    setMessages((prev) => {
-      // For each assistant message, we can remove any toolInvocations that haven't yielded a final result.
-      // According to the Vercel AI SDK docs, a completed invocation has "state" === "result".
-      // Partial calls might have "state" === "partial-call" or "call" (no final result yet).
+    console.info("🧹 Starting cleanup of incomplete tool calls");
+    console.info(
+      "📊 Current messages state:",
+      messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        toolCalls: m.toolInvocations?.map((t) => ({
+          state: t.state,
+        })),
+      }))
+    );
 
-      return prev
+    setMessages((prev) => {
+      const updatedMessages = prev
         .map((msg) => {
-          // Only adjust assistant messages that have toolInvocations
           if (msg.role === "assistant" && Array.isArray(msg.toolInvocations)) {
-            // Filter out incomplete tool calls
             const filteredToolInvocations = msg.toolInvocations.filter(
               (invocation) => invocation.state === "result"
             );
-
-            // Return a new message object with updated toolInvocations
+            console.info("🔍 Processing message tool calls:", {
+              messageId: msg.id,
+              before: msg.toolInvocations.length,
+              after: filteredToolInvocations.length,
+              removed:
+                msg.toolInvocations.length - filteredToolInvocations.length,
+              removedStates: msg.toolInvocations
+                .filter((t) => t.state !== "result")
+                .map((t) => ({ state: t.state })),
+            });
             return {
               ...msg,
               toolInvocations: filteredToolInvocations,
             };
           }
-
-          // For all other messages (user role, system role, etc.), we leave them unchanged
           return msg;
         })
         .filter((msg) => {
-          // Optionally remove entire assistant messages if they have no text AND no completed tool calls
           if (
             msg.role === "assistant" &&
             !msg.content?.trim() &&
             (!msg.toolInvocations || msg.toolInvocations.length === 0)
           ) {
+            console.info("🗑️ Removing empty assistant message");
             return false;
           }
           return true;
         });
+
+      console.info("✅ Cleanup complete:", {
+        beforeCount: prev.length,
+        afterCount: updatedMessages.length,
+        removedCount: prev.length - updatedMessages.length,
+      });
+
+      return updatedMessages;
     });
   }
 
   function handleStop() {
+    console.info("🛑 Stopping chat");
     stop();
     removeIncompleteToolCalls();
   }
@@ -405,16 +528,19 @@ export default function ChatPage() {
 
   // Reuse the same handler from NavBar for consistency
   const handleNewChat = async () => {
+    console.info("🆕 Starting new chat");
     router.push("/");
   };
 
   // Add effect to handle session expiration
   useEffect(() => {
+    console.info("⏰ Session expiration status changed:", { isExpired });
     if (isExpired) {
+      console.info("⚠️ Session expired, cleaning up");
       stop();
       removeIncompleteToolCalls();
     }
-  }, [isExpired]); // Only re-run when isExpired changes
+  }, [isExpired]);
 
   return (
     <>

@@ -19,6 +19,7 @@ const MAX_SESSION_DURATION = 15 * 60; // 15 minutes in seconds
 const SteelContext = createContext<SteelContextType | undefined>(undefined);
 
 export function SteelProvider({ children }: { children: React.ReactNode }) {
+  console.info("🔄 Initializing SteelProvider");
   const [currentSession, setCurrentSession] = useState<Steel.Session | null>(
     null
   );
@@ -29,13 +30,18 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
 
   // Timer effect
   useEffect(() => {
+    console.info("⏱️ Timer effect triggered", { currentSession, isExpired });
     let intervalId: NodeJS.Timeout;
 
     if (currentSession && !isExpired) {
+      console.info("⏰ Starting session timer");
       intervalId = setInterval(() => {
         setSessionTimeElapsed((prev) => {
           const newTime = prev + 1;
           if (newTime >= MAX_SESSION_DURATION) {
+            console.warn(
+              "⚠️ Session expired after reaching MAX_SESSION_DURATION"
+            );
             setIsExpired(true);
             clearInterval(intervalId);
             return MAX_SESSION_DURATION;
@@ -47,6 +53,7 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       if (intervalId) {
+        console.info("🛑 Clearing session timer");
         clearInterval(intervalId);
       }
     };
@@ -54,20 +61,26 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
 
   // Helper function to release a session
   const releaseSession = async (sessionId: string) => {
+    console.info("🔓 Attempting to release session:", sessionId);
     try {
       await fetch(`/api/sessions/${sessionId}/release`, {
         method: "POST",
       });
+      console.info("✅ Successfully released session:", sessionId);
     } catch (error) {
-      console.error("Failed to release session:", error);
+      console.error("❌ Failed to release session:", error);
     }
   };
 
   // Cleanup effect when page is closed/unloaded
   useEffect(() => {
+    console.info("🧹 Setting up cleanup effect");
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (currentSession?.id) {
-        // Use sendBeacon which is designed specifically for cleanup calls that need to survive page unload
+        console.info(
+          "🔄 BeforeUnload triggered - releasing session:",
+          currentSession.id
+        );
         navigator.sendBeacon(`/api/sessions/${currentSession.id}/release`);
       }
     };
@@ -75,18 +88,25 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
+      console.info("🧹 Cleaning up event listeners");
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      // Handle normal unmounting separately
       if (currentSession?.id) {
+        console.info("🔓 Cleanup: releasing session:", currentSession.id);
         releaseSession(currentSession.id);
       }
     };
   }, [currentSession?.id]);
 
   async function createSession() {
+    console.info("🚀 Attempting to create new session", { currentSettings });
     try {
       if (currentSettings) {
         setIsCreatingSession(true);
+        console.info("⏳ Creating session with settings:", {
+          agent_type: currentSettings.selectedAgent,
+          timeout: MAX_SESSION_DURATION,
+        });
+
         const response = await fetch("/api/sessions", {
           method: "POST",
           headers: {
@@ -98,13 +118,14 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
           }),
         });
         const session = await response.json();
+        console.info("✅ Session created successfully:", session);
         setCurrentSession(session);
         setSessionTimeElapsed(0);
         setIsExpired(false);
         return session;
       }
     } catch (err) {
-      console.error("Failed to create session:", err);
+      console.error("❌ Failed to create session:", err);
       return null;
     } finally {
       setIsCreatingSession(false);
@@ -112,7 +133,12 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
   }
 
   const resetSession = async () => {
+    console.info("🔄 Resetting session");
     if (currentSession?.id) {
+      console.info(
+        "🔓 Releasing current session before reset:",
+        currentSession.id
+      );
       await releaseSession(currentSession.id);
     }
 
@@ -120,6 +146,7 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
     setIsCreatingSession(false);
     setSessionTimeElapsed(0);
     setIsExpired(false);
+    console.info("✅ Session reset complete");
   };
 
   return (

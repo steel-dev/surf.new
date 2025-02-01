@@ -64,9 +64,15 @@ async def create_session(request: SessionRequest):
 @app.post("/api/sessions/{session_id}/release")
 async def release_session(session_id: str):
     """
-    Releases a session.
+    Releases a session. Returns success even if session is already released.
     """
-    return steel_client.sessions.release(session_id)
+    try:
+        return steel_client.sessions.release(session_id)
+    except Exception as e:
+        # Return success response even if session was already released
+        if "Session already stopped" in str(e):
+            return {"status": "success", "message": "Session released"}
+        raise e
 
 
 @app.post("/api/chat")

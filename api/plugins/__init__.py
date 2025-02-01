@@ -85,54 +85,6 @@ AGENT_CONFIGS = {
     #     },
     #     "agent_settings": {},
     # },
-    WebAgentType.BROWSER_USE.value: {
-        "name": "Browser Agent",
-        "description": "Agent with web browsing capabilities",
-        "supported_models": [
-            {
-                "provider": ModelProvider.ANTHROPIC.value,
-                "models": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"],
-            },
-            {
-                "provider": ModelProvider.OPENAI.value,
-                "models": ["chatgpt-4o", "gpt-4o-mini"],
-            },
-        ],
-        "model_settings": {
-            "max_tokens": {
-                "type": SettingType.INTEGER.value,
-                "default": 1000,
-                "min": 1,
-                "max": 4096,
-                "description": "Maximum number of tokens to generate",
-            },
-            "temperature": {
-                "type": SettingType.FLOAT.value,
-                "default": 0.7,
-                "min": 0,
-                "max": 1,
-                "step": 0.05,
-                "description": "Controls randomness in the output",
-            },
-            "top_p": {
-                "type": SettingType.FLOAT.value,
-                "default": 0.9,
-                "min": 0,
-                "max": 1,
-                "step": 0.1,
-                "description": "Controls diversity via nucleus sampling",
-            },
-        },
-        "agent_settings": {
-            "steps": {
-                "type": SettingType.INTEGER.value,
-                "default": 10,
-                "min": 0,
-                "max": 20,
-                "description": "Max number of steps to take",
-            },
-        },
-    },
     WebAgentType.CLAUDE_STEEL_USE.value: {
         "name": "Claude Steel Agent",
         "description": "Advanced agent with Claude-specific capabilities",
@@ -190,6 +142,55 @@ AGENT_CONFIGS = {
             },
         },
     },
+    WebAgentType.BROWSER_USE.value: {
+        "name": "Browser Agent",
+        "description": "Agent with web browsing capabilities",
+        "supported_models": [
+            {
+                "provider": ModelProvider.ANTHROPIC.value,
+                "models": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"],
+            },
+            {
+                "provider": ModelProvider.OPENAI.value,
+                "models": ["chatgpt-4o", "gpt-4o-mini"],
+            },
+        ],
+        "model_settings": {
+            "max_tokens": {
+                "type": SettingType.INTEGER.value,
+                "default": 1000,
+                "min": 1,
+                "max": 4096,
+                "description": "Maximum number of tokens to generate",
+            },
+            "temperature": {
+                "type": SettingType.FLOAT.value,
+                "default": 0.7,
+                "min": 0,
+                "max": 1,
+                "step": 0.05,
+                "description": "Controls randomness in the output",
+            },
+            "top_p": {
+                "type": SettingType.FLOAT.value,
+                "default": 0.9,
+                "min": 0,
+                "max": 1,
+                "step": 0.1,
+                "description": "Controls diversity via nucleus sampling",
+            },
+        },
+        "agent_settings": {
+            "steps": {
+                "type": SettingType.INTEGER.value,
+                "default": 10,
+                "min": 0,
+                "max": 20,
+                "description": "Max number of steps to take",
+            },
+        },
+    },
+    
     
 }
 
