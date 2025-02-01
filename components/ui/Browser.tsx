@@ -102,7 +102,7 @@ export function Browser() {
               <GlobeIcon className="w-4 h-4 mr-2" />
             )}
           </div>
-          <span className="text-[--gray-12] text-base font-normal font-['Geist'] leading-normal truncate mr-auto">
+          <span className="text-[--gray-12] text-base font-normal font-geist leading-normal truncate mr-auto">
             {url ? url : "Session not connected"}
           </span>
         </div>
@@ -120,7 +120,7 @@ export function Browser() {
           <div className="w-full h-full" />
         )}
 
-        <div className="absolute left-[372px] top-[236px] text-white text-base font-normal font-['Geist'] leading-normal opacity-0">
+        <div className="absolute left-[372px] top-[236px] text-white text-base font-normal font-geist leading-normal opacity-0">
           Awaiting your input...
         </div>
       </div>

@@ -84,7 +84,7 @@ function UserMessage({ content }: UserMessageProps) {
     <div className="flex justify-end w-full">
       <div
         className={`
-          inline-flex p-3 max-w-[85%] w-fit
+          inline-flex p-3 max-w-[85%] w-fit font-geist
           ${
             isLongMessage || hasLineBreaks ? "rounded-3xl" : "rounded-full px-4"
           }
@@ -94,7 +94,7 @@ function UserMessage({ content }: UserMessageProps) {
         <div
           className={`
             text-[--gray-12] text-base font-normal 
-            font-['Geist'] leading-normal whitespace-pre-wrap
+            font-geist leading-normal whitespace-pre-wrap
             break-words w-full overflow-hidden
           `}
         >
@@ -583,7 +583,7 @@ export default function ChatPage() {
                       <>
                         <UserMessage content={message.content} />
                         {index === 0 && isCreatingSession && (
-                          <div className="px-4 py-2 bg-[--blue-2] text-[--blue-11] border border-[--blue-3] rounded-md text-sm animate-pulse w-[85%] mx-auto mt-2">
+                          <div className="px-4 py-2 bg-[--blue-2] text-[--blue-11] font-geist border border-[--blue-3] rounded-md text-sm animate-pulse w-[85%] mx-auto mt-2">
                             Connecting to Steel Browser Session...
                           </div>
                         )}
@@ -591,7 +591,7 @@ export default function ChatPage() {
                           hasShownConnection &&
                           !isCreatingSession &&
                           currentSession?.id && (
-                            <div className="px-4 py-2 bg-[--green-2] text-[--green-11] border border-[--green-3] rounded-md text-sm flex items-center gap-2 w-[85%] mx-auto mt-2">
+                            <div className="px-4 py-2 bg-[--green-2] text-[--green-11] font-geist border border-[--green-3] rounded-md text-sm flex items-center gap-2 w-[85%] mx-auto mt-2">
                               <CheckIcon className="h-4 w-4" />
                               Steel Browser Session connected
                             </div>
@@ -630,7 +630,7 @@ export default function ChatPage() {
                         gap-2
                       "
                     >
-                      <span className="text-[--gray-11] text-sm font-normal font-['Geist'] leading-[18px]">
+                      <span className="text-[--gray-11] text-sm font-normal font-geist leading-[18px]">
                         {attachment.name}
                       </span>
                     </div>

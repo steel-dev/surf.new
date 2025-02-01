@@ -129,7 +129,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
                   hover:bg-[#282828]
                 "
                 >
-                  <span className="text-[#6e6e6e] text-sm font-normal font-['Geist'] leading-[18px]">
+                  <span className="text-[#6e6e6e] text-sm font-normal font-geist leading-[18px]">
                     {truncateFileName(file)}
                   </span>
                   {/* X button shows only in ChatInput */}

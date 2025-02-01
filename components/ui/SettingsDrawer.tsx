@@ -86,7 +86,7 @@ export function SettingsButton() {
           className={[
             "inline-flex items-center justify-center overflow-hidden gap-1.5",
             "h-8 pl-1 pr-2.5 rounded-full border text-sm font-normal leading-[14px]",
-            "font-['Geist']",
+            "font-geist",
             "bg-[--gray-2] border-[--gray-3] text-[--gray-12]",
             "hover:bg-[--gray-3]",
             "disabled:text-[--gray-8]",
@@ -606,7 +606,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
               className={[
                 "w-full inline-flex items-center justify-between",
                 "h-8 px-2.5 rounded-full border text-sm font-normal leading-[14px]",
-                "font-['Geist']",
+                "font-geist",
                 "bg-transparent border-transparent text-[--gray-12]",
                 "hover:bg-[--gray-3]",
                 "disabled:text-[--gray-8]",
@@ -680,7 +680,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
           onClick={handleSave}
         >
           <div className="px-1 justify-start items-start flex">
-            <div className="text-neutral-900 text-sm font-medium font-['Geist'] leading-normal">
+            <div className="text-neutral-900 text-sm font-medium font-geist leading-normal">
               Apply Changes & Restart Chat
             </div>
           </div>
