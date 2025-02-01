@@ -1,5 +1,5 @@
 import logging
-from browser_use import Agent, Browser, BrowserConfig
+from browser_use import Agent, Browser, BrowserConfig, Controller
 from typing import Any, List, Mapping, AsyncIterator, Optional
 from ...providers import create_llm
 from ...models import ModelConfig
@@ -15,6 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 load_dotenv(".env.local")
+os.environ["ANONYMIZED_TELEMETRY"] = "false"
 
 STEEL_API_KEY = os.getenv("STEEL_API_KEY")
 STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
@@ -34,12 +35,17 @@ async def browser_use_agent(
     llm = create_llm(model_config)
     logger.info("🤖 Created LLM instance")
 
+    controller = Controller(exclude_actions=['open_tab', 'switch_tab'])
+
+
     agent = Agent(
         llm=llm,
         task=history[-1]["content"],
+        controller=controller,
         browser=Browser(
             BrowserConfig(cdp_url=f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session_id}")
         ),
+        generate_gif=False,
     )
     logger.info("🌐 Created Agent with browser instance")
 
