@@ -1,16 +1,11 @@
-"use client";
-
-import { SteelProvider } from "./contexts/SteelContext";
-import { SettingsProvider } from "@/app/contexts/SettingsContext";
 import { Inter } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
-import { ChatProvider } from "./contexts/ChatContext";
-import { NavBar } from "@/components/ui/navbar";
 import localFont from "next/font/local";
 import { cn } from "@/lib/utils";
-import { Toaster } from "@/components/ui/toaster";
+import { Metadata } from "next";
+import { LayoutContent } from "@/components/LayoutContent";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -27,6 +22,14 @@ const ibmPlexMono = localFont({
   src: "../public/IBM_Plex_Mono/IBMPlexMono-Regular.ttf",
   variable: "--font-ibm-plex-mono",
 });
+
+export const metadata: Metadata = {
+  title: "Surf.new - built with Steel",
+  description: "Surf.new - web agent demos built on top of Steel",
+  icons: {
+    icon: "/logo.svg",
+  },
+};
 
 export default function RootLayout({
   children,
@@ -46,19 +49,7 @@ export default function RootLayout({
       )}
     >
       <body className={inter.className}>
-        <ChatProvider>
-          <SettingsProvider>
-            <SteelProvider>
-              <NavBar />
-              <div className="pt-14 bg-[--gray-1]">
-                {" "}
-                {/* Add padding to account for fixed navbar */}
-                {children}
-              </div>
-              <Toaster />
-            </SteelProvider>
-          </SettingsProvider>
-        </ChatProvider>
+        <LayoutContent>{children}</LayoutContent>
       </body>
     </html>
   );
