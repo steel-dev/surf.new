@@ -126,9 +126,9 @@ AGENT_CONFIGS = {
         "agent_settings": {
             "steps": {
                 "type": SettingType.INTEGER.value,
-                "default": 10,
-                "min": 0,
-                "max": 20,
+                "default": 100,
+                "min": 10,
+                "max": 125,
                 "description": "Max number of steps to take",
             },
         },
