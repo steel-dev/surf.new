@@ -123,14 +123,18 @@ async def browser_use_agent(
     )
     logger.info("🌐 Created Agent with browser instance")
 
-    agent_task = asyncio.create_task(agent.run(agent_settings.steps))
-    logger.info("▶️ Started agent task with %d steps", agent_settings.steps)
+    steps = agent_settings.steps or 100
+
+    agent_task = asyncio.create_task(agent.run(steps))
+    logger.info("▶️ Started agent task with %d steps", steps)
 
     try:
         while True:
             if cancel_event and cancel_event.is_set():
                 agent.stop()
                 agent_task.cancel()
+                break
+            if agent._too_many_failures():
                 break
             # Wait for data from the queue
             data = await queue.get()
