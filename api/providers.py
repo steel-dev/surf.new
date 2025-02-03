@@ -9,6 +9,7 @@ from langchain_core.tools import BaseTool
 from langchain_anthropic.chat_models import convert_to_anthropic_tool
 from functools import cached_property
 import anthropic
+import os
 
 
 class BetaChatAnthropic(ChatAnthropic):
@@ -57,7 +58,9 @@ def create_llm(config: ModelConfig) -> BaseChatModel | Client:
             model_name=config.model_name or "gpt-4o-mini",
             temperature=config.temperature,
             max_tokens=config.max_tokens,
-            api_key=config.api_key,
+            api_key=(
+                os.getenv("OPENAI_API_KEY") if not config.api_key else config.api_key
+            ),
             **config.extra_params,
         )
     elif config.provider == ModelProvider.ANTHROPIC:
@@ -65,7 +68,9 @@ def create_llm(config: ModelConfig) -> BaseChatModel | Client:
             model=config.model_name or "claude-3-5-sonnet-latest",
             max_tokens_to_sample=config.max_tokens,
             temperature=config.temperature,
-            api_key=config.api_key,
+            api_key=(
+                os.getenv("ANTHROPIC_API_KEY") if not config.api_key else config.api_key
+            ),
             **config.extra_params,
         )
     elif config.provider == ModelProvider.ANTHROPIC_COMPUTER_USE:
@@ -73,7 +78,9 @@ def create_llm(config: ModelConfig) -> BaseChatModel | Client:
             model=config.model_name or "claude-3-5-sonnet-20241022",
             max_tokens_to_sample=config.max_tokens,
             temperature=config.temperature,
-            anthropic_api_key=config.api_key,
+            anthropic_api_key=(
+                os.getenv("ANTHROPIC_API_KEY") if not config.api_key else config.api_key
+            ),
             **config.extra_params,
         )
     else:

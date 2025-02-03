@@ -10,7 +10,6 @@ import Link from "next/link";
 import { SearchIcon, ListIcon, Search } from "lucide-react";
 import { useSettings } from "./contexts/SettingsContext";
 import { useSteelContext } from "./contexts/SteelContext";
-import { cn } from "@/lib/utils";
 
 export default function Home() {
   const router = useRouter();
@@ -38,9 +37,10 @@ export default function Home() {
   }, []); // Empty deps array means this runs once on mount
 
   const checkApiKey = () => {
-    const provider = currentSettings?.selectedProvider;
-    if (!provider) return false;
-    return !!currentSettings?.providerApiKeys?.[provider];
+    // const provider = currentSettings?.selectedProvider;
+    // if (!provider) return false;
+    // return !!currentSettings?.providerApiKeys?.[provider];
+    return true;
   };
   const handleApiKeySubmit = (key: string) => {
     const provider = currentSettings?.selectedProvider;
@@ -214,7 +214,8 @@ export default function Home() {
                     Investigate for me
                   </div>
                   <div className="text-[--gray-11] text-sm font-medium leading-tight">
-                    Investigate the trade-in value for iPhone 13 Pro Max on apple.com
+                    Investigate the trade-in value for iPhone 13 Pro Max on
+                    apple.com
                   </div>
                 </div>
               </div>

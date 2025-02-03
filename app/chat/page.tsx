@@ -165,15 +165,16 @@ export default function ChatPage() {
   const pendingMessageRef = useRef<string>("");
 
   const checkApiKey = () => {
-    console.info(
-      "🔑 Checking API key for provider:",
-      currentSettings?.selectedProvider
-    );
-    const provider = currentSettings?.selectedProvider;
-    if (!provider) return false;
-    const hasKey = !!currentSettings?.providerApiKeys?.[provider];
-    console.info(hasKey ? "✅ API key found" : "❌ No API key found");
-    return hasKey;
+    // console.info(
+    //   "🔑 Checking API key for provider:",
+    //   currentSettings?.selectedProvider
+    // );
+    // const provider = currentSettings?.selectedProvider;
+    // if (!provider) return false;
+    // const hasKey = !!currentSettings?.providerApiKeys?.[provider];
+    // console.info(hasKey ? "✅ API key found" : "❌ No API key found");
+    // return hasKey;
+    return true;
   };
 
   const handleApiKeySubmit = (key: string) => {

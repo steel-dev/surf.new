@@ -10,6 +10,10 @@ For a reference on the protocol, see:
 https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 async def stream_vercel_format(
     stream: AsyncGenerator[str, None],
@@ -83,14 +87,14 @@ async def stream_vercel_format(
                     else:
                         yield f"0:{json.dumps(chunk.content)}\n"
                 for tool_call in chunk.tool_calls:
-                    print(f"Emitting tool call: {tool_call.get('id')}")
+                    logger.info(f"Emitting tool call: {tool_call.get('id')}")
                     pending_tool_calls.add(tool_call.get("id"))
                     yield f'9:{{"toolCallId":"{tool_call.get("id")}","toolName":"{tool_call.get("name")}","args":{json.dumps(tool_call.get("args"))}}}\n'
 
             # Handle tool call results (that are not tool_call_chunks)
             elif hasattr(chunk, "tool_call_id") and chunk.tool_call_id:
-                print("DEBUG: Found tool_call_id:", chunk.tool_call_id)
-                print(f"Emitting tool result for: {chunk.tool_call_id}")
+                logger.info(f"Found tool_call_id: {chunk.tool_call_id}")
+                logger.info(f"Emitting tool result for: {chunk.tool_call_id}")
                 # Only try to remove if it exists in the set
                 if chunk.tool_call_id in pending_tool_calls:
                     pending_tool_calls.remove(chunk.tool_call_id)
@@ -99,7 +103,7 @@ async def stream_vercel_format(
                 # Check if this is the last tool result by looking at stop_reason
                 if len(pending_tool_calls) == 0:
                     draft_tool_calls = {}
-                    print(f"Emitting finish reason after final tool result")
+                    logger.info(f"Emitting finish reason after final tool result")
                     yield 'e:{{"finishReason":"{reason}","usage":{{"promptTokens":{prompt},"completionTokens":{completion}}}}}\n'.format(
                         reason="tool-calls",
                         prompt=0,
