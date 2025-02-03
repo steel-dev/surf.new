@@ -139,11 +139,11 @@ async def handle_chat(request: ChatRequest):
         # Directly wrap the agent stream with the Vercel AI format
         streaming_response = stream_vercel_format(
             stream=web_agent_stream,
-            is_browser_use=request.agent_type == WebAgentType.BROWSER_USE,
         )
 
         # Use background=on_disconnect to catch client-aborted requests
-        response = StreamingResponse(streaming_response, background=on_disconnect)
+        response = StreamingResponse(
+            streaming_response, background=on_disconnect)
         response.headers["x-vercel-ai-data-stream"] = "v1"
         # response.headers["model_used"] = request.model_name
         return response
@@ -156,7 +156,8 @@ async def handle_chat(request: ChatRequest):
                 "code": getattr(e, "code", 500),
             }
         }
-        raise HTTPException(status_code=getattr(e, "code", 500), detail=error_response)
+        raise HTTPException(status_code=getattr(
+            e, "code", 500), detail=error_response)
 
 
 @app.get("/api/agents")

@@ -47,6 +47,7 @@ dependencies = [
     "websockets>=12.0",
     "browser-use>=0.1.30",
     "steel-sdk>=0.1.0b8",
+    "langchain>=0.3.14",
 ]
 [tool.setuptools]
 packages = ["api"]
