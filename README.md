@@ -2,6 +2,8 @@
 
 A playground for testing web agents powered by [Steel.dev](https://steel.dev). Experience how different AI agents can surf and interact with the web just like humans do.
 
+https://github.com/user-attachments/assets/cc50c603-1cb8-49b1-8910-251b6beec228
+
 ## 🌟 Features
 
 - Test multiple web agents in a controlled environment
