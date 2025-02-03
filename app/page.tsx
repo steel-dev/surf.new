@@ -125,7 +125,7 @@ export default function Home() {
               onClick={(e) => {
                 e.preventDefault();
                 const text =
-                  "Find me the cheapest flight from San Francisco to Tokyo during the second week of February.";
+                  "Find me the cheapest one-way flight from San Francisco to Tokyo next week.";
                 if (!loading) {
                   resetSession();
                   if (!checkApiKey()) {
@@ -147,8 +147,7 @@ export default function Home() {
                     Scrape & Compare
                   </div>
                   <div className="text-[--gray-11] text-sm font-medium leading-tight">
-                    Find me the cheapest flight from San Francisco to Tokyo the
-                    2nd week of February.
+                    Find me the cheapest one-way flight from San Francisco to Tokyo next week.
                   </div>
                 </div>
               </div>
