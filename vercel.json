@@ -1,7 +1,0 @@
-{
-    "functions": {
-        "api/index.py": {
-            "runtime": "@vercel/python@4.7.1"
-        }
-    }
-}

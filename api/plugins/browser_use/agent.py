@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 from ...utils.types import AgentSettings
 from browser_use.browser.views import BrowserState
+from browser_use.browser.context import BrowserContext, BrowserSession
 from browser_use.agent.views import (
     ActionResult,
     AgentError,
@@ -30,6 +31,41 @@ os.environ["ANONYMIZED_TELEMETRY"] = "false"
 
 STEEL_API_KEY = os.getenv("STEEL_API_KEY")
 STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
+
+
+class CustomBrowserContext(BrowserContext):
+    async def close(self):
+        """Close the browser instance"""
+        logger.debug("Closing browser context")
+        pass
+
+    def __del__(self):
+        """Cleanup when object is destroyed"""
+        pass
+
+    async def _initialize_session(self):
+        """Initialize the browser session"""
+        logger.debug("Initializing browser context")
+
+        playwright_browser = await self.browser.get_playwright_browser()
+
+        context = await self._create_context(playwright_browser)
+        self._add_new_page_listener(context)
+        # page = await context.new_page()
+        if context.pages:
+            page = context.pages[-1]  # re-use the last page
+        else:
+            page = await context.new_page()
+
+        # Instead of calling _update_state(), create an empty initial state
+        initial_state = self._get_initial_state(page)
+
+        self.session = BrowserSession(
+            context=context,
+            current_page=page,
+            cached_state=initial_state,
+        )
+        return self.session
 
 
 async def browser_use_agent(
@@ -108,15 +144,19 @@ async def browser_use_agent(
     def yield_done(history: "AgentHistoryList"):
         asyncio.get_event_loop().call_soon_threadsafe(queue.put_nowait, "END")
 
+    browser = Browser(
+        BrowserConfig(
+            cdp_url=f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session_id}"
+        )
+    )
+    browser_context = CustomBrowserContext(browser=browser)
+
     agent = Agent(
         llm=llm,
         task=history[-1]["content"],
         controller=controller,
-        browser=Browser(
-            BrowserConfig(
-                cdp_url=f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session_id}"
-            )
-        ),
+        browser=browser,
+        browser_context=browser_context,
         generate_gif=False,
         register_new_step_callback=yield_data,
         register_done_callback=yield_done,
