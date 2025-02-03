@@ -90,12 +90,12 @@ AGENT_CONFIGS = {
         "description": "Agent with web browsing capabilities",
         "supported_models": [
             {
-                "provider": ModelProvider.ANTHROPIC.value,
-                "models": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"],
-            },
-            {
                 "provider": ModelProvider.OPENAI.value,
                 "models": ["gpt-4o", "gpt-4o-mini", "o1"],
+            },
+            {
+                "provider": ModelProvider.ANTHROPIC.value,
+                "models": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"],
             },
         ],
         "model_settings": {
