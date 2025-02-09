@@ -13,19 +13,19 @@ interface SendButtonProps {
 export function SendButton({ isLoading, onStop }: SendButtonProps) {
   return (
     <div className="flex items-center justify-end w-full gap-6">
-      <div className="hidden md:flex h-8 items-center gap-1">
-        <div className="text-[--gray-11] text-sm font-normal font-geist leading-[14px]">
+      <div className="hidden md:flex h-2 items-center gap-1">
+        <div className="text-[--gray-11] text-xs font-normal font-geist">
           New Line
         </div>
         <div className="pl-2.5 bg-[--gray-2] rounded-full flex items-center gap-1.5 overflow-hidden border border-[--gray-3]">
           <div
             className={`text-[--gray-11] text-xs font-normal font-geist leading-[14px]`}
           >
-            shift
+            Shift
           </div>
-          <div className="w-7 h-8 bg-[--gray-2] border-l border-[--gray-3] flex items-center justify-center gap-2.5">
+          <div className="w-7 h-6 p-4 bg-[--gray-2] border-l border-[--gray-3] flex items-center justify-center gap-2.5">
             <div
-              className={`text-[--gray-11] text-sm font-normal font-geist leading-[14px]`}
+              className={`text-[--gray-11] text-xs font-normal font-geist leading-[14px]`}
             >
               ↵
             </div>

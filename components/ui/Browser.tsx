@@ -24,8 +24,6 @@ export function Browser() {
     useSteelContext();
 
   const debugUrl = currentSession?.debugUrl;
-  console.log("debugUrl", debugUrl);
-  console.log("currentSession", currentSession);
 
   // Format time as MM:SS
   const formatTime = (seconds: number) => {
@@ -114,7 +112,7 @@ export function Browser() {
       <div ref={parentRef} className="relative flex-1 p2">
         {debugUrl ? (
           <iframe
-            src={debugUrl + "?showControls=false" }
+            src={debugUrl + "?showControls=false"}
             sandbox="allow-same-origin allow-scripts"
             className="w-full h-full rounded-sm border border-[--gray-3]"
           />
@@ -159,13 +157,13 @@ export function Browser() {
             </span>
           </div>
 
-          <span className="flex items-center gap-2">
+          <span className="flex items-center text-sm gap-2 mt-1 md:mt-0">
             Browser Powered by{" "}
             <a
               href="https://steel.dev"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[--gray-12] hover:text-[--gray-11] transition-colors duration-200 underline"
+              className="text-[--gray-12] text-sm hover:text-[--gray-11] transition-colors duration-200 underline"
             >
               Steel.dev
             </a>

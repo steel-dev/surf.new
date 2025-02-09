@@ -92,7 +92,18 @@ export default function Home() {
         <div className="text-justify p-4 text-[--gray-12] text-base font-medium font-geist leading-tight">
           Surf.new® is a a playground to test out different web agents. These
           agents can surf the web and interact with webpages similar to how a
-          human would. Built by <Link href="https://steel.dev" className="text-[--yellow-11]"><Image src="/steel_logo.svg" alt="Steel logo" width={18} height={18} className="inline-block mr-1" />steel.dev</Link>.
+          human would. Built by{" "}
+          <Link href="https://steel.dev" className="text-[--yellow-11]">
+            <Image
+              src="/steel_logo.svg"
+              alt="Steel logo"
+              width={18}
+              height={18}
+              className="inline-block mr-1"
+            />
+            steel.dev
+          </Link>
+          .
         </div>
         <div className="w-full md:max-w-[740px] px-4 flex flex-col gap-2">
           <div className="flex-col justify-start items-start">
@@ -136,19 +147,26 @@ export default function Home() {
                   proceedToChat(text);
                 }
               }}
-              className="w-full p-4 bg-[--gray-1] rounded-[20px] border border-[--gray-3] hover:bg-[--gray-2] transition-colors"
+              className="p-4 bg-[--gray-1] rounded-[20px] border border-[--gray-3] hover:bg-[--gray-2] transition-colors"
             >
-              <div className="flex items-start gap-2">
-                <div className="w-8 h-6 bg-[--gray-5] rounded-full flex items-center justify-center">
-                  <SearchIcon className="w-4 h-4 text-[--blue-9]" />
-                </div>
-                <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-6 bg-[--gray-5] rounded-full flex items-center justify-center">
+                    <Image
+                      src="/icons/pixel_plane.svg"
+                      alt="Plane icon"
+                      width={16}
+                      height={16}
+                      className="text-[--blue-9]"
+                    />
+                  </div>
                   <div className="text-[--gray-12] text-sm font-medium">
                     Scrape & Compare
                   </div>
-                  <div className="text-[--gray-11] text-sm font-medium leading-tight">
-                    Find me the cheapest one-way flight from San Francisco to Tokyo next week.
-                  </div>
+                </div>
+                <div className="text-[--gray-11] text-sm font-medium leading-tight">
+                  Find me the cheapest one-way flight from San Francisco to
+                  Tokyo next week.
                 </div>
               </div>
             </Link>
@@ -169,19 +187,25 @@ export default function Home() {
                   proceedToChat(text);
                 }
               }}
-              className="w-full p-4 bg-[--gray-1] rounded-[20px] border border-[--gray-3] hover:bg-[--gray-2] transition-colors"
+              className="p-4 bg-[--gray-1] rounded-[20px] border border-[--gray-3] hover:bg-[--gray-2] transition-colors"
             >
-              <div className="flex items-start gap-2">
-                <div className="w-8 h-6 bg-[--gray-5] rounded-full flex items-center justify-center">
-                  <ListIcon className="w-4 h-4 text-[--blue-9]" />
-                </div>
-                <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-6 bg-[--gray-5] rounded-full flex items-center justify-center">
+                    <Image
+                      src="/icons/pixel_square.svg"
+                      alt="Square icon"
+                      width={16}
+                      height={16}
+                      className="text-[--yellow-9]"
+                    />
+                  </div>
                   <div className="text-[--gray-12] text-sm font-medium">
                     Collect a List
                   </div>
-                  <div className="text-[--gray-11] text-sm font-medium leading-tight">
-                    Go to Hacker News and summarize the top 5 stories for me.
-                  </div>
+                </div>
+                <div className="text-[--gray-11] text-sm font-medium leading-tight">
+                  Go to Hacker News and summarize the top 5 stories for me.
                 </div>
               </div>
             </Link>
@@ -202,20 +226,26 @@ export default function Home() {
                   proceedToChat(text);
                 }
               }}
-              className="w-full p-4 bg-[--gray-1] rounded-[20px] border border-[--gray-3] hover:bg-[--gray-2] transition-colors"
+              className="p-4 bg-[--gray-1] rounded-[20px] border border-[--gray-3] hover:bg-[--gray-2] transition-colors"
             >
-              <div className="flex items-start gap-2">
-                <div className="w-8 h-6 bg-[--gray-5] rounded-full flex items-center justify-center">
-                  <Search className="w-4 h-4 text-[--blue-9]" />
-                </div>
-                <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-6 bg-[--gray-5] rounded-full flex items-center justify-center">
+                    <Image
+                      src="/icons/pixel_dollar.svg"
+                      alt="Dollar icon"
+                      width={16}
+                      height={16}
+                      className="text-[--blue-9]"
+                    />
+                  </div>
                   <div className="text-[--gray-12] text-sm font-medium">
                     Investigate for me
                   </div>
-                  <div className="text-[--gray-11] text-sm font-medium leading-tight">
-                    Investigate the trade-in value for iPhone 13 Pro Max on
-                    apple.com
-                  </div>
+                </div>
+                <div className="text-[--gray-11] text-sm font-medium leading-tight">
+                  Investigate the trade-in value for iPhone 13 Pro Max on
+                  apple.com
                 </div>
               </div>
             </Link>

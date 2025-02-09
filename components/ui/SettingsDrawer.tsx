@@ -85,7 +85,7 @@ export function SettingsButton() {
         <Button
           className={[
             "inline-flex items-center justify-center overflow-hidden gap-1.5",
-            "h-8 pl-1 pr-2.5 rounded-full border text-sm font-normal leading-[14px]",
+            "h-8 pl-0 pr-2.5 rounded-full border text-sm font-normal leading-[14px]",
             "font-geist",
             "bg-[--gray-2] border-[--gray-3] text-[--gray-12]",
             "hover:bg-[--gray-3]",
@@ -95,7 +95,7 @@ export function SettingsButton() {
         >
           <div
             className={[
-              "w-8 h-8 flex items-center justify-center gap-2.5 border-r",
+              "w-8 h-8 flex items-center justify-center gap-2.5 border-r text-sm",
               "bg-transparent",
               "border-[--gray-3]",
               "font-geist",
@@ -425,7 +425,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
   return (
     <SheetContent
       className={cn(
-        "flex w-1/3 h-full flex-col shrink-0",
+        "flex w-1/3 h-full flex-col shrink-0 min-w-[380px] max-w-full",
         "rounded-[20px] border border-[--gray-3] bg-[--gray-1]",
         "shadow-[0_16px_32px_-12px_rgba(14,18,27,0.10)] p-6 text-[--gray-12]"
       )}

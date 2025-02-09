@@ -550,7 +550,7 @@ export default function ChatPage() {
         <div
           className="
           flex flex-col 
-          w-full md:w-[400px] md:min-w-[400px] md:max-w-[400px]
+          w-full md:w-[400px] md:min-w-[480px] md:max-w-[480px]
           h-[60vh] md:h-full
           border-t md:border-t-0 md:border-r border-[--gray-3]
         "
