@@ -24,6 +24,8 @@ export function Browser() {
     useSteelContext();
 
   const debugUrl = currentSession?.debugUrl;
+  console.log("debugUrl", debugUrl);
+  console.log("currentSession", currentSession);
 
   // Format time as MM:SS
   const formatTime = (seconds: number) => {
@@ -83,7 +85,7 @@ export function Browser() {
       "
     >
       {/* Top Bar */}
-      <div className="h-[60px] bg-[--gray-1] border-b border-[--gray-3] flex items-center justify-center p-2.5">
+      {/* <div className="h-[60px] bg-[--gray-1] border-b border-[--gray-3] flex items-center justify-center p-2.5">
         <div className="w-[360px] h-10 px-4 py-3 bg-[--gray-1] rounded-full border border-[--gray-3] flex justify-center items-center">
           <div className="flex items-center justify-center mr-auto">
             {favicon ? (
@@ -106,13 +108,13 @@ export function Browser() {
             {url ? url : "Session not connected"}
           </span>
         </div>
-      </div>
+      </div> */}
 
       {/* Main Content */}
       <div ref={parentRef} className="relative flex-1 p2">
         {debugUrl ? (
           <iframe
-            src={debugUrl + "?showControls=false"}
+            src={debugUrl /* + "?showControls=false" */}
             sandbox="allow-same-origin allow-scripts"
             className="w-full h-full rounded-sm border border-[--gray-3]"
           />
