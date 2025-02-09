@@ -31,35 +31,48 @@ os.environ["ANONYMIZED_TELEMETRY"] = "false"
 
 STEEL_API_KEY = os.getenv("STEEL_API_KEY")
 STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
+class CustomBrowser(Browser):
+    async def close(self):
+        # Override close to do nothing
+        logger.info("CustomBrowser.close() overridden; not closing browser.")
+        # Instead of closing, simply clear internal references
+        self.playwright_browser = None
+        self.playwright = None
 
+    def __del__(self):
+        # Override __del__ to avoid any async cleanup
+        logger.info("CustomBrowser.__del__() overridden; cleanup skipped.")
+        pass
 
 class CustomBrowserContext(BrowserContext):
     async def close(self):
-        """Close the browser instance"""
-        logger.debug("Closing browser context")
+        logger.debug("CustomBrowserContext.close() overridden; skipping cleanup.")
+        # Do nothing so the underlying page stays active
         pass
 
     def __del__(self):
-        """Cleanup when object is destroyed"""
+        logger.debug("CustomBrowserContext.__del__() overridden; skipping cleanup.")
         pass
 
+    # Optionally override the async context manager exit if used
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        logger.debug("CustomBrowserContext.__aexit__() overridden; not closing context.")
+        # Do not call the parent __aexit__; simply pass.
+        pass
+
+    # You may also want to override _initialize_session if you want to ensure
+    # the initial state is created but nothing is cleaned up later.
     async def _initialize_session(self):
-        """Initialize the browser session"""
-        logger.debug("Initializing browser context")
-
+        logger.debug("CustomBrowserContext._initialize_session() overridden.")
         playwright_browser = await self.browser.get_playwright_browser()
-
         context = await self._create_context(playwright_browser)
         self._add_new_page_listener(context)
-        # page = await context.new_page()
+        # Reuse the last page if available; otherwise create one.
         if context.pages:
-            page = context.pages[-1]  # re-use the last page
+            page = context.pages[-1]
         else:
             page = await context.new_page()
-
-        # Instead of calling _update_state(), create an empty initial state
         initial_state = self._get_initial_state(page)
-
         self.session = BrowserSession(
             context=context,
             current_page=page,
@@ -67,6 +80,24 @@ class CustomBrowserContext(BrowserContext):
         )
         return self.session
 
+class CustomAgent(Agent):
+    async def run(self, max_steps: int = 100) -> "AgentHistoryList":
+        try:
+            # Execute the standard run behavior.
+            history = await super().run(max_steps)
+            return history
+        finally:
+            # Instead of closing the browser and context,
+            # log a message and do nothing.
+            self._paused = False  # or any flag resets you might need
+            # ***DON'T*** call close() on browser_context or browser.
+            self._log_cleanup_skipped()
+    
+    def _log_cleanup_skipped(self):
+        import logging
+        logging.getLogger(__name__).info(
+            "CustomAgent cleanup skipped; browser and context remain open."
+        )
 
 async def browser_use_agent(
     model_config: ModelConfig,
@@ -144,14 +175,16 @@ async def browser_use_agent(
     def yield_done(history: "AgentHistoryList"):
         asyncio.get_event_loop().call_soon_threadsafe(queue.put_nowait, "END")
 
-    browser = Browser(
+    # Use our custom browser class
+    browser = CustomBrowser(
         BrowserConfig(
             cdp_url=f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session_id}"
         )
     )
+    # Use our custom browser context instead of the default one.
     browser_context = CustomBrowserContext(browser=browser)
 
-    agent = Agent(
+    agent = CustomAgent(
         llm=llm,
         task=history[-1]["content"],
         controller=controller,
