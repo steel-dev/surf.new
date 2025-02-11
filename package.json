@@ -44,6 +44,7 @@
     "@types/node": "^17.0.12",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "autoprefixer": "^10.4.14",
     "concurrently": "^9.1.0",
     "eslint": "8.57.1",
