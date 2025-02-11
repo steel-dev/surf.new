@@ -32,6 +32,7 @@
     "react": "^18",
     "react-dom": "^18",
     "react-intersection-observer": "^9.15.1",
+    "react-syntax-highlighter": "^15.6.1",
     "shadcn-ui": "^0.9.4",
     "steel-sdk": "^0.1.0-beta.8",
     "tailwind-merge": "^2.6.0",

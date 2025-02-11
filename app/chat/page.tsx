@@ -19,54 +19,151 @@ import { AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { atomDark, solarizedDarkAtom } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { style } from "react-syntax-highlighter/dist/esm/styles/hljs";
 
 interface MarkdownTextProps {
   content: string;
 }
 
-function MarkdownText({ content }: MarkdownTextProps) {
-  // Convert the content into React elements
-  const parseMarkdown = (text: string) => {
-    // Split the text into segments that need to be processed
+// UPDATED CodeBlock component for rendering code blocks with a copy button and language display.
+function CodeBlock({ code, language }: { code: string; language?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy code:", err);
+    }
+  };
+
+  if (language) {
+    return (
+      <div className="my-4  rounded overflow-hidden">
+        {/* Header bar displaying the language (if provided) and the copy button */}
+        <div className="flex items-center justify-between bg-[--gray-1] text-[--gray-12] text-xs px-3 py-1">
+          <span>{language.toUpperCase()}</span>
+          <button
+            onClick={handleCopy}
+            className="bg-[--gray-1] text-xs px-2 py-1 rounded border border-[--gray-3] hover:bg-[--gray-2] transition-colors"
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <SyntaxHighlighter
+          language={language}
+          style={atomDark}
+          customStyle={{ padding: "1rem", margin: 0, borderRadius: "0.5rem" }}
+        >
+          {code}
+        </SyntaxHighlighter>
+      </div>
+    );
+  }
+
+  // Fallback if no language is provided: show the copy button as an overlay.
+  return (
+    <div className="relative my-4 group">
+      <SyntaxHighlighter
+        language="text"
+        style={atomDark}
+        customStyle={{ padding: "1rem", borderRadius: "0.5rem" }}
+      >
+        {code}
+      </SyntaxHighlighter>
+      <button
+        onClick={handleCopy}
+        className="absolute top-2 right-2 hidden group-hover:block bg-gray-700 text-xs text-white px-2 py-1 rounded"
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
+// UPDATED MarkdownText component to support code blocks along with inline markdown
+function MarkdownText({ content }: { content: string }) {
+  // Helper function to process inline markdown (links, bold, italics)
+  const parseInlineMarkdown = (text: string, keyOffset: number) => {
     const segments = text
       .split(/(\[.*?\]\(.*?\))|(\*.*?\*)|(_.*?_)/g)
       .filter(Boolean);
-
     return segments.map((segment, index) => {
-      // Handle links [text](url)
-      const linkMatch = segment.match(/\[(.*?)\]\((.*?)\)/);
-      if (linkMatch) {
-        return (
-          <a
-            key={index}
-            href={linkMatch[2]}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[--blue-11] hover:underline"
-          >
-            {linkMatch[1]}
-          </a>
-        );
+      const key = `${keyOffset}-${index}`;
+      // Handle markdown links [text](url)
+      if (/^\[.*?\]\(.*?\)$/.test(segment)) {
+        const linkMatch = segment.match(/^\[(.*?)\]\((.*?)\)$/);
+        if (linkMatch) {
+          return (
+            <a
+              key={key}
+              href={linkMatch[2]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[--blue-11] hover:underline"
+            >
+              {linkMatch[1]}
+            </a>
+          );
+        }
       }
-
-      // Handle bold *text*
-      const boldMatch = segment.match(/\*(.*?)\*/);
-      if (boldMatch) {
-        return <strong key={index}>{boldMatch[1]}</strong>;
+      // Handle bold text *text*
+      if (/^\*.*\*$/.test(segment)) {
+        const boldMatch = segment.match(/^\*(.*?)\*$/);
+        if (boldMatch) {
+          return <strong key={key}>{boldMatch[1]}</strong>;
+        }
       }
-
       // Handle italics _text_
-      const italicMatch = segment.match(/_(.*?)_/);
-      if (italicMatch) {
-        return <em key={index}>{italicMatch[1]}</em>;
+      if (/^_.*_$/.test(segment)) {
+        const italicMatch = segment.match(/^_(.*?)_$/);
+        if (italicMatch) {
+          return <em key={key}>{italicMatch[1]}</em>;
+        }
       }
-
-      // Return regular text
-      return <span key={index}>{segment}</span>;
+      // Return plain text if no markdown matched
+      return <span key={key}>{segment}</span>;
     });
   };
 
-  return <>{parseMarkdown(content)}</>;
+  // Main parser that first detects code blocks and falls back to inline markdown
+  const parseContent = (text: string) => {
+    const elements = [];
+    let lastIndex = 0;
+    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+    let match: RegExpExecArray | null;
+    let key = 0;
+
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      // Process any text before the code block as inline markdown
+      if (match.index > lastIndex) {
+        const inlineText = text.substring(lastIndex, match.index);
+        elements.push(...parseInlineMarkdown(inlineText, key));
+        key++;
+      }
+      // Extract language (if provided) and code content, then render the CodeBlock
+      const language = match[1] || "";
+      const codeContent = match[2];
+      elements.push(
+        <CodeBlock key={`code-${key}`} language={language} code={codeContent} />
+      );
+      key++;
+      lastIndex = codeBlockRegex.lastIndex;
+    }
+
+    // Process any remaining text after the last code block
+    if (lastIndex < text.length) {
+      const inlineText = text.substring(lastIndex);
+      elements.push(...parseInlineMarkdown(inlineText, key));
+    }
+    return elements;
+  };
+
+  return <>{parseContent(content)}</>;
 }
 
 interface UserMessageProps {
