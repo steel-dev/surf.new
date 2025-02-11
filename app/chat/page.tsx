@@ -21,7 +21,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomDark, solarizedDarkAtom } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { style } from "react-syntax-highlighter/dist/esm/styles/hljs";
 
 interface MarkdownTextProps {
   content: string;
