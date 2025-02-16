@@ -137,8 +137,8 @@ typing-extensions==4.12.2
 tzlocal==5.2
 uritemplate==4.1.1
 urllib3==2.3.0
+uv==0.5.31
 uvicorn==0.34.0
-uvloop==0.21.0
 watchfiles==1.0.4
 websockets==14.2
 wrapt==1.17.2
