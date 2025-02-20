@@ -97,6 +97,13 @@ AGENT_CONFIGS = {
                 "provider": ModelProvider.ANTHROPIC.value,
                 "models": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"],
             },
+            {
+                "provider": ModelProvider.GEMINI.value,
+                "models": [
+                    "gemini-2.0-flash",
+                    "gemini-1.5-pro"
+                ],
+            },
         ],
         "model_settings": {
             "max_tokens": {

@@ -10,6 +10,7 @@ from langchain_anthropic.chat_models import convert_to_anthropic_tool
 from functools import cached_property
 import anthropic
 import os
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 
 class BetaChatAnthropic(ChatAnthropic):
@@ -80,6 +81,16 @@ def create_llm(config: ModelConfig) -> BaseChatModel | Client:
             temperature=config.temperature,
             anthropic_api_key=(
                 os.getenv("ANTHROPIC_API_KEY") if not config.api_key else config.api_key
+            ),
+            **config.extra_params,
+        )
+    elif config.provider == ModelProvider.GEMINI:
+        return ChatGoogleGenerativeAI(
+            model=config.model_name or "gemini-2.0-flash",
+            temperature=config.temperature,
+            max_output_tokens=config.max_tokens,
+            google_api_key=(
+                os.getenv("GOOGLE_API_KEY") if not config.api_key else config.api_key
             ),
             **config.extra_params,
         )
