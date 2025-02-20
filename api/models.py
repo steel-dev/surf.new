@@ -6,6 +6,7 @@ class ModelProvider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     ANTHROPIC_COMPUTER_USE = "anthropic_computer_use"
+    GEMINI = "gemini"
     # OPENROUTER = "openrouter"
     # GOOGLE = "google"
 
@@ -76,5 +77,6 @@ class ModelConfig:
             ModelProvider.OPENAI: "gpt-4o-mini",
             ModelProvider.ANTHROPIC: "claude-3-5-sonnet-latest",
             ModelProvider.ANTHROPIC_COMPUTER_USE: "claude-3-5-sonnet-20241022",
+            ModelProvider.GEMINI: "gemini-2.0-flash",
         }
         return default_models.get(provider) or ValueError("Unsupported provider.")
