@@ -168,3 +168,8 @@ async def get_available_agents():
     Returns all available agents and their configurations.
     """
     return AGENT_CONFIGS
+
+
+@app.get("/healthcheck")
+async def healthcheck():
+    return {"status": "ok"}
