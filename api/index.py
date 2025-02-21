@@ -21,7 +21,7 @@ except ImportError:
 load_dotenv(".env.local")
 
 app = FastAPI()
-app.add_middleware(ProfilingMiddleware)
+# app.add_middleware(ProfilingMiddleware) # Uncomment this when profiling is needed
 STEEL_API_KEY = os.getenv("STEEL_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 STEEL_API_URL = os.getenv("STEEL_API_URL")
