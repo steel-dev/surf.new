@@ -31,73 +31,6 @@ os.environ["ANONYMIZED_TELEMETRY"] = "false"
 
 STEEL_API_KEY = os.getenv("STEEL_API_KEY")
 STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
-class CustomBrowser(Browser):
-    async def close(self):
-        # Override close to do nothing
-        logger.info("CustomBrowser.close() overridden; not closing browser.")
-        # Instead of closing, simply clear internal references
-        self.playwright_browser = None
-        self.playwright = None
-
-    def __del__(self):
-        # Override __del__ to avoid any async cleanup
-        logger.info("CustomBrowser.__del__() overridden; cleanup skipped.")
-        pass
-
-class CustomBrowserContext(BrowserContext):
-    async def close(self):
-        logger.debug("CustomBrowserContext.close() overridden; skipping cleanup.")
-        # Do nothing so the underlying page stays active
-        pass
-
-    def __del__(self):
-        logger.debug("CustomBrowserContext.__del__() overridden; skipping cleanup.")
-        pass
-
-    # Optionally override the async context manager exit if used
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        logger.debug("CustomBrowserContext.__aexit__() overridden; not closing context.")
-        # Do not call the parent __aexit__; simply pass.
-        pass
-
-    # You may also want to override _initialize_session if you want to ensure
-    # the initial state is created but nothing is cleaned up later.
-    async def _initialize_session(self):
-        logger.debug("CustomBrowserContext._initialize_session() overridden.")
-        playwright_browser = await self.browser.get_playwright_browser()
-        context = await self._create_context(playwright_browser)
-        self._add_new_page_listener(context)
-        # Reuse the last page if available; otherwise create one.
-        if context.pages:
-            page = context.pages[-1]
-        else:
-            page = await context.new_page()
-        initial_state = self._get_initial_state(page)
-        self.session = BrowserSession(
-            context=context,
-            current_page=page,
-            cached_state=initial_state,
-        )
-        return self.session
-
-class CustomAgent(Agent):
-    async def run(self, max_steps: int = 100) -> "AgentHistoryList":
-        try:
-            # Execute the standard run behavior.
-            history = await super().run(max_steps)
-            return history
-        finally:
-            # Instead of closing the browser and context,
-            # log a message and do nothing.
-            self._paused = False  # or any flag resets you might need
-            # ***DON'T*** call close() on browser_context or browser.
-            self._log_cleanup_skipped()
-    
-    def _log_cleanup_skipped(self):
-        import logging
-        logging.getLogger(__name__).info(
-            "CustomAgent cleanup skipped; browser and context remain open."
-        )
 
 async def browser_use_agent(
     model_config: ModelConfig,
@@ -114,7 +47,7 @@ async def browser_use_agent(
     logger.info("🤖 Created LLM instance")
 
     controller = Controller(exclude_actions=["open_tab", "switch_tab"])
-
+    browser = None
     queue = asyncio.Queue()
 
     def yield_data(
@@ -176,15 +109,15 @@ async def browser_use_agent(
         asyncio.get_event_loop().call_soon_threadsafe(queue.put_nowait, "END")
 
     # Use our custom browser class
-    browser = CustomBrowser(
+    browser = Browser(
         BrowserConfig(
             cdp_url=f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session_id}"
         )
     )
     # Use our custom browser context instead of the default one.
-    browser_context = CustomBrowserContext(browser=browser)
+    browser_context = BrowserContext(browser=browser)
 
-    agent = CustomAgent(
+    agent = Agent(
         llm=llm,
         task=history[-1]["content"],
         controller=controller,
@@ -215,5 +148,19 @@ async def browser_use_agent(
                 break
             yield data
     finally:
-        # Cleanup code here
+        # if browser:
+        #     print("Closing browser...")
+        #     try:
+        #         await browser.close()
+        #         print("Browser closed.")
+        #     except Exception as e:
+        #         print(f"Error closing browser: {e}")
+        # # Cleanup code here
+        # pending_tasks = [t for t in asyncio.all_tasks(
+        # ) if t is not asyncio.current_task()]
+        # if pending_tasks:
+        #     print(f"Cancelling {len(pending_tasks)} pending tasks...")
+        #     for t in pending_tasks:
+        #         t.cancel()
+        #     await asyncio.gather(*pending_tasks, return_exceptions=True)
         pass

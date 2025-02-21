@@ -7,6 +7,7 @@ from .utils.prompt import convert_to_chat_messages
 from .models import ModelConfig
 from .plugins import WebAgentType, get_web_agent, AGENT_CONFIGS
 from .streamer import stream_vercel_format
+from api.middleware.profiling_middleware import ProfilingMiddleware
 import os
 import asyncio
 
@@ -20,6 +21,7 @@ except ImportError:
 load_dotenv(".env.local")
 
 app = FastAPI()
+app.add_middleware(ProfilingMiddleware)
 STEEL_API_KEY = os.getenv("STEEL_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 STEEL_API_URL = os.getenv("STEEL_API_URL")
@@ -142,7 +144,8 @@ async def handle_chat(request: ChatRequest):
         )
 
         # Use background=on_disconnect to catch client-aborted requests
-        response = StreamingResponse(streaming_response, background=on_disconnect)
+        response = StreamingResponse(
+            streaming_response, background=on_disconnect)
         response.headers["x-vercel-ai-data-stream"] = "v1"
         # response.headers["model_used"] = request.model_name
         return response
@@ -155,7 +158,8 @@ async def handle_chat(request: ChatRequest):
                 "code": getattr(e, "code", 500),
             }
         }
-        raise HTTPException(status_code=getattr(e, "code", 500), detail=error_response)
+        raise HTTPException(status_code=getattr(
+            e, "code", 500), detail=error_response)
 
 
 @app.get("/api/agents")
