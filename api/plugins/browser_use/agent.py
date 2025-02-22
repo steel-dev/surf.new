@@ -129,7 +129,7 @@ async def browser_use_agent(
     )
     logger.info("🌐 Created Agent with browser instance")
 
-    steps = agent_settings.steps or 100
+    steps = agent_settings.steps or 25
 
     agent_task = asyncio.create_task(agent.run(steps))
     logger.info("▶️ Started agent task with %d steps", steps)
