@@ -95,7 +95,7 @@ AGENT_CONFIGS = {
             },
             {
                 "provider": ModelProvider.ANTHROPIC.value,
-                "models": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"],
+                "models": ["claude-3-7-sonnet-latest", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"],
             },
             {
                 "provider": ModelProvider.GEMINI.value,
@@ -147,6 +147,10 @@ AGENT_CONFIGS = {
             {
                 "provider": ModelProvider.ANTHROPIC_COMPUTER_USE.value,
                 "models": ["claude-3-5-sonnet-20241022"],
+            },
+            {
+                "provider": ModelProvider.ANTHROPIC.value,
+                "models": ["claude-3-7-sonnet-latest"],
             }
         ],
         "model_settings": {

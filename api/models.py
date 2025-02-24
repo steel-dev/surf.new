@@ -75,7 +75,7 @@ class ModelConfig:
         """
         default_models = {
             ModelProvider.OPENAI: "gpt-4o-mini",
-            ModelProvider.ANTHROPIC: "claude-3-5-sonnet-latest",
+            ModelProvider.ANTHROPIC: "claude-3-7-sonnet-latest",
             ModelProvider.ANTHROPIC_COMPUTER_USE: "claude-3-5-sonnet-20241022",
             ModelProvider.GEMINI: "gemini-2.0-flash",
         }

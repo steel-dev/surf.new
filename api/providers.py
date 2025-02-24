@@ -66,7 +66,7 @@ def create_llm(config: ModelConfig) -> BaseChatModel | Client:
         )
     elif config.provider == ModelProvider.ANTHROPIC:
         return ChatAnthropic(
-            model=config.model_name or "claude-3-5-sonnet-latest",
+            model=config.model_name or "claude-3-7-sonnet-latest",
             max_tokens_to_sample=config.max_tokens,
             temperature=config.temperature,
             api_key=(
