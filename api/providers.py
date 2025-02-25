@@ -11,6 +11,8 @@ from functools import cached_property
 import anthropic
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_ollama import ChatOllama
+from pydantic import SecretStr
 
 
 class BetaChatAnthropic(ChatAnthropic):
@@ -49,10 +51,11 @@ class BetaChatAnthropic(ChatAnthropic):
         return super().bind(tools=anthropic_tools, **kwargs)
 
 
-def create_llm(config: ModelConfig) -> BaseChatModel | Client:
+def create_llm(config: ModelConfig) -> tuple[BaseChatModel | Client, bool]:
     """
-    Returns the appropriate LangChain LLM object based on the ModelConfig provider.
-    You can expand this to handle additional providers.
+    Returns a tuple containing:
+    1. The appropriate LangChain LLM object based on the ModelConfig provider
+    2. A boolean indicating whether vision should be used (False for DeepSeek, True for others)
     """
     if config.provider == ModelProvider.OPENAI:
         return ChatOpenAI(
@@ -63,7 +66,7 @@ def create_llm(config: ModelConfig) -> BaseChatModel | Client:
                 os.getenv("OPENAI_API_KEY") if not config.api_key else config.api_key
             ),
             **config.extra_params,
-        )
+        ), True
     elif config.provider == ModelProvider.ANTHROPIC:
         return ChatAnthropic(
             model=config.model_name or "claude-3-7-sonnet-latest",
@@ -73,7 +76,7 @@ def create_llm(config: ModelConfig) -> BaseChatModel | Client:
                 os.getenv("ANTHROPIC_API_KEY") if not config.api_key else config.api_key
             ),
             **config.extra_params,
-        )
+        ), True
     elif config.provider == ModelProvider.ANTHROPIC_COMPUTER_USE:
         return BetaChatAnthropic(
             model=config.model_name or "claude-3-5-sonnet-20241022",
@@ -83,7 +86,7 @@ def create_llm(config: ModelConfig) -> BaseChatModel | Client:
                 os.getenv("ANTHROPIC_API_KEY") if not config.api_key else config.api_key
             ),
             **config.extra_params,
-        )
+        ), True
     elif config.provider == ModelProvider.GEMINI:
         return ChatGoogleGenerativeAI(
             model=config.model_name or "gemini-2.0-flash",
@@ -93,6 +96,29 @@ def create_llm(config: ModelConfig) -> BaseChatModel | Client:
                 os.getenv("GOOGLE_API_KEY") if not config.api_key else config.api_key
             ),
             **config.extra_params,
-        )
+        ), True
+    elif config.provider == ModelProvider.DEEPSEEK:
+        api_key = config.api_key or os.getenv("DEEPSEEK_API_KEY", "")
+        
+        return ChatOpenAI(
+            base_url="https://api.deepseek.com/v1",
+            model_name=config.model_name or "deepseek-chat",
+            temperature=config.temperature,
+            max_tokens=config.max_tokens,
+            api_key=SecretStr(api_key),
+            **config.extra_params,
+        ), False
+    elif config.provider == ModelProvider.OLLAMA:
+        # Extract base model name if it contains a tag (e.g., "qwen2.5:32b" -> "qwen2.5")
+        model_name = config.model_name or "llama3.3"
+        base_model_name = model_name.split(':')[0] if ':' in model_name else model_name
+        
+        return ChatOllama(
+            model=base_model_name,  # Use the base model name without tags
+            temperature=config.temperature,
+            num_ctx=config.extra_params.get("num_ctx", 32000),
+            # Ollama connects to a local instance and doesn't require an API key
+            **{k: v for k, v in config.extra_params.items() if k != "num_ctx"},
+        ), True
     else:
         raise ValueError(f"Unsupported provider: {config.provider}")

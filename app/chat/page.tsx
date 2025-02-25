@@ -1,26 +1,29 @@
-"use client";
+'use client';
 
-import { useChat } from "ai/react";
-import { useSettings } from "@/app/contexts/SettingsContext";
-import { useSteelContext } from "@/app/contexts/SteelContext";
-import { ChatInput } from "@/components/ui/ChatInput";
-import { useEffect, useState, useRef } from "react";
-import { useChatContext } from "@/app/contexts/ChatContext";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { CheckIcon } from "@radix-ui/react-icons";
-import { ToolInvocations } from "@/components/ui/tool";
-import { useInView } from "react-intersection-observer";
-import { Browser } from "@/components/ui/Browser";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { AuthModal } from "@/components/ui/AuthModal";
-import { AlertCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useChat } from 'ai/react';
+import { useSettings } from '@/app/contexts/SettingsContext';
+import { useSteelContext } from '@/app/contexts/SteelContext';
+import { ChatInput } from '@/components/ui/ChatInput';
+import { useEffect, useState, useRef } from 'react';
+import { useChatContext } from '@/app/contexts/ChatContext';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { CheckIcon } from '@radix-ui/react-icons';
+import { ToolInvocations } from '@/components/ui/tool';
+import { useInView } from 'react-intersection-observer';
+import { Browser } from '@/components/ui/Browser';
+import { Button } from '@/components/ui/button';
+import { Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { AuthModal } from '@/components/ui/AuthModal';
+import { AlertCircle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { atomDark, solarizedDarkAtom } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import {
+  atomDark,
+  solarizedDarkAtom,
+} from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface MarkdownTextProps {
   content: string;
@@ -36,7 +39,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error("Failed to copy code:", err);
+      console.error('Failed to copy code:', err);
     }
   };
 
@@ -50,13 +53,13 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
             onClick={handleCopy}
             className="bg-[--gray-1] text-xs px-2 py-1 rounded border border-[--gray-3] hover:bg-[--gray-2] transition-colors"
           >
-            {copied ? "Copied" : "Copy"}
+            {copied ? 'Copied' : 'Copy'}
           </button>
         </div>
         <SyntaxHighlighter
           language={language}
           style={atomDark}
-          customStyle={{ padding: "1rem", margin: 0, borderRadius: "0.5rem" }}
+          customStyle={{ padding: '1rem', margin: 0, borderRadius: '0.5rem' }}
         >
           {code}
         </SyntaxHighlighter>
@@ -70,7 +73,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
       <SyntaxHighlighter
         language="text"
         style={atomDark}
-        customStyle={{ padding: "1rem", borderRadius: "0.5rem" }}
+        customStyle={{ padding: '1rem', borderRadius: '0.5rem' }}
       >
         {code}
       </SyntaxHighlighter>
@@ -78,7 +81,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
         onClick={handleCopy}
         className="absolute top-2 right-2 hidden group-hover:block bg-gray-700 text-xs text-white px-2 py-1 rounded"
       >
-        {copied ? "Copied" : "Copy"}
+        {copied ? 'Copied' : 'Copy'}
       </button>
     </div>
   );
@@ -145,7 +148,7 @@ function MarkdownText({ content }: { content: string }) {
         key++;
       }
       // Extract language (if provided) and code content, then render the CodeBlock
-      const language = match[1] || "";
+      const language = match[1] || '';
       const codeContent = match[2];
       elements.push(
         <CodeBlock key={`code-${key}`} language={language} code={codeContent} />
@@ -170,9 +173,9 @@ interface UserMessageProps {
 }
 
 function UserMessage({ content }: UserMessageProps) {
-  const hasLineBreaks = content.includes("\n");
+  const hasLineBreaks = content.includes('\n');
   const longestLine = Math.max(
-    ...content.split("\n").map((line) => line.length)
+    ...content.split('\n').map((line) => line.length)
   );
   const isLongMessage = longestLine > 60;
 
@@ -182,7 +185,7 @@ function UserMessage({ content }: UserMessageProps) {
         className={`
           inline-flex p-3 max-w-[85%] w-fit font-geist
           ${
-            isLongMessage || hasLineBreaks ? "rounded-3xl" : "rounded-full px-4"
+            isLongMessage || hasLineBreaks ? 'rounded-3xl' : 'rounded-full px-4'
           }
           bg-[--blue-9] shrink-0
         `}
@@ -240,7 +243,7 @@ function ChatScrollAnchor({
 }
 
 export default function ChatPage() {
-  console.info("🔄 Initializing ChatPage component");
+  console.info('🔄 Initializing ChatPage component');
   const { currentSettings, updateSettings } = useSettings();
   const {
     currentSession,
@@ -258,28 +261,29 @@ export default function ChatPage() {
 
   // Add API key modal state and handlers
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const pendingMessageRef = useRef<string>("");
+  const pendingMessageRef = useRef<string>('');
 
   const checkApiKey = () => {
-    // console.info(
-    //   "🔑 Checking API key for provider:",
-    //   currentSettings?.selectedProvider
-    // );
+    // // For Ollama, we don't need an API key as it connects to a local instance
+    // if (currentSettings?.selectedProvider === 'ollama') {
+    //   return true;
+    // }
+
+    // // For other providers, check if API key exists
     // const provider = currentSettings?.selectedProvider;
     // if (!provider) return false;
     // const hasKey = !!currentSettings?.providerApiKeys?.[provider];
-    // console.info(hasKey ? "✅ API key found" : "❌ No API key found");
     // return hasKey;
     return true;
   };
 
   const handleApiKeySubmit = (key: string) => {
-    console.info("🔑 Handling API key submission");
+    console.info('🔑 Handling API key submission');
     const provider = currentSettings?.selectedProvider;
     if (!provider) return;
 
     console.info(
-      "⚙️ Updating settings with new API key for provider:",
+      '⚙️ Updating settings with new API key for provider:',
       provider
     );
     const currentKeys = currentSettings?.providerApiKeys || {};
@@ -294,11 +298,11 @@ export default function ChatPage() {
 
     if (pendingMessageRef.current) {
       console.info(
-        "📝 Setting initial message from pending ref:",
+        '📝 Setting initial message from pending ref:',
         pendingMessageRef.current
       );
       setInitialMessage(pendingMessageRef.current);
-      pendingMessageRef.current = "";
+      pendingMessageRef.current = '';
     }
   };
 
@@ -312,11 +316,11 @@ export default function ChatPage() {
     reload,
     stop,
   } = useChat({
-    api: "/api/chat",
+    api: '/api/chat',
     id: currentSession?.id || undefined,
     maxSteps: 10,
     initialMessages: initialMessage
-      ? [{ id: "1", role: "user", content: initialMessage }]
+      ? [{ id: '1', role: 'user', content: initialMessage }]
       : undefined,
     body: {
       session_id: currentSession?.id,
@@ -324,8 +328,8 @@ export default function ChatPage() {
       provider: currentSettings?.selectedProvider,
       api_key:
         currentSettings?.providerApiKeys?.[
-          currentSettings?.selectedProvider || ""
-        ] || "",
+          currentSettings?.selectedProvider || ''
+        ] || '',
       model_settings: {
         model_choice: currentSettings?.selectedModel,
         max_tokens: Number(currentSettings?.modelSettings.max_tokens),
@@ -350,24 +354,24 @@ export default function ChatPage() {
           )
           .map(([key, value]) => [
             key,
-            typeof value === "string" ? value : Number(value),
+            typeof value === 'string' ? value : Number(value),
           ])
       ),
     },
     onFinish: (message) => {
-      console.info("✅ Chat finished:", message);
+      console.info('✅ Chat finished:', message);
     },
     onError: (error) => {
-      console.error("❌ Chat error:", error);
+      console.error('❌ Chat error:', error);
       toast({
-        title: "Error",
-        description: error?.message || "An unexpected error occurred",
+        title: 'Error',
+        description: error?.message || 'An unexpected error occurred',
         className:
-          "text-[var(--gray-12)] border border-[var(--red-11)] bg-[var(--red-2)] text-sm",
+          'text-[var(--gray-12)] border border-[var(--red-11)] bg-[var(--red-2)] text-sm',
       });
     },
     onToolCall: (toolCall) => {
-      console.info("🛠️ Tool call received:", toolCall);
+      console.info('🛠️ Tool call received:', toolCall);
     },
   });
 
@@ -383,17 +387,17 @@ export default function ChatPage() {
     const atBottom = scrollHeight - clientHeight <= scrollTop + 1;
 
     if (atBottom !== isAtBottom) {
-      console.info("📜 Scroll position changed:", { atBottom });
+      console.info('📜 Scroll position changed:', { atBottom });
       setIsAtBottom(atBottom);
     }
   }
 
   // If user is sending a message (isLoading = true), scroll to bottom
   useEffect(() => {
-    console.info("📜 Loading state changed:", { isLoading });
+    console.info('📜 Loading state changed:', { isLoading });
     if (isLoading) {
       if (!scrollAreaRef.current?.children[0]) {
-        console.warn("⚠️ Messages container is null; cannot scroll");
+        console.warn('⚠️ Messages container is null; cannot scroll');
         return;
       }
       const messagesContainer = scrollAreaRef.current.children[0];
@@ -411,7 +415,7 @@ export default function ChatPage() {
 
   // Log key context and state changes
   useEffect(() => {
-    console.info("📊 Current session state:", {
+    console.info('📊 Current session state:', {
       sessionId: currentSession?.id,
       isCreating: isCreatingSession,
       isExpired,
@@ -427,13 +431,13 @@ export default function ChatPage() {
   ]);
 
   useEffect(() => {
-    console.info("⚙️ Current settings state:", {
+    console.info('⚙️ Current settings state:', {
       provider: currentSettings?.selectedProvider,
       model: currentSettings?.selectedModel,
       agent: currentSettings?.selectedAgent,
       hasApiKey:
         !!currentSettings?.providerApiKeys?.[
-          currentSettings?.selectedProvider || ""
+          currentSettings?.selectedProvider || ''
         ],
     });
   }, [currentSettings]);
@@ -441,7 +445,7 @@ export default function ChatPage() {
   // Track message state changes
   useEffect(() => {
     if (messages.length > 0) {
-      console.info("💬 Messages state updated:", {
+      console.info('💬 Messages state updated:', {
         count: messages.length,
         lastMessage: {
           role: messages[messages.length - 1].role,
@@ -460,7 +464,7 @@ export default function ChatPage() {
 
   // Track loading and submission states
   useEffect(() => {
-    console.info("🔄 Chat interaction state:", {
+    console.info('🔄 Chat interaction state:', {
       isLoading,
       isSubmitting,
       hasInput: !!input,
@@ -474,7 +478,7 @@ export default function ChatPage() {
     messageText: string,
     attachments: File[]
   ) {
-    console.info("📤 Handling message send:", {
+    console.info('📤 Handling message send:', {
       messageText,
       attachments,
       currentState: {
@@ -489,7 +493,7 @@ export default function ChatPage() {
     e.preventDefault();
 
     if (!checkApiKey()) {
-      console.info("🔑 No API key found, storing message and showing modal");
+      console.info('🔑 No API key found, storing message and showing modal');
       pendingMessageRef.current = messageText;
       setShowApiKeyModal(true);
       return;
@@ -497,16 +501,16 @@ export default function ChatPage() {
 
     setIsSubmitting(true);
     if (messages.length === 0) {
-      console.info("📝 Setting initial message with context:", {
+      console.info('📝 Setting initial message with context:', {
         messageText,
         sessionId: currentSession?.id,
         provider: currentSettings?.selectedProvider,
         agent: currentSettings?.selectedAgent,
       });
       setInitialMessage(messageText);
-      handleInputChange({ target: { value: "" } } as any);
+      handleInputChange({ target: { value: '' } } as any);
     } else {
-      console.info("📤 Submitting message to existing chat:", {
+      console.info('📤 Submitting message to existing chat:', {
         messageText,
         sessionId: currentSession?.id,
         existingMessages: messages.length,
@@ -517,9 +521,9 @@ export default function ChatPage() {
 
     let session = currentSession;
     if (!session?.id) {
-      console.info("🔄 Creating new session for message");
+      console.info('🔄 Creating new session for message');
       session = await createSession();
-      console.info("✅ New session created:", session);
+      console.info('✅ New session created:', session);
     }
   }
 
@@ -549,9 +553,9 @@ export default function ChatPage() {
 
   // Enhanced removeIncompleteToolCalls with more detailed logging
   function removeIncompleteToolCalls() {
-    console.info("🧹 Starting cleanup of incomplete tool calls");
+    console.info('🧹 Starting cleanup of incomplete tool calls');
     console.info(
-      "📊 Current messages state:",
+      '📊 Current messages state:',
       messages.map((m) => ({
         id: m.id,
         role: m.role,
@@ -564,18 +568,18 @@ export default function ChatPage() {
     setMessages((prev) => {
       const updatedMessages = prev
         .map((msg) => {
-          if (msg.role === "assistant" && Array.isArray(msg.toolInvocations)) {
+          if (msg.role === 'assistant' && Array.isArray(msg.toolInvocations)) {
             const filteredToolInvocations = msg.toolInvocations.filter(
-              (invocation) => invocation.state === "result"
+              (invocation) => invocation.state === 'result'
             );
-            console.info("🔍 Processing message tool calls:", {
+            console.info('🔍 Processing message tool calls:', {
               messageId: msg.id,
               before: msg.toolInvocations.length,
               after: filteredToolInvocations.length,
               removed:
                 msg.toolInvocations.length - filteredToolInvocations.length,
               removedStates: msg.toolInvocations
-                .filter((t) => t.state !== "result")
+                .filter((t) => t.state !== 'result')
                 .map((t) => ({ state: t.state })),
             });
             return {
@@ -587,17 +591,17 @@ export default function ChatPage() {
         })
         .filter((msg) => {
           if (
-            msg.role === "assistant" &&
+            msg.role === 'assistant' &&
             !msg.content?.trim() &&
             (!msg.toolInvocations || msg.toolInvocations.length === 0)
           ) {
-            console.info("🗑️ Removing empty assistant message");
+            console.info('🗑️ Removing empty assistant message');
             return false;
           }
           return true;
         });
 
-      console.info("✅ Cleanup complete:", {
+      console.info('✅ Cleanup complete:', {
         beforeCount: prev.length,
         afterCount: updatedMessages.length,
         removedCount: prev.length - updatedMessages.length,
@@ -608,7 +612,7 @@ export default function ChatPage() {
   }
 
   function handleStop() {
-    console.info("🛑 Stopping chat");
+    console.info('🛑 Stopping chat');
     stop();
     removeIncompleteToolCalls();
   }
@@ -617,23 +621,23 @@ export default function ChatPage() {
   function isSettingConfig(value: any): boolean {
     return (
       value &&
-      typeof value === "object" &&
-      "type" in value &&
-      "default" in value
+      typeof value === 'object' &&
+      'type' in value &&
+      'default' in value
     );
   }
 
   // Reuse the same handler from NavBar for consistency
   const handleNewChat = async () => {
-    console.info("🆕 Starting new chat");
-    router.push("/");
+    console.info('🆕 Starting new chat');
+    router.push('/');
   };
 
   // Add effect to handle session expiration
   useEffect(() => {
-    console.info("⏰ Session expiration status changed:", { isExpired });
+    console.info('⏰ Session expiration status changed:', { isExpired });
     if (isExpired) {
-      console.info("⚠️ Session expired, cleaning up");
+      console.info('⚠️ Session expired, cleaning up');
       stop();
       removeIncompleteToolCalls();
     }
@@ -676,7 +680,7 @@ export default function ChatPage() {
                 >
                   {/* Force message content to respect container width */}
                   <div className="w-full max-w-full">
-                    {message.role === "user" ? (
+                    {message.role === 'user' ? (
                       <>
                         <UserMessage content={message.content} />
                         {index === 0 && isCreatingSession && (
@@ -813,7 +817,7 @@ export default function ChatPage() {
           {selectedImage && (
             <div
               className="p flex items-center justify-center"
-              style={{ height: "80vh" }}
+              style={{ height: '80vh' }}
             >
               <img
                 src={selectedImage}
@@ -827,7 +831,7 @@ export default function ChatPage() {
 
       {/* API Key Modal */}
       <AuthModal
-        provider={currentSettings?.selectedProvider || ""}
+        provider={currentSettings?.selectedProvider || ''}
         isOpen={showApiKeyModal}
         onSubmit={handleApiKeySubmit}
       />

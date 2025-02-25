@@ -10,6 +10,8 @@ from .streamer import stream_vercel_format
 from api.middleware.profiling_middleware import ProfilingMiddleware
 import os
 import asyncio
+import subprocess
+import re
 
 # 1) Import the Steel client
 try:
@@ -173,3 +175,47 @@ async def get_available_agents():
 @app.get("/healthcheck")
 async def healthcheck():
     return {"status": "ok"}
+
+
+@app.get("/api/ollama/models")
+async def get_ollama_models():
+    """
+    Fetches available models from a local Ollama instance using the 'ollama list' command.
+    Returns a list of model objects with full tags and base names that can be used with Ollama.
+    """
+    try:
+        result = subprocess.run(
+            ["ollama", "list"], 
+            capture_output=True, 
+            text=True, 
+            check=True
+        )
+        
+        models = []
+        lines = result.stdout.strip().split('\n')
+        
+        if lines and "NAME" in lines[0] and "ID" in lines[0]:
+            lines = lines[1:]
+        
+        for line in lines:
+            if line.strip():
+                parts = re.split(r'\s{2,}', line.strip())
+                if parts and parts[0]:
+                    full_tag = parts[0]
+                    base_name = full_tag.split(':')[0] if ':' in full_tag else full_tag
+                    models.append({
+                        "tag": full_tag,
+                        "base_name": base_name
+                    })
+        
+        return {"models": models}
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to fetch Ollama models: {e.stderr}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error fetching Ollama models: {str(e)}"
+        )
