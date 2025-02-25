@@ -36,8 +36,8 @@ export function NavBar() {
             <Link href="/" className="w-[95px]">
               <span
                 className={cn(
-                  "text-[--gray-12] text-2xl font-normal leading-loose",
-                  "font-instrument-serif-italic"
+                  'text-[--gray-12] text-2xl font-normal leading-loose',
+                  'font-instrument-serif-italic'
                 )}
               >
                 surf.new
@@ -97,8 +97,8 @@ export function NavBar() {
       {/* Mobile Menu */}
       <div
         className={cn(
-          "md:hidden bg-neutral-900 border-b border-[#282828]",
-          isMenuOpen ? "block" : "hidden"
+          'md:hidden bg-neutral-900 border-b border-[#282828]',
+          isMenuOpen ? 'block' : 'hidden'
         )}
       >
         <div className="p-4 flex flex-col gap-4 max-w-[1440px] mx-auto">
@@ -107,10 +107,7 @@ export function NavBar() {
             className="w-full bg-neutral-900 rounded-full border-[#282828] text-[#afafaf] justify-center h-8"
             asChild
           >
-            <Link
-              href="https://github.com/yourusername/surf-new"
-              target="_blank"
-            >
+            <Link href="https://github.com/steel-dev/surf.new" target="_blank">
               <Github className="h-4 w-4" />
               <span className="px-1 font-geist">Github Repo</span>
             </Link>
