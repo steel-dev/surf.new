@@ -1,13 +1,15 @@
-"use client";
+'use client';
 
-import React, { useState, useRef, forwardRef } from "react";
-import { Input } from "@/components/ui/input";
-import { SettingsButton } from "@/components/ui/SettingsDrawer";
-import { SendButton } from "./SendButton";
-import { ChatInputProps } from "./types";
-import { Paperclip, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { forwardRef, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Paperclip, X } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { SettingsButton } from '@/components/ui/SettingsDrawer';
+
+import { SendButton } from './SendButton';
+import { ChatInputProps } from './types';
 
 export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
   (
@@ -18,7 +20,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
       disabled,
       isLoading,
       onStop,
-      placeholder = "Type your request here...",
+      placeholder = 'Type your request here...',
     },
     ref
   ) => {
@@ -57,12 +59,12 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
       }
       setAttachments(updated);
       // Reset the file input so user can pick the same file again if needed
-      e.target.value = "";
+      e.target.value = '';
     }
 
     // Remove an attachment from the local list
     function removeAttachment(index: number) {
-      setAttachments((prev) => {
+      setAttachments(prev => {
         const copy = [...prev];
         copy.splice(index, 1);
         return copy;
@@ -73,7 +75,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
     function truncateFileName(file: File): string {
       const { name } = file;
       // Example: if name === "my-super-long-cat-picture.png"
-      const dotIndex = name.lastIndexOf(".");
+      const dotIndex = name.lastIndexOf('.');
       if (dotIndex < 0) return name;
       const ext = name.slice(dotIndex + 1); // "png"
       const base = name.slice(0, dotIndex); // "my-super-long-cat-picture"
@@ -98,7 +100,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
 
     function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
       // If user presses Enter without Shift, submit:
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === 'Enter' && !e.shiftKey) {
         handleSubmit(e);
       }
     }
@@ -108,7 +110,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
     const shouldShowButton = isLoading || hasInput;
 
     return (
-      <form onSubmit={handleSubmit} className="flex flex-col w-full h-full">
+      <form onSubmit={handleSubmit} className="flex size-full flex-col">
         {/* Attachment bubbles row */}
         {attachments.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-2">
@@ -117,19 +119,19 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
                 <div
                   key={index}
                   className="
-                  flex items-center
-                  h-8 px-2
-                  bg-[#1c1c1c]
+                  relative flex
+                  h-8 cursor-default
+                  items-center
+                  gap-2
                   rounded-full
                   border
                   border-[#282828]
-                  gap-2
-                  relative
-                  cursor-default
+                  bg-[#1c1c1c]
+                  px-2
                   hover:bg-[#282828]
                 "
                 >
-                  <span className="text-[#6e6e6e] text-sm font-normal font-geist leading-[18px]">
+                  <span className="font-geist text-sm font-normal leading-[18px] text-[#6e6e6e]">
                     {truncateFileName(file)}
                   </span>
                   {/* X button shows only in ChatInput */}
@@ -137,10 +139,9 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
                     type="button"
                     onClick={() => removeAttachment(index)}
                     className="
-                    flex items-center justify-center
-                    w-4 h-4
+                    flex size-4 items-center
+                    justify-center rounded-full
                     text-[#6e6e6e] 
-                    rounded-full
                     hover:text-white
                   "
                     aria-label="Remove attachment"
@@ -154,31 +155,31 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
         )}
 
         {/* Textarea for typed input */}
-        <div className="flex-1 flex flex-col gap-2 w-full h-full">
+        <div className="flex size-full flex-1 flex-col gap-2">
           <textarea
             ref={ref}
             value={value}
             onKeyDown={handleKeyDown}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={e => onChange(e.target.value)}
             placeholder={placeholder}
             disabled={disabled}
             className="
-            flex-1
             w-full
+            flex-1
             overflow-auto
+            rounded-md
             bg-muted
-            text-[var(--gray-12)]
             text-base
+            text-[var(--gray-12)]
+            outline-none
             [&::placeholder]:text-[var(--gray-11)]
             [&:focus::placeholder]:opacity-0
-            rounded-md
-            outline-none
           "
-            style={{ resize: "none" }}
+            style={{ resize: 'none' }}
           />
 
           {/* Bottom row: attachments button + settings + send */}
-          <div className="flex justify-between items-center w-full">
+          <div className="flex w-full items-center justify-between">
             <div className="flex items-center gap-2">
               {/* Hidden file input */}
               <input
@@ -226,7 +227,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 20 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
                 >
                   <SendButton
                     disabled={disabled || false}
@@ -243,4 +244,4 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
   }
 );
 
-ChatInput.displayName = "ChatInput";
+ChatInput.displayName = 'ChatInput';

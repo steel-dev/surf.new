@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { createContext, useContext } from "react";
-import { useLocalStorage } from "usehooks-ts";
+import { createContext, useContext } from 'react';
+import { useLocalStorage } from 'usehooks-ts';
 
 export interface ModelSettings {
   max_tokens: number;
@@ -39,19 +39,19 @@ interface SettingsContextType {
   }) => void;
 }
 
-const SettingsContext = createContext<SettingsContextType | undefined>(
-  undefined
-);
+const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [currentSettings, setCurrentSettings] =
-    useLocalStorage<SurfSettings | null>("chatSettings", null);
+  const [currentSettings, setCurrentSettings] = useLocalStorage<SurfSettings | null>(
+    'chatSettings',
+    null
+  );
 
   const updateSettings = (newSettings: {
     [key in keyof SurfSettings]: SurfSettings[key];
   }) => {
     if (currentSettings) {
-      setCurrentSettings((prev) => ({ ...prev, ...newSettings }));
+      setCurrentSettings(prev => ({ ...prev, ...newSettings }));
     } else {
       setCurrentSettings(newSettings);
     }
@@ -72,7 +72,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 export function useSettings() {
   const context = useContext(SettingsContext);
   if (context === undefined) {
-    throw new Error("useSettings must be used within a SettingsProvider");
+    throw new Error('useSettings must be used within a SettingsProvider');
   }
   return context;
 }

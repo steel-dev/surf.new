@@ -1,14 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
+import { useEffect, useMemo, useState } from 'react';
+import { Settings } from 'lucide-react';
+import { Info } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -18,24 +14,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Settings } from 'lucide-react';
 import {
-  useSettings,
-  AgentSettings,
-  ModelSettings,
-} from '@/app/contexts/SettingsContext';
-import { cn } from '@/lib/utils';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { Info } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+import { cn } from '@/lib/utils';
+
 import { useChatContext } from '@/app/contexts/ChatContext';
+import { AgentSettings, ModelSettings, useSettings } from '@/app/contexts/SettingsContext';
 import { useSteelContext } from '@/app/contexts/SteelContext';
 
 interface AgentConfig {
@@ -102,7 +96,7 @@ export function SettingsButton() {
               'group-hover:bg-transparent',
             ].join(' ')}
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="size-5" />
           </div>
           {currentSettings?.selectedAgent}
         </Button>
@@ -125,7 +119,7 @@ function SettingInput({
 }) {
   const label = settingKey
     .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 
   // Use config.default if value is undefined
@@ -146,9 +140,9 @@ function SettingInput({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger>
-                <Info className="h-4 w-4  rounded-full" />
+                <Info className="size-4 rounded-full" />
               </TooltipTrigger>
-              <TooltipContent className="bg-[--gray-1] text-[--gray-11] border border-[--gray-3]">
+              <TooltipContent className="border border-[--gray-3] bg-[--gray-1] text-[--gray-11]">
                 {config.description}
               </TooltipContent>
             </Tooltip>
@@ -164,14 +158,14 @@ function SettingInput({
             max={config.max ?? 1}
             step={config.step ?? 0.1}
             onValueChange={([newValue]) => onChange(sanitizeNumber(newValue))}
-            className="[&_[role=slider]]:bg-[--gray-12] [&_[role=slider]]:border-[--gray-12] [&_[role=slider]]:shadow-sm
-                       [&_.relative]:bg-[--gray-6] 
-                       [&_[data-disabled]]:opacity-50
-                       [&_[role=slider]]:focus:ring-2 [&_[role=slider]]:focus:ring-[--gray-8]
-                       [&_[role=slider]]:focus-visible:outline-none
-                       [&_.absolute]:bg-[--gray-12]"
+            className="[&_.absolute]:bg-[--gray-12] [&_.relative]:bg-[--gray-6] [&_[data-disabled]]:opacity-50
+                       [&_[role=slider]]:border-[--gray-12] 
+                       [&_[role=slider]]:bg-[--gray-12]
+                       [&_[role=slider]]:shadow-sm [&_[role=slider]]:focus:ring-2
+                       [&_[role=slider]]:focus:ring-[--gray-8]
+                       [&_[role=slider]]:focus-visible:outline-none"
           />
-          <div className="text-sm text-[--gray-11] text-right">
+          <div className="text-right text-sm text-[--gray-11]">
             {Number(currentValue).toFixed(2)}
           </div>
         </div>
@@ -184,13 +178,13 @@ function SettingInput({
           min={config.min}
           max={config.max}
           step={1}
-          onChange={(e) => {
+          onChange={e => {
             const newValue = parseInt(e.target.value);
             if (!isNaN(newValue)) {
               onChange(sanitizeNumber(newValue));
             }
           }}
-          onBlur={(e) => {
+          onBlur={e => {
             const newValue = parseInt(e.target.value);
             if (!isNaN(newValue)) {
               onChange(sanitizeNumber(newValue));
@@ -207,7 +201,7 @@ function SettingInput({
           type="text"
           value={currentValue}
           maxLength={config.maxLength}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={e => onChange(e.target.value)}
           className="settings-input"
         />
       )}
@@ -216,7 +210,7 @@ function SettingInput({
         <Textarea
           value={currentValue}
           maxLength={config.maxLength}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={e => onChange(e.target.value)}
           className="settings-input min-h-[100px]"
         />
       )}
@@ -240,16 +234,10 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
   const [isLoadingOllamaModels, setIsLoadingOllamaModels] = useState(false);
   const [ollamaError, setOllamaError] = useState<string | null>(null);
 
-  const [selectedAgent, setSelectedAgent] = useState(
-    currentSettings?.selectedAgent
-  );
-  const [selectedProvider, setSelectedProvider] = useState(
-    currentSettings?.selectedProvider
-  );
+  const [selectedAgent, setSelectedAgent] = useState(currentSettings?.selectedAgent);
+  const [selectedProvider, setSelectedProvider] = useState(currentSettings?.selectedProvider);
 
-  const [selectedModel, setSelectedModel] = useState(
-    currentSettings?.selectedModel
-  );
+  const [selectedModel, setSelectedModel] = useState(currentSettings?.selectedModel);
 
   const [modelSettings, setModelSettings] = useState<ModelSettings | undefined>(
     currentSettings?.modelSettings
@@ -325,33 +313,29 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
       try {
         const response = await fetch('/api/agents');
         if (!response.ok) {
-          throw new Error(
-            `Failed to fetch agents: ${
-              response.status
-            } ${await response.text()}`
-          );
+          throw new Error(`Failed to fetch agents: ${response.status} ${await response.text()}`);
         }
         const data: AvailableAgents = await response.json();
         setAgents(data);
         if (!currentSettings) {
           const firstAgentKey = Object.keys(data)[0];
           const defaultAgent = data[firstAgentKey].name;
-          const defaultProvider =
-            data[firstAgentKey].supported_models[0].provider;
-          const defaultModel =
-            data[firstAgentKey].supported_models[0].models[0];
-          const defaultModelSettings = Object.entries(
-            data[firstAgentKey].model_settings
-          ).reduce((acc, [key, value]) => {
-            acc[key] = value.default;
-            return acc;
-          }, {} as ModelSettings);
-          const defaultAgentSettings = Object.entries(
-            data[firstAgentKey].agent_settings
-          ).reduce((acc, [key, value]) => {
-            acc[key] = value.default;
-            return acc;
-          }, {} as AgentSettings);
+          const defaultProvider = data[firstAgentKey].supported_models[0].provider;
+          const defaultModel = data[firstAgentKey].supported_models[0].models[0];
+          const defaultModelSettings = Object.entries(data[firstAgentKey].model_settings).reduce(
+            (acc, [key, value]) => {
+              acc[key] = value.default;
+              return acc;
+            },
+            {} as ModelSettings
+          );
+          const defaultAgentSettings = Object.entries(data[firstAgentKey].agent_settings).reduce(
+            (acc, [key, value]) => {
+              acc[key] = value.default;
+              return acc;
+            },
+            {} as AgentSettings
+          );
 
           updateSettings({
             selectedAgent: firstAgentKey,
@@ -383,20 +367,22 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
       setSelectedModel(agents[selectedAgent].supported_models[0].models[0]);
 
       // Initialize model settings with all default values from the config
-      const defaultModelSettings = Object.entries(
-        agents[selectedAgent].model_settings
-      ).reduce((acc, [key, config]) => {
-        acc[key] = config.default;
-        return acc;
-      }, {} as ModelSettings);
+      const defaultModelSettings = Object.entries(agents[selectedAgent].model_settings).reduce(
+        (acc, [key, config]) => {
+          acc[key] = config.default;
+          return acc;
+        },
+        {} as ModelSettings
+      );
 
       // Initialize agent settings with all default values from the config
-      const defaultAgentSettings = Object.entries(
-        agents[selectedAgent].agent_settings
-      ).reduce((acc, [key, config]) => {
-        acc[key] = config.default;
-        return acc;
-      }, {} as AgentSettings);
+      const defaultAgentSettings = Object.entries(agents[selectedAgent].agent_settings).reduce(
+        (acc, [key, config]) => {
+          acc[key] = config.default;
+          return acc;
+        },
+        {} as AgentSettings
+      );
 
       setModelSettings(defaultModelSettings);
       setAgentSettings(defaultAgentSettings);
@@ -408,7 +394,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
     if (agents && selectedAgent && selectedProvider) {
       // Find the supported models for the selected provider
       const providerModels = agents[selectedAgent].supported_models.find(
-        (m) => m.provider === selectedProvider
+        m => m.provider === selectedProvider
       );
 
       // If we found models for this provider, set the first one as default
@@ -419,26 +405,22 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
   }, [selectedProvider, selectedAgent, agents]);
 
   // When setting agent/model settings, store only the values, not the config objects
-  const handleSettingChange = (
-    settingType: 'model' | 'agent',
-    key: string,
-    value: any
-  ) => {
+  const handleSettingChange = (settingType: 'model' | 'agent', key: string, value: any) => {
     if (settingType === 'model') {
       setModelSettings(
-        (prev) =>
+        prev =>
           ({
             ...(prev || {}),
             [key]: value,
-          } as ModelSettings)
+          }) as ModelSettings
       );
     } else {
       setAgentSettings(
-        (prev) =>
+        prev =>
           ({
             ...(prev || {}),
             [key]: value,
-          } as AgentSettings)
+          }) as AgentSettings
       );
     }
   };
@@ -448,13 +430,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
   }
 
   function handleSave() {
-    if (
-      !selectedAgent ||
-      !selectedProvider ||
-      !selectedModel ||
-      !modelSettings ||
-      !agentSettings
-    ) {
+    if (!selectedAgent || !selectedProvider || !selectedModel || !modelSettings || !agentSettings) {
       return;
     }
 
@@ -481,8 +457,8 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
 
   if (loading || !agents) {
     return (
-      <div className="flex items-center justify-center w-3 h-3">
-        <div className="w-3 h-3 border-2 border-[--gray-8] border-t-transparent rounded-full animate-spin" />
+      <div className="flex size-3 items-center justify-center">
+        <div className="size-3 animate-spin rounded-full border-2 border-[--gray-8] border-t-transparent" />
       </div>
     );
   }
@@ -490,9 +466,9 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
   return (
     <SheetContent
       className={cn(
-        'flex w-1/3 h-full flex-col shrink-0 min-w-[380px] max-w-full',
+        'flex h-full w-1/3 min-w-[380px] max-w-full shrink-0 flex-col',
         'rounded-[20px] border border-[--gray-3] bg-[--gray-1]',
-        'shadow-[0_16px_32px_-12px_rgba(14,18,27,0.10)] p-6 text-[--gray-12]'
+        'p-6 text-[--gray-12] shadow-[0_16px_32px_-12px_rgba(14,18,27,0.10)]'
       )}
     >
       <SheetHeader>
@@ -504,31 +480,31 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
 
       {/* Add a scrollable container with styled scrollbar */}
       <div
-        className="flex-1 overflow-y-auto my-6 pr-4 
-        [&::-webkit-scrollbar]:w-2.5
-        [&::-webkit-scrollbar-track]:bg-[--gray-3]
-        [&::-webkit-scrollbar-track]:rounded-full
-        [&::-webkit-scrollbar-thumb]:bg-[--gray-7]
+        className="scrollbar-gutter-stable scrollbar-thin my-6 flex-1 
+        space-y-4
+        overflow-y-auto
+        pr-4
         [&::-webkit-scrollbar-thumb]:rounded-full
         [&::-webkit-scrollbar-thumb]:border-4
-        [&::-webkit-scrollbar-thumb]:hover:bg-[--gray-8]
+        [&::-webkit-scrollbar-thumb]:bg-[--gray-7]
         [&::-webkit-scrollbar-thumb]:transition-colors
-        scrollbar-gutter-stable
-        scrollbar-thin
-        space-y-4"
+        [&::-webkit-scrollbar-thumb]:hover:bg-[--gray-8]
+        [&::-webkit-scrollbar-track]:rounded-full
+        [&::-webkit-scrollbar-track]:bg-[--gray-3]
+        [&::-webkit-scrollbar]:w-2.5"
       >
         {/* Agent Selection */}
         <div className="space-y-2">
           <label className="text-sm font-medium">Agent</label>
           <Select
             value={selectedAgent}
-            onValueChange={(value) => setSelectedAgent(value)}
+            onValueChange={value => setSelectedAgent(value)}
             disabled={Object.keys(agents).length === 0}
           >
             <SelectTrigger className="settings-input">
               <SelectValue placeholder="Select an agent" />
             </SelectTrigger>
-            <SelectContent className="settings-input bg-[--gray-1] text-[--gray-11] border border-[--gray-3]">
+            <SelectContent className="settings-input border border-[--gray-3] bg-[--gray-1] text-[--gray-11]">
               {Object.entries(agents).map(([key, agent]) => (
                 <SelectItem key={key} value={key}>
                   {agent.name} - {agent.description}
@@ -545,11 +521,8 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Model Provider</label>
                 <Select
-                  value={
-                    selectedProvider ??
-                    agents[selectedAgent].supported_models[0].provider
-                  }
-                  onValueChange={(value) => {
+                  value={selectedProvider ?? agents[selectedAgent].supported_models[0].provider}
+                  onValueChange={value => {
                     setSelectedProvider(value);
                   }}
                 >
@@ -557,16 +530,11 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="settings-input">
-                    {agents[selectedAgent].supported_models.map(
-                      (supportedModel) => (
-                        <SelectItem
-                          key={supportedModel.provider}
-                          value={supportedModel.provider}
-                        >
-                          {supportedModel.provider}
-                        </SelectItem>
-                      )
-                    )}
+                    {agents[selectedAgent].supported_models.map(supportedModel => (
+                      <SelectItem key={supportedModel.provider} value={supportedModel.provider}>
+                        {supportedModel.provider}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -574,11 +542,8 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Model</label>
                 <Select
-                  value={
-                    selectedModel ??
-                    agents[selectedAgent].supported_models[0].models[0]
-                  }
-                  onValueChange={(value) => setSelectedModel(value)}
+                  value={selectedModel ?? agents[selectedAgent].supported_models[0].models[0]}
+                  onValueChange={value => setSelectedModel(value)}
                 >
                   <SelectTrigger className="settings-input">
                     <SelectValue />
@@ -632,9 +597,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
           {selectedProvider && selectedProvider !== 'ollama' && (
             <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">
-                  {selectedProvider} API Key
-                </label>
+                <label className="text-sm font-medium">{selectedProvider} API Key</label>
                 {currentSettings?.providerApiKeys?.[selectedProvider] && (
                   <button
                     onClick={() => {
@@ -661,15 +624,14 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                       : `Enter ${selectedProvider} API Key`
                   }
                   value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
+                  onChange={e => setApiKey(e.target.value)}
                   className="settings-input pr-20"
                 />
                 {apiKey && (
                   <button
                     onClick={() => {
                       // Save the API key
-                      const currentKeys =
-                        currentSettings?.providerApiKeys || {};
+                      const currentKeys = currentSettings?.providerApiKeys || {};
                       updateSettings({
                         ...currentSettings!,
                         providerApiKeys: {
@@ -680,8 +642,8 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                       setApiKey(''); // Clear input after saving
                     }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 
-                             px-3 py-1 text-sm bg-[--gray-3] hover:bg-[--gray-4] 
-                             text-[--gray-12] rounded-full transition-colors"
+                             rounded-full bg-[--gray-3] px-3 py-1 text-sm 
+                             text-[--gray-12] transition-colors hover:bg-[--gray-4]"
                   >
                     Save
                   </button>
@@ -739,7 +701,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowAdvanced((prev) => !prev)}
+              onClick={() => setShowAdvanced(prev => !prev)}
               className={[
                 'w-full inline-flex items-center justify-between',
                 'h-8 px-2.5 rounded-full border text-sm font-normal leading-[14px]',
@@ -757,7 +719,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
                 className={cn(
-                  'transform transition-transform duration-200',
+                  'transition-transform duration-200',
                   showAdvanced ? 'rotate-180' : ''
                 )}
               >
@@ -771,7 +733,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
               </svg>
             </Button>
             {showAdvanced && (
-              <div className="mt-2 space-y-4 animate-in slide-in-from-top-2 duration-200">
+              <div className="mt-2 space-y-4 duration-200 animate-in slide-in-from-top-2">
                 {/* Model Settings */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium">Model Settings</h3>
@@ -802,8 +764,18 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                         handleSettingChange('agent', key, value)
                       }
                     />
-                  )
-                )}
+                  ))}
+
+                {/* Agent Settings */}
+                {Object.entries(agents[selectedAgent].agent_settings).map(([key, config]) => (
+                  <SettingInput
+                    key={key}
+                    settingKey={key}
+                    config={config}
+                    value={agentSettings?.[key] ?? config.default}
+                    onChange={value => handleSettingChange('agent', key, value)}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -813,11 +785,11 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
       {/* Keep the button at the bottom */}
       <div className="mt-auto">
         <div
-          className="h-8 px-2 py-1 bg-[--gray-12] rounded-full justify-center items-center inline-flex overflow-hidden cursor-pointer"
+          className="inline-flex h-8 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[--gray-12] px-2 py-1"
           onClick={handleSave}
         >
-          <div className="px-1 justify-start items-start flex">
-            <div className="text-neutral-900 text-sm font-medium font-geist leading-normal">
+          <div className="flex items-start justify-start px-1">
+            <div className="font-geist text-sm font-medium leading-normal text-neutral-900">
               Apply Changes & Restart Chat
             </div>
           </div>

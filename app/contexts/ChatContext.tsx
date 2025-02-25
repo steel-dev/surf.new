@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { createContext, useContext, useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
-import { useLocalStorage } from "usehooks-ts";
+import { createContext, useContext, useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { useLocalStorage } from 'usehooks-ts';
 
 interface ChatContextType {
   initialMessage: string | null;
@@ -16,18 +16,18 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [initialMessage, setInitialMessage] = useLocalStorage<string | null>(
-    "initialMessage",
+    'initialMessage',
     null
   );
   const [shouldAutoSubmit, setShouldAutoSubmit] = useLocalStorage<boolean>(
-    "shouldAutoSubmit",
+    'shouldAutoSubmit',
     false
   );
   const pathname = usePathname();
 
   // Reset context when navigating away from chat
   useEffect(() => {
-    if (pathname === "/") {
+    if (pathname === '/') {
       clearInitialState();
     }
   }, [pathname]);
@@ -55,7 +55,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 export function useChatContext() {
   const context = useContext(ChatContext);
   if (context === undefined) {
-    throw new Error("useChatContext must be used within a ChatProvider");
+    throw new Error('useChatContext must be used within a ChatProvider');
   }
   return context;
 }

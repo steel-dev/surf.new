@@ -1,0 +1,68 @@
+{
+  "extends": ["next/core-web-vitals", "prettier", "plugin:tailwindcss/recommended"],
+  "plugins": ["prettier", "simple-import-sort", "tailwindcss"],
+  "rules": {
+    "prettier/prettier": ["error", {}, { "usePrettierrc": true }],
+    "simple-import-sort/imports": "error",
+    "simple-import-sort/exports": "error",
+    "tailwindcss/classnames-order": "warn",
+    "tailwindcss/no-custom-classname": "warn",
+    "tailwindcss/no-contradicting-classname": "error",
+    "no-unused-vars": "warn",
+    "no-console": ["warn", { "allow": ["warn", "error"] }]
+  },
+  "settings": {
+    "tailwindcss": {
+      "callees": ["cn", "clsx", "cva"],
+      "config": "tailwind.config.js"
+    }
+  },
+  "overrides": [
+    {
+      "files": ["*.ts", "*.tsx"],
+      "parser": "@typescript-eslint/parser"
+    },
+    {
+      "files": ["*.js", "*.jsx", "*.ts", "*.tsx"],
+      "rules": {
+        "simple-import-sort/imports": [
+          "error",
+          {
+            "groups": [
+              // Packages `react` related packages come first.
+              ["^react", "^@?\\w"],
+              // Server actions
+              ["^@/actions(/.*|$)", "^(actions)(/.*|$)"],
+              // UI components
+              ["^@/ui(/.*|$)", "^(ui)(/.*|$)"],
+              // Internal packages.
+              ["^@/components(/.*|$)", "^(components)(/.*|$)"],
+              // hooks
+              ["^@/hooks(/.*|$)", "^(hooks)(/.*|$)"],
+              // Lib
+              ["^@/lib(/.*|$)", "^(lib)(/.*|$)"],
+              // API
+              ["^@/api(/.*|$)", "^(api)(/.*|$)"],
+              // Utils
+              ["^@/utils(/.*|$)", "^(utils)(/.*|$)"],
+              // Types
+              ["^@/types(/.*|$)", "^(types)(/.*|$)"],
+              // Public files
+              ["^@/public(/.*|$)", "^(public)(/.*|$)"],
+              // Other @/ imports
+              ["^@/"],
+              // Side effect imports.
+              ["^\\u0000"],
+              // Parent imports. Put `..` last.
+              ["^\\.\\.(?!/?$)", "^\\.\\./?$"],
+              // Other relative imports. Put same-folder imports and `.` last.
+              ["^\\./(?=.*/)(?!/?$)", "^\\.(?!/?$)", "^\\./?$"],
+              // Style imports.
+              ["^.+\\.?(css)$"]
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

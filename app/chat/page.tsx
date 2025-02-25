@@ -1,29 +1,28 @@
 'use client';
 
-import { useChat } from 'ai/react';
-import { useSettings } from '@/app/contexts/SettingsContext';
-import { useSteelContext } from '@/app/contexts/SteelContext';
-import { ChatInput } from '@/components/ui/ChatInput';
-import { useEffect, useState, useRef } from 'react';
-import { useChatContext } from '@/app/contexts/ChatContext';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { CheckIcon } from '@radix-ui/react-icons';
-import { ToolInvocations } from '@/components/ui/tool';
+import { useEffect, useRef, useState } from 'react';
 import { useInView } from 'react-intersection-observer';
-import { Browser } from '@/components/ui/Browser';
-import { Button } from '@/components/ui/button';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { atomDark, solarizedDarkAtom } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { CheckIcon } from '@radix-ui/react-icons';
+import { useChat } from 'ai/react';
 import { Plus } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { AuthModal } from '@/components/ui/AuthModal';
 import { AlertCircle } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import {
-  atomDark,
-  solarizedDarkAtom,
-} from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { AuthModal } from '@/components/ui/AuthModal';
+import { Browser } from '@/components/ui/Browser';
+import { Button } from '@/components/ui/button';
+import { ChatInput } from '@/components/ui/ChatInput';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { ToolInvocations } from '@/components/ui/tool';
+
+import { useToast } from '@/hooks/use-toast';
+
+import { useChatContext } from '@/app/contexts/ChatContext';
+import { useSettings } from '@/app/contexts/SettingsContext';
+import { useSteelContext } from '@/app/contexts/SteelContext';
 
 interface MarkdownTextProps {
   content: string;
@@ -45,13 +44,13 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
 
   if (language) {
     return (
-      <div className="my-4  rounded overflow-hidden">
+      <div className="my-4  overflow-hidden rounded">
         {/* Header bar displaying the language (if provided) and the copy button */}
-        <div className="flex items-center justify-between bg-[--gray-1] text-[--gray-12] text-xs px-3 py-1">
+        <div className="flex items-center justify-between bg-[--gray-1] px-3 py-1 text-xs text-[--gray-12]">
           <span>{language.toUpperCase()}</span>
           <button
             onClick={handleCopy}
-            className="bg-[--gray-1] text-xs px-2 py-1 rounded border border-[--gray-3] hover:bg-[--gray-2] transition-colors"
+            className="rounded border border-[--gray-3] bg-[--gray-1] px-2 py-1 text-xs transition-colors hover:bg-[--gray-2]"
           >
             {copied ? 'Copied' : 'Copy'}
           </button>
@@ -69,7 +68,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
 
   // Fallback if no language is provided: show the copy button as an overlay.
   return (
-    <div className="relative my-4 group">
+    <div className="group relative my-4">
       <SyntaxHighlighter
         language="text"
         style={atomDark}
@@ -79,7 +78,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
       </SyntaxHighlighter>
       <button
         onClick={handleCopy}
-        className="absolute top-2 right-2 hidden group-hover:block bg-gray-700 text-xs text-white px-2 py-1 rounded"
+        className="absolute right-2 top-2 hidden rounded bg-gray-700 px-2 py-1 text-xs text-white group-hover:block"
       >
         {copied ? 'Copied' : 'Copy'}
       </button>
@@ -91,9 +90,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
 function MarkdownText({ content }: { content: string }) {
   // Helper function to process inline markdown (links, bold, italics)
   const parseInlineMarkdown = (text: string, keyOffset: number) => {
-    const segments = text
-      .split(/(\[.*?\]\(.*?\))|(\*.*?\*)|(_.*?_)/g)
-      .filter(Boolean);
+    const segments = text.split(/(\[.*?\]\(.*?\))|(\*.*?\*)|(_.*?_)/g).filter(Boolean);
     return segments.map((segment, index) => {
       const key = `${keyOffset}-${index}`;
       // Handle markdown links [text](url)
@@ -150,9 +147,7 @@ function MarkdownText({ content }: { content: string }) {
       // Extract language (if provided) and code content, then render the CodeBlock
       const language = match[1] || '';
       const codeContent = match[2];
-      elements.push(
-        <CodeBlock key={`code-${key}`} language={language} code={codeContent} />
-      );
+      elements.push(<CodeBlock key={`code-${key}`} language={language} code={codeContent} />);
       key++;
       lastIndex = codeBlockRegex.lastIndex;
     }
@@ -174,27 +169,23 @@ interface UserMessageProps {
 
 function UserMessage({ content }: UserMessageProps) {
   const hasLineBreaks = content.includes('\n');
-  const longestLine = Math.max(
-    ...content.split('\n').map((line) => line.length)
-  );
+  const longestLine = Math.max(...content.split('\n').map(line => line.length));
   const isLongMessage = longestLine > 60;
 
   return (
-    <div className="flex justify-end w-full">
+    <div className="flex w-full justify-end">
       <div
         className={`
-          inline-flex p-3 max-w-[85%] w-fit font-geist
-          ${
-            isLongMessage || hasLineBreaks ? 'rounded-3xl' : 'rounded-full px-4'
-          }
-          bg-[--blue-9] shrink-0
+          inline-flex w-fit max-w-[85%] p-3 font-geist
+          ${isLongMessage || hasLineBreaks ? 'rounded-3xl' : 'rounded-full px-4'}
+          shrink-0 bg-[--blue-9]
         `}
       >
         <div
           className={`
-            text-[--gray-12] text-base font-normal 
-            font-geist leading-normal whitespace-pre-wrap
-            break-words w-full overflow-hidden
+            w-full overflow-hidden whitespace-pre-wrap 
+            break-words font-geist text-base
+            font-normal leading-normal text-[--gray-12]
           `}
         >
           <MarkdownText content={content} />
@@ -216,26 +207,16 @@ interface ChatScrollAnchorProps {
   scrollAreaRef: React.RefObject<HTMLDivElement>;
 }
 
-function ChatScrollAnchor({
-  trackVisibility,
-  isAtBottom,
-  scrollAreaRef,
-}: ChatScrollAnchorProps) {
+function ChatScrollAnchor({ trackVisibility, isAtBottom, scrollAreaRef }: ChatScrollAnchorProps) {
   const { ref, inView } = useInView({
     trackVisibility,
     delay: 100,
   });
 
   useEffect(() => {
-    if (
-      isAtBottom &&
-      trackVisibility &&
-      !inView &&
-      scrollAreaRef.current?.children[0]
-    ) {
+    if (isAtBottom && trackVisibility && !inView && scrollAreaRef.current?.children[0]) {
       const messagesContainer = scrollAreaRef.current.children[0];
-      messagesContainer.scrollTop =
-        messagesContainer.scrollHeight - messagesContainer.clientHeight;
+      messagesContainer.scrollTop = messagesContainer.scrollHeight - messagesContainer.clientHeight;
     }
   }, [inView, isAtBottom, trackVisibility]);
 
@@ -245,15 +226,9 @@ function ChatScrollAnchor({
 export default function ChatPage() {
   console.info('🔄 Initializing ChatPage component');
   const { currentSettings, updateSettings } = useSettings();
-  const {
-    currentSession,
-    createSession,
-    isCreatingSession,
-    isExpired,
-    resetSession,
-  } = useSteelContext();
-  const { initialMessage, setInitialMessage, clearInitialState } =
-    useChatContext();
+  const { currentSession, createSession, isCreatingSession, isExpired, resetSession } =
+    useSteelContext();
+  const { initialMessage, setInitialMessage, clearInitialState } = useChatContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasShownConnection, setHasShownConnection] = useState(false);
   const router = useRouter();
@@ -282,10 +257,7 @@ export default function ChatPage() {
     const provider = currentSettings?.selectedProvider;
     if (!provider) return;
 
-    console.info(
-      '⚙️ Updating settings with new API key for provider:',
-      provider
-    );
+    console.info('⚙️ Updating settings with new API key for provider:', provider);
     const currentKeys = currentSettings?.providerApiKeys || {};
     updateSettings({
       ...currentSettings!,
@@ -297,83 +269,64 @@ export default function ChatPage() {
     setShowApiKeyModal(false);
 
     if (pendingMessageRef.current) {
-      console.info(
-        '📝 Setting initial message from pending ref:',
-        pendingMessageRef.current
-      );
+      console.info('📝 Setting initial message from pending ref:', pendingMessageRef.current);
       setInitialMessage(pendingMessageRef.current);
       pendingMessageRef.current = '';
     }
   };
 
-  const {
-    messages,
-    handleSubmit,
-    isLoading,
-    input,
-    handleInputChange,
-    setMessages,
-    reload,
-    stop,
-  } = useChat({
-    api: '/api/chat',
-    id: currentSession?.id || undefined,
-    maxSteps: 10,
-    initialMessages: initialMessage
-      ? [{ id: '1', role: 'user', content: initialMessage }]
-      : undefined,
-    body: {
-      session_id: currentSession?.id,
-      agent_type: currentSettings?.selectedAgent,
-      provider: currentSettings?.selectedProvider,
-      api_key:
-        currentSettings?.providerApiKeys?.[
-          currentSettings?.selectedProvider || ''
-        ] || '',
-      model_settings: {
-        model_choice: currentSettings?.selectedModel,
-        max_tokens: Number(currentSettings?.modelSettings.max_tokens),
-        temperature: Number(currentSettings?.modelSettings.temperature),
-        top_p: currentSettings?.modelSettings.top_p
-          ? Number(currentSettings?.modelSettings.top_p)
-          : undefined,
-        top_k: currentSettings?.modelSettings.top_k
-          ? Number(currentSettings?.modelSettings.top_k)
-          : undefined,
-        frequency_penalty: currentSettings?.modelSettings.frequency_penalty
-          ? Number(currentSettings?.modelSettings.frequency_penalty)
-          : undefined,
-        presence_penalty: currentSettings?.modelSettings.presence_penalty
-          ? Number(currentSettings?.modelSettings.presence_penalty)
-          : undefined,
+  const { messages, handleSubmit, isLoading, input, handleInputChange, setMessages, reload, stop } =
+    useChat({
+      api: '/api/chat',
+      id: currentSession?.id || undefined,
+      maxSteps: 10,
+      initialMessages: initialMessage
+        ? [{ id: '1', role: 'user', content: initialMessage }]
+        : undefined,
+      body: {
+        session_id: currentSession?.id,
+        agent_type: currentSettings?.selectedAgent,
+        provider: currentSettings?.selectedProvider,
+        api_key: currentSettings?.providerApiKeys?.[currentSettings?.selectedProvider || ''] || '',
+        model_settings: {
+          model_choice: currentSettings?.selectedModel,
+          max_tokens: Number(currentSettings?.modelSettings.max_tokens),
+          temperature: Number(currentSettings?.modelSettings.temperature),
+          top_p: currentSettings?.modelSettings.top_p
+            ? Number(currentSettings?.modelSettings.top_p)
+            : undefined,
+          top_k: currentSettings?.modelSettings.top_k
+            ? Number(currentSettings?.modelSettings.top_k)
+            : undefined,
+          frequency_penalty: currentSettings?.modelSettings.frequency_penalty
+            ? Number(currentSettings?.modelSettings.frequency_penalty)
+            : undefined,
+          presence_penalty: currentSettings?.modelSettings.presence_penalty
+            ? Number(currentSettings?.modelSettings.presence_penalty)
+            : undefined,
+        },
+        agent_settings: Object.fromEntries(
+          Object.entries(currentSettings?.agentSettings ?? {})
+            .filter(([_, value]) => value !== undefined && !isSettingConfig(value))
+            .map(([key, value]) => [key, typeof value === 'string' ? value : Number(value)])
+        ),
       },
-      agent_settings: Object.fromEntries(
-        Object.entries(currentSettings?.agentSettings ?? {})
-          .filter(
-            ([_, value]) => value !== undefined && !isSettingConfig(value)
-          )
-          .map(([key, value]) => [
-            key,
-            typeof value === 'string' ? value : Number(value),
-          ])
-      ),
-    },
-    onFinish: (message) => {
-      console.info('✅ Chat finished:', message);
-    },
-    onError: (error) => {
-      console.error('❌ Chat error:', error);
-      toast({
-        title: 'Error',
-        description: error?.message || 'An unexpected error occurred',
-        className:
-          'text-[var(--gray-12)] border border-[var(--red-11)] bg-[var(--red-2)] text-sm',
-      });
-    },
-    onToolCall: (toolCall) => {
-      console.info('🛠️ Tool call received:', toolCall);
-    },
-  });
+      onFinish: message => {
+        console.info('✅ Chat finished:', message);
+      },
+      onError: error => {
+        console.error('❌ Chat error:', error);
+        toast({
+          title: 'Error',
+          description: error?.message || 'An unexpected error occurred',
+          className:
+            'text-[var(--gray-12)] border border-[var(--red-11)] bg-[var(--red-2)] text-sm',
+        });
+      },
+      onToolCall: toolCall => {
+        console.info('🛠️ Tool call received:', toolCall);
+      },
+    });
 
   // Track whether user is at the bottom
   const [isAtBottom, setIsAtBottom] = useState<boolean>(false);
@@ -382,8 +335,7 @@ export default function ChatPage() {
   function handleScroll() {
     if (!scrollAreaRef.current) return;
 
-    const { scrollTop, scrollHeight, clientHeight } =
-      scrollAreaRef.current.children[0];
+    const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current.children[0];
     const atBottom = scrollHeight - clientHeight <= scrollTop + 1;
 
     if (atBottom !== isAtBottom) {
@@ -401,8 +353,7 @@ export default function ChatPage() {
         return;
       }
       const messagesContainer = scrollAreaRef.current.children[0];
-      messagesContainer.scrollTop =
-        messagesContainer.scrollHeight - messagesContainer.clientHeight;
+      messagesContainer.scrollTop = messagesContainer.scrollHeight - messagesContainer.clientHeight;
       setIsAtBottom(true);
     }
   }, [isLoading]);
@@ -422,23 +373,14 @@ export default function ChatPage() {
       hasShownConnection,
       isSubmitting,
     });
-  }, [
-    currentSession?.id,
-    isCreatingSession,
-    isExpired,
-    hasShownConnection,
-    isSubmitting,
-  ]);
+  }, [currentSession?.id, isCreatingSession, isExpired, hasShownConnection, isSubmitting]);
 
   useEffect(() => {
     console.info('⚙️ Current settings state:', {
       provider: currentSettings?.selectedProvider,
       model: currentSettings?.selectedModel,
       agent: currentSettings?.selectedAgent,
-      hasApiKey:
-        !!currentSettings?.providerApiKeys?.[
-          currentSettings?.selectedProvider || ''
-        ],
+      hasApiKey: !!currentSettings?.providerApiKeys?.[currentSettings?.selectedProvider || ''],
     });
   }, [currentSettings]);
 
@@ -452,7 +394,7 @@ export default function ChatPage() {
           hasContent: !!messages[messages.length - 1].content,
           hasToolCalls: !!messages[messages.length - 1].toolInvocations?.length,
         },
-        allMessages: messages.map((m) => ({
+        allMessages: messages.map(m => ({
           id: m.id,
           role: m.role,
           hasContent: !!m.content,
@@ -473,11 +415,7 @@ export default function ChatPage() {
   }, [isLoading, isSubmitting, input, messages.length]);
 
   // Enhanced handleSend with more logging
-  async function handleSend(
-    e: React.FormEvent,
-    messageText: string,
-    attachments: File[]
-  ) {
+  async function handleSend(e: React.FormEvent, messageText: string, attachments: File[]) {
     console.info('📤 Handling message send:', {
       messageText,
       attachments,
@@ -556,31 +494,30 @@ export default function ChatPage() {
     console.info('🧹 Starting cleanup of incomplete tool calls');
     console.info(
       '📊 Current messages state:',
-      messages.map((m) => ({
+      messages.map(m => ({
         id: m.id,
         role: m.role,
-        toolCalls: m.toolInvocations?.map((t) => ({
+        toolCalls: m.toolInvocations?.map(t => ({
           state: t.state,
         })),
       }))
     );
 
-    setMessages((prev) => {
+    setMessages(prev => {
       const updatedMessages = prev
-        .map((msg) => {
+        .map(msg => {
           if (msg.role === 'assistant' && Array.isArray(msg.toolInvocations)) {
             const filteredToolInvocations = msg.toolInvocations.filter(
-              (invocation) => invocation.state === 'result'
+              invocation => invocation.state === 'result'
             );
             console.info('🔍 Processing message tool calls:', {
               messageId: msg.id,
               before: msg.toolInvocations.length,
               after: filteredToolInvocations.length,
-              removed:
-                msg.toolInvocations.length - filteredToolInvocations.length,
+              removed: msg.toolInvocations.length - filteredToolInvocations.length,
               removedStates: msg.toolInvocations
-                .filter((t) => t.state !== 'result')
-                .map((t) => ({ state: t.state })),
+                .filter(t => t.state !== 'result')
+                .map(t => ({ state: t.state })),
             });
             return {
               ...msg,
@@ -589,7 +526,7 @@ export default function ChatPage() {
           }
           return msg;
         })
-        .filter((msg) => {
+        .filter(msg => {
           if (
             msg.role === 'assistant' &&
             !msg.content?.trim() &&
@@ -619,12 +556,7 @@ export default function ChatPage() {
 
   // Helper function to check if a value is a setting config object
   function isSettingConfig(value: any): boolean {
-    return (
-      value &&
-      typeof value === 'object' &&
-      'type' in value &&
-      'default' in value
-    );
+    return value && typeof value === 'object' && 'type' in value && 'default' in value;
   }
 
   // Reuse the same handler from NavBar for consistency
@@ -645,46 +577,38 @@ export default function ChatPage() {
 
   return (
     <>
-      <div className="flex flex-col-reverse md:flex-row h-[calc(100vh-3.5rem)]">
+      <div className="flex h-[calc(100vh-3.5rem)] flex-col-reverse md:flex-row">
         {/* Left (chat) - Set min/max width for desktop, full width on mobile */}
         <div
           className="
-          flex flex-col 
-          w-full md:w-[400px] md:min-w-[480px] md:max-w-[480px]
-          h-[60vh] md:h-full
-          border-t md:border-t-0 md:border-r border-[--gray-3]
+          flex h-[60vh] 
+          w-full flex-col border-t border-[--gray-3]
+          md:h-full md:w-[400px]
+          md:min-w-[480px] md:max-w-[480px] md:border-r md:border-t-0
         "
         >
-          <div
-            className="flex-1 overflow-hidden"
-            ref={scrollAreaRef}
-            onScroll={handleScroll}
-          >
+          <div className="flex-1 overflow-hidden" ref={scrollAreaRef} onScroll={handleScroll}>
             <div
-              className="flex flex-col gap-4 h-full overflow-y-auto overflow-x-hidden p-4 w-full
-                [&::-webkit-scrollbar]:w-1.5
-                [&::-webkit-scrollbar-track]:bg-[--gray-1]
-                [&::-webkit-scrollbar-track]:rounded-full
-                [&::-webkit-scrollbar-thumb]:bg-[--gray-3]
+              className="scrollbar-gutter-stable scrollbar-thin flex size-full flex-col gap-4 overflow-y-auto overflow-x-hidden
+                p-4
                 [&::-webkit-scrollbar-thumb]:rounded-full
                 [&::-webkit-scrollbar-thumb]:border-4
-                [&::-webkit-scrollbar-thumb]:hover:bg-[--gray-3]
+                [&::-webkit-scrollbar-thumb]:bg-[--gray-3]
                 [&::-webkit-scrollbar-thumb]:transition-colors
-                scrollbar-gutter-stable
-                scrollbar-thin"
+                [&::-webkit-scrollbar-thumb]:hover:bg-[--gray-3]
+                [&::-webkit-scrollbar-track]:rounded-full
+                [&::-webkit-scrollbar-track]:bg-[--gray-1]
+                [&::-webkit-scrollbar]:w-1.5"
             >
               {messages.map((message, index) => (
-                <div
-                  key={message.id}
-                  className="flex flex-col gap-2 w-full max-w-full"
-                >
+                <div key={message.id} className="flex w-full max-w-full flex-col gap-2">
                   {/* Force message content to respect container width */}
                   <div className="w-full max-w-full">
                     {message.role === 'user' ? (
                       <>
                         <UserMessage content={message.content} />
                         {index === 0 && isCreatingSession && (
-                          <div className="px-4 py-2 bg-[--blue-2] text-[--blue-11] font-geist border border-[--blue-3] rounded-md text-sm animate-pulse w-[85%] mx-auto mt-2">
+                          <div className="mx-auto mt-2 w-[85%] animate-pulse rounded-md border border-[--blue-3] bg-[--blue-2] px-4 py-2 font-geist text-sm text-[--blue-11]">
                             Connecting to Steel Browser Session...
                           </div>
                         )}
@@ -692,21 +616,21 @@ export default function ChatPage() {
                           hasShownConnection &&
                           !isCreatingSession &&
                           currentSession?.id && (
-                            <div className="px-4 py-2 bg-[--green-2] text-[--green-11] font-geist border border-[--green-3] rounded-md text-sm flex items-center gap-2 w-[85%] mx-auto mt-2">
-                              <CheckIcon className="h-4 w-4" />
+                            <div className="mx-auto mt-2 flex w-[85%] items-center gap-2 rounded-md border border-[--green-3] bg-[--green-2] px-4 py-2 font-geist text-sm text-[--green-11]">
+                              <CheckIcon className="size-4" />
                               Steel Browser Session connected
                             </div>
                           )}
                       </>
                     ) : (
-                      <div className="flex flex-col gap-2 text-base text-[--gray-12] w-full max-w-full break-words">
+                      <div className="flex w-full max-w-full flex-col gap-2 break-words text-base text-[--gray-12]">
                         {message.content && (
-                          <div className="w-full max-w-full break-words whitespace-pre-wrap">
+                          <div className="w-full max-w-full whitespace-pre-wrap break-words">
                             <MarkdownText content={message.content} />
                           </div>
                         )}
                         {message.toolInvocations?.length ? (
-                          <div className="flex flex-col gap-2 border border-[--gray-3] rounded-[20px] p-2 bg-[--gray-1] w-full max-w-full">
+                          <div className="flex w-full max-w-full flex-col gap-2 rounded-[20px] border border-[--gray-3] bg-[--gray-1] p-2">
                             <ToolInvocations
                               toolInvocations={message.toolInvocations}
                               onImageClick={handleImageClick}
@@ -722,16 +646,16 @@ export default function ChatPage() {
                       className="
                         mt-1
                         inline-flex
-                        h-8 px-2
-                        bg-[--gray-2]
+                        h-8 items-center
+                        gap-2
                         rounded-full
                         border
                         border-[--gray-3]
-                        items-center
-                        gap-2
+                        bg-[--gray-2]
+                        px-2
                       "
                     >
-                      <span className="text-[--gray-11] text-sm font-normal font-geist leading-[18px]">
+                      <span className="font-geist text-sm font-normal leading-[18px] text-[--gray-11]">
                         {attachment.name}
                       </span>
                     </div>
@@ -739,7 +663,7 @@ export default function ChatPage() {
                 </div>
               ))}
               {isLoading && (
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-[--gray-12] border-t-transparent" />
+                <div className="size-4 animate-spin rounded-full border-2 border-[--gray-12] border-t-transparent" />
               )}
 
               {/* Simplified scroll anchor */}
@@ -753,28 +677,26 @@ export default function ChatPage() {
 
           {/* Chat input or Expired State */}
           <div className="border-t border-[--gray-3]" />
-          <div className="flex-none p-4 min-h-44 drop-shadow-md">
+          <div className="min-h-44 flex-none p-4 drop-shadow-md">
             {isExpired ? (
               <div className="flex flex-col items-center gap-4">
-                <p className="text-[--gray-11] text-sm font-medium">
+                <p className="text-sm font-medium text-[--gray-11]">
                   Your browser session has expired
                 </p>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="bg-[--gray-1] rounded-full border-[--gray-3] text-[--gray-11] h-8"
+                  className="h-8 rounded-full border-[--gray-3] bg-[--gray-1] text-[--gray-11]"
                   onClick={handleNewChat}
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="size-4" />
                   <span className="px-1 font-geist">New Chat</span>
                 </Button>
               </div>
             ) : (
               <ChatInput
                 value={input}
-                onChange={(value: string) =>
-                  handleInputChange({ target: { value } } as any)
-                }
+                onChange={(value: string) => handleInputChange({ target: { value } } as any)}
                 onSubmit={handleSend}
                 disabled={isLoading}
                 isLoading={isLoading}
@@ -787,10 +709,10 @@ export default function ChatPage() {
         {/* Right (browser) - Flex grow to fill space */}
         <div
           className="
-          flex-1 
-          h-[40vh] md:h-full
-          border-b md:border-b-0 border-[--gray-3] 
-          p-4
+          h-[40vh] 
+          flex-1 border-b
+          border-[--gray-3] p-4 md:h-full 
+          md:border-b-0
         "
         >
           <Browser />
@@ -798,31 +720,25 @@ export default function ChatPage() {
       </div>
 
       {/* Modal for expanded image */}
-      <Dialog
-        open={selectedImage !== null}
-        onOpenChange={(open) => !open && setSelectedImage(null)}
-      >
-        <DialogContent className="max-w-[90vw] p-0 border bg-[--gray-1] border-[#282828]">
-          <div className="px-4 py-2 border-b border-[#282828] flex justify-between items-center">
-            <DialogTitle className="text-[--gray-12] text-base font-medium">
+      <Dialog open={selectedImage !== null} onOpenChange={open => !open && setSelectedImage(null)}>
+        <DialogContent className="max-w-[90vw] border border-[#282828] bg-[--gray-1] p-0">
+          <div className="flex items-center justify-between border-b border-[#282828] px-4 py-2">
+            <DialogTitle className="text-base font-medium text-[--gray-12]">
               Page preview sent to model
             </DialogTitle>
             <button
               onClick={() => setSelectedImage(null)}
-              className="text-[--gray-11] hover:text-[--gray-12] transition-colors"
+              className="text-[--gray-11] transition-colors hover:text-[--gray-12]"
             >
               Close
             </button>
           </div>
           {selectedImage && (
-            <div
-              className="p flex items-center justify-center"
-              style={{ height: '80vh' }}
-            >
+            <div className="p flex items-center justify-center" style={{ height: '80vh' }}>
               <img
                 src={selectedImage}
                 alt="Preview"
-                className="max-w-full max-h-full object-contain"
+                className="max-h-full max-w-full object-contain"
               />
             </div>
           )}
