@@ -43,7 +43,7 @@ async def browser_use_agent(
     logger.info("🔧 Model config: %s", model_config)
     logger.info("⚙️ Agent settings: %s", agent_settings)
 
-    llm = create_llm(model_config)
+    llm, use_vision = create_llm(model_config)
     logger.info("🤖 Created LLM instance")
 
     controller = Controller(exclude_actions=["open_tab", "switch_tab"])
@@ -124,10 +124,11 @@ async def browser_use_agent(
         browser=browser,
         browser_context=browser_context,
         generate_gif=False,
+        use_vision=use_vision,
         register_new_step_callback=yield_data,
         register_done_callback=yield_done,
     )
-    logger.info("🌐 Created Agent with browser instance")
+    logger.info("🌐 Created Agent with browser instance (use_vision=%s)", use_vision)
 
     steps = agent_settings.steps or 25
 

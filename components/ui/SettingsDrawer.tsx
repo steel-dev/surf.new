@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -8,35 +8,35 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+} from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Settings } from "lucide-react";
+} from '@/components/ui/select';
+import { Settings } from 'lucide-react';
 import {
   useSettings,
   AgentSettings,
   ModelSettings,
-} from "@/app/contexts/SettingsContext";
-import { cn } from "@/lib/utils";
-import { Slider } from "@/components/ui/slider";
-import { Textarea } from "@/components/ui/textarea";
+} from '@/app/contexts/SettingsContext';
+import { cn } from '@/lib/utils';
+import { Slider } from '@/components/ui/slider';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Info } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useChatContext } from "@/app/contexts/ChatContext";
-import { useSteelContext } from "@/app/contexts/SteelContext";
+} from '@/components/ui/tooltip';
+import { Info } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useChatContext } from '@/app/contexts/ChatContext';
+import { useSteelContext } from '@/app/contexts/SteelContext';
 
 interface AgentConfig {
   name: string;
@@ -66,7 +66,7 @@ interface ModelConfig {
 }
 
 interface SettingConfig {
-  type: "integer" | "float" | "text" | "textarea";
+  type: 'integer' | 'float' | 'text' | 'textarea';
   default: number | string;
   min?: number;
   max?: number;
@@ -84,23 +84,23 @@ export function SettingsButton() {
       <SheetTrigger asChild>
         <Button
           className={[
-            "inline-flex items-center justify-center overflow-hidden gap-1.5",
-            "h-8 pl-0 pr-2.5 rounded-full border text-sm font-normal leading-[14px]",
-            "font-geist",
-            "bg-[--gray-2] border-[--gray-3] text-[--gray-12]",
-            "hover:bg-[--gray-3]",
-            "disabled:text-[--gray-8]",
-            "",
-          ].join(" ")}
+            'inline-flex items-center justify-center overflow-hidden gap-1.5',
+            'h-8 pl-0 pr-2.5 rounded-full border text-sm font-normal leading-[14px]',
+            'font-geist',
+            'bg-[--gray-2] border-[--gray-3] text-[--gray-12]',
+            'hover:bg-[--gray-3]',
+            'disabled:text-[--gray-8]',
+            '',
+          ].join(' ')}
         >
           <div
             className={[
-              "w-8 h-8 flex items-center justify-center gap-2.5 border-r text-sm",
-              "bg-transparent",
-              "border-[--gray-3]",
-              "font-geist",
-              "group-hover:bg-transparent",
-            ].join(" ")}
+              'w-8 h-8 flex items-center justify-center gap-2.5 border-r text-sm',
+              'bg-transparent',
+              'border-[--gray-3]',
+              'font-geist',
+              'group-hover:bg-transparent',
+            ].join(' ')}
           >
             <Settings className="w-5 h-5" />
           </div>
@@ -124,9 +124,9 @@ function SettingInput({
   onChange: (value: any) => void;
 }) {
   const label = settingKey
-    .split("_")
+    .split('_')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+    .join(' ');
 
   // Use config.default if value is undefined
   const currentValue = value ?? config.default;
@@ -156,7 +156,7 @@ function SettingInput({
         )}
       </div>
 
-      {config.type === "float" && (
+      {config.type === 'float' && (
         <div className="flex flex-col gap-2">
           <Slider
             value={[currentValue]}
@@ -177,7 +177,7 @@ function SettingInput({
         </div>
       )}
 
-      {config.type === "integer" && (
+      {config.type === 'integer' && (
         <Input
           type="number"
           value={currentValue}
@@ -202,7 +202,7 @@ function SettingInput({
         />
       )}
 
-      {config.type === "text" && (
+      {config.type === 'text' && (
         <Input
           type="text"
           value={currentValue}
@@ -212,7 +212,7 @@ function SettingInput({
         />
       )}
 
-      {config.type === "textarea" && (
+      {config.type === 'textarea' && (
         <Textarea
           value={currentValue}
           maxLength={config.maxLength}
@@ -227,13 +227,18 @@ function SettingInput({
 function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
   const [agents, setAgents] = useState<AvailableAgents | null>(null);
   const { currentSettings, updateSettings } = useSettings();
-  const [apiKey, setApiKey] = useState("");
+  const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { clearInitialState } = useChatContext();
   const { resetSession } = useSteelContext();
 
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [ollamaModels, setOllamaModels] = useState<
+    Array<{ tag: string; base_name: string }>
+  >([]);
+  const [isLoadingOllamaModels, setIsLoadingOllamaModels] = useState(false);
+  const [ollamaError, setOllamaError] = useState<string | null>(null);
 
   const [selectedAgent, setSelectedAgent] = useState(
     currentSettings?.selectedAgent
@@ -255,10 +260,70 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
     currentSettings?.agentSettings
   );
 
+  // Fetch Ollama models when provider is set to Ollama
+  useEffect(() => {
+    if (selectedProvider === 'ollama') {
+      const fetchOllamaModels = async () => {
+        try {
+          setIsLoadingOllamaModels(true);
+          setOllamaError(null);
+          const response = await fetch('/api/ollama/models');
+
+          if (!response.ok) {
+            throw new Error(
+              `Failed to fetch Ollama models: ${
+                response.status
+              } ${await response.text()}`
+            );
+          }
+
+          const data = await response.json();
+          setOllamaModels(data.models || []);
+
+          // If we have models and the current selected model is not in the list,
+          // select the first available model
+          if (data.models && data.models.length > 0) {
+            // Check if the current model is in the list of tags
+            const modelTags = data.models.map(
+              (model: { tag: string }) => model.tag
+            );
+            if (!modelTags.includes(selectedModel)) {
+              setSelectedModel(data.models[0].tag);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching Ollama models:', error);
+          setOllamaError(
+            error instanceof Error
+              ? error.message
+              : 'Failed to fetch Ollama models'
+          );
+          // Fallback to default models from the agent config
+          const defaultModels =
+            (selectedAgent &&
+              agents?.[selectedAgent]?.supported_models.find(
+                (m: any) => m.provider === 'ollama'
+              )?.models) ||
+            [];
+          setOllamaModels(
+            defaultModels.map((model: any) => ({
+              tag: model,
+              base_name: model,
+            }))
+          );
+        } finally {
+          setIsLoadingOllamaModels(false);
+        }
+      };
+
+      fetchOllamaModels();
+    }
+  }, [selectedProvider, selectedAgent, agents, selectedModel]);
+
   useEffect(() => {
     async function fetchAgents() {
       try {
-        const response = await fetch("/api/agents");
+        const response = await fetch('/api/agents');
         if (!response.ok) {
           throw new Error(
             `Failed to fetch agents: ${
@@ -303,7 +368,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
           setAgentSettings(defaultAgentSettings);
         }
       } catch (error) {
-        console.error("Error fetching agents:", error);
+        console.error('Error fetching agents:', error);
       } finally {
         setLoading(false);
       }
@@ -355,11 +420,11 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
 
   // When setting agent/model settings, store only the values, not the config objects
   const handleSettingChange = (
-    settingType: "model" | "agent",
+    settingType: 'model' | 'agent',
     key: string,
     value: any
   ) => {
-    if (settingType === "model") {
+    if (settingType === 'model') {
       setModelSettings(
         (prev) =>
           ({
@@ -411,7 +476,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
     closeSettings();
 
     // Navigate to home page
-    router.push("/");
+    router.push('/');
   }
 
   if (loading || !agents) {
@@ -425,9 +490,9 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
   return (
     <SheetContent
       className={cn(
-        "flex w-1/3 h-full flex-col shrink-0 min-w-[380px] max-w-full",
-        "rounded-[20px] border border-[--gray-3] bg-[--gray-1]",
-        "shadow-[0_16px_32px_-12px_rgba(14,18,27,0.10)] p-6 text-[--gray-12]"
+        'flex w-1/3 h-full flex-col shrink-0 min-w-[380px] max-w-full',
+        'rounded-[20px] border border-[--gray-3] bg-[--gray-1]',
+        'shadow-[0_16px_32px_-12px_rgba(14,18,27,0.10)] p-6 text-[--gray-12]'
       )}
     >
       <SheetHeader>
@@ -519,13 +584,44 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="settings-input">
-                    {agents[selectedAgent].supported_models
-                      .find((m) => m.provider === selectedProvider)
-                      ?.models.map((model) => (
-                        <SelectItem key={model} value={model}>
-                          {model}
+                    {selectedProvider === 'ollama' ? (
+                      isLoadingOllamaModels ? (
+                        <SelectItem value="loading" disabled>
+                          Loading Ollama models...
                         </SelectItem>
-                      ))}
+                      ) : ollamaError ? (
+                        <>
+                          <SelectItem value="error" disabled>
+                            Error loading models
+                          </SelectItem>
+                          {agents[selectedAgent].supported_models
+                            .find((m) => m.provider === selectedProvider)
+                            ?.models.map((model) => (
+                              <SelectItem key={model} value={model}>
+                                {model} (fallback)
+                              </SelectItem>
+                            ))}
+                        </>
+                      ) : ollamaModels.length > 0 ? (
+                        ollamaModels.map((model) => (
+                          <SelectItem key={model.tag} value={model.tag}>
+                            {model.tag}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="no-models" disabled>
+                          No models found. Install models with 'ollama pull'
+                        </SelectItem>
+                      )
+                    ) : (
+                      agents[selectedAgent].supported_models
+                        .find((m) => m.provider === selectedProvider)
+                        ?.models.map((model) => (
+                          <SelectItem key={model} value={model}>
+                            {model}
+                          </SelectItem>
+                        ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -533,7 +629,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
           )}
 
           {/* API Key Management */}
-          {selectedProvider && (
+          {selectedProvider && selectedProvider !== 'ollama' && (
             <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium">
@@ -561,7 +657,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                   type="password"
                   placeholder={
                     currentSettings?.providerApiKeys?.[selectedProvider]
-                      ? "••••••••••••••••"
+                      ? '••••••••••••••••'
                       : `Enter ${selectedProvider} API Key`
                   }
                   value={apiKey}
@@ -581,7 +677,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                           [selectedProvider]: apiKey,
                         },
                       });
-                      setApiKey(""); // Clear input after saving
+                      setApiKey(''); // Clear input after saving
                     }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 
                              px-3 py-1 text-sm bg-[--gray-3] hover:bg-[--gray-4] 
@@ -597,6 +693,47 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
             </div>
           )}
 
+          {/* Ollama Instructions */}
+          {selectedProvider === 'ollama' && (
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Ollama Setup</label>
+              </div>
+              <div className="p-3 bg-[--gray-3] rounded-md">
+                <p className="text-sm text-[--gray-12] mb-2">
+                  Ollama runs locally on your machine and doesn't require an API
+                  key.
+                </p>
+                <p className="text-sm text-[--gray-11] mb-2">
+                  1. Install Ollama from{' '}
+                  <a
+                    href="https://ollama.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[--blue-11] hover:underline"
+                  >
+                    ollama.com
+                  </a>
+                </p>
+                <p className="text-sm text-[--gray-11] mb-2">
+                  2. Run Ollama locally with the model of your choice:
+                  <code className="block mt-1 p-1 bg-[--gray-4] rounded text-xs">
+                    ollama run {selectedModel || 'MODEL_NAME'}
+                  </code>
+                </p>
+                <p className="text-sm text-[--gray-11]">
+                  3. Surf.new will connect to your local Ollama instance
+                  automatically
+                </p>
+                {ollamaError && (
+                  <div className="mt-2 p-2 bg-[--red-3] border border-[--red-6] rounded-md text-[--red-11] text-xs">
+                    Error: {ollamaError}. Make sure Ollama is running.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Advanced Settings */}
           <div className="space-y-2">
             <Button
@@ -604,13 +741,13 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
               size="sm"
               onClick={() => setShowAdvanced((prev) => !prev)}
               className={[
-                "w-full inline-flex items-center justify-between",
-                "h-8 px-2.5 rounded-full border text-sm font-normal leading-[14px]",
-                "font-geist",
-                "bg-transparent border-transparent text-[--gray-12]",
-                "hover:bg-[--gray-3]",
-                "disabled:text-[--gray-8]",
-              ].join(" ")}
+                'w-full inline-flex items-center justify-between',
+                'h-8 px-2.5 rounded-full border text-sm font-normal leading-[14px]',
+                'font-geist',
+                'bg-transparent border-transparent text-[--gray-12]',
+                'hover:bg-[--gray-3]',
+                'disabled:text-[--gray-8]',
+              ].join(' ')}
             >
               Advanced Settings
               <svg
@@ -620,8 +757,8 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
                 className={cn(
-                  "transform transition-transform duration-200",
-                  showAdvanced ? "rotate-180" : ""
+                  'transform transition-transform duration-200',
+                  showAdvanced ? 'rotate-180' : ''
                 )}
               >
                 <path
@@ -646,7 +783,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                         config={config}
                         value={modelSettings?.[key] ?? config.default}
                         onChange={(value) =>
-                          handleSettingChange("model", key, value)
+                          handleSettingChange('model', key, value)
                         }
                       />
                     )
@@ -662,7 +799,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                       config={config}
                       value={agentSettings?.[key] ?? config.default}
                       onChange={(value) =>
-                        handleSettingChange("agent", key, value)
+                        handleSettingChange('agent', key, value)
                       }
                     />
                   )

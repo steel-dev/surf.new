@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import Image from "next/image";
-import { useChatContext } from "./contexts/ChatContext";
-import { ChatInput } from "@/components/ui/ChatInput";
-import { AuthModal } from "@/components/ui/AuthModal";
-import Link from "next/link";
-import { SearchIcon, ListIcon, Search } from "lucide-react";
-import { useSettings } from "./contexts/SettingsContext";
-import { useSteelContext } from "./contexts/SteelContext";
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { useChatContext } from './contexts/ChatContext';
+import { ChatInput } from '@/components/ui/ChatInput';
+import { AuthModal } from '@/components/ui/AuthModal';
+import Link from 'next/link';
+import { SearchIcon, ListIcon, Search } from 'lucide-react';
+import { useSettings } from './contexts/SettingsContext';
+import { useSteelContext } from './contexts/SteelContext';
 
 export default function Home() {
   const router = useRouter();
@@ -17,11 +17,11 @@ export default function Home() {
   const { setInitialMessage, clearInitialState } = useChatContext();
   const { currentSettings, updateSettings } = useSettings();
   const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   // Store the pending query when waiting for API key
-  const pendingQueryRef = useRef<string>("");
+  const pendingQueryRef = useRef<string>('');
 
   // Clear all state on mount
   useEffect(() => {
@@ -40,6 +40,18 @@ export default function Home() {
     // const provider = currentSettings?.selectedProvider;
     // if (!provider) return false;
     // return !!currentSettings?.providerApiKeys?.[provider];
+
+    // // For Ollama, we don't need an API key as it connects to a local instance
+    // if (currentSettings?.selectedProvider === 'ollama') {
+    //   return true;
+    // }
+
+    // // For other providers, check if API key exists
+    // const provider = currentSettings?.selectedProvider;
+    // if (!provider) return false;
+    // const hasKey = !!currentSettings?.providerApiKeys?.[provider];
+    // return hasKey;
+
     return true;
   };
   const handleApiKeySubmit = (key: string) => {
@@ -79,8 +91,8 @@ export default function Home() {
       }
       proceedToChat(query);
     } catch (err) {
-      console.error("Error creating session:", err);
-      alert("Failed to create session. Please try again.");
+      console.error('Error creating session:', err);
+      alert('Failed to create session. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -92,7 +104,7 @@ export default function Home() {
         <div className="text-justify p-4 text-[--gray-12] text-base font-medium font-geist leading-tight">
           Surf.new® is a a playground to test out different web agents. These
           agents can surf the web and interact with webpages similar to how a
-          human would. Built by{" "}
+          human would. Built by{' '}
           <Link href="https://steel.dev" className="text-[--yellow-11]">
             <Image
               src="/steel_logo.svg"
@@ -136,7 +148,7 @@ export default function Home() {
               onClick={(e) => {
                 e.preventDefault();
                 const text =
-                  "Find me the cheapest one-way flight from San Francisco to Tokyo next week.";
+                  'Find me the cheapest one-way flight from San Francisco to Tokyo next week.';
                 if (!loading) {
                   resetSession();
                   if (!checkApiKey()) {
@@ -176,7 +188,7 @@ export default function Home() {
               onClick={(e) => {
                 e.preventDefault();
                 const text =
-                  "Go to Hacker News and summarize the top 5 stories for me. Format your response in markdown.";
+                  'Go to Hacker News and summarize the top 5 stories for me. Format your response in markdown.';
                 if (!loading) {
                   resetSession();
                   if (!checkApiKey()) {
@@ -215,7 +227,7 @@ export default function Home() {
               onClick={(e) => {
                 e.preventDefault();
                 const text =
-                  "Investigate the trade-in value for iPhone 13 Pro Max on apple.com";
+                  'Investigate the trade-in value for iPhone 13 Pro Max on apple.com';
                 if (!loading) {
                   resetSession();
                   if (!checkApiKey()) {
@@ -254,7 +266,7 @@ export default function Home() {
       </div>
       {/* Add API Key Modal */}
       <AuthModal
-        provider={currentSettings?.selectedProvider || ""}
+        provider={currentSettings?.selectedProvider || ''}
         isOpen={showApiKeyModal}
         onSubmit={handleApiKeySubmit}
       />

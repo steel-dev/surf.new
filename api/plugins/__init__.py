@@ -104,6 +104,22 @@ AGENT_CONFIGS = {
                     "gemini-1.5-pro"
                 ],
             },
+            {
+                "provider": ModelProvider.DEEPSEEK.value,
+                "models": [
+                    "deepseek-chat",
+                    "deepseek-reasoner"
+                ],
+            },
+            {
+                "provider": ModelProvider.OLLAMA.value,
+                "models": [
+                    "llama3.3",
+                    "qwen2.5",
+                    "llama3",
+                    "mistral"
+                ],
+            },
         ],
         "model_settings": {
             "max_tokens": {

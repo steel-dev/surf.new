@@ -7,6 +7,8 @@ class ModelProvider(str, Enum):
     ANTHROPIC = "anthropic"
     ANTHROPIC_COMPUTER_USE = "anthropic_computer_use"
     GEMINI = "gemini"
+    DEEPSEEK = "deepseek"
+    OLLAMA = "ollama"
     # OPENROUTER = "openrouter"
     # GOOGLE = "google"
 
@@ -78,5 +80,7 @@ class ModelConfig:
             ModelProvider.ANTHROPIC: "claude-3-7-sonnet-latest",
             ModelProvider.ANTHROPIC_COMPUTER_USE: "claude-3-5-sonnet-20241022",
             ModelProvider.GEMINI: "gemini-2.0-flash",
+            ModelProvider.DEEPSEEK: "deepseek-chat",
+            ModelProvider.OLLAMA: "llama3.3",
         }
         return default_models.get(provider) or ValueError("Unsupported provider.")
