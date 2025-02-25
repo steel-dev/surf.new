@@ -8,6 +8,8 @@ from .models import ModelConfig
 from .plugins import WebAgentType, get_web_agent, AGENT_CONFIGS
 from .streamer import stream_vercel_format
 from api.middleware.profiling_middleware import ProfilingMiddleware
+from pydantic import BaseModel
+from typing import List
 import os
 import asyncio
 import subprocess
@@ -46,7 +48,7 @@ app.add_middleware(
 )
 
 
-@app.post("/api/sessions")
+@app.post("/api/sessions", tags=["Sessions"])
 async def create_session(request: SessionRequest):
     """
     Creates a new session.
@@ -65,7 +67,7 @@ async def create_session(request: SessionRequest):
         )
 
 
-@app.post("/api/sessions/{session_id}/release")
+@app.post("/api/sessions/{session_id}/release", tags=["Sessions"])
 async def release_session(session_id: str):
     """
     Releases a session. Returns success even if session is already released.
@@ -79,7 +81,7 @@ async def release_session(session_id: str):
         raise e
 
 
-@app.post("/api/chat")
+@app.post("/api/chat", tags=["Chat"])
 async def handle_chat(request: ChatRequest):
     """
     This endpoint accepts a chat request, instantiates an agent,
@@ -164,7 +166,7 @@ async def handle_chat(request: ChatRequest):
             e, "code", 500), detail=error_response)
 
 
-@app.get("/api/agents")
+@app.get("/api/agents", tags=["Agents"])
 async def get_available_agents():
     """
     Returns all available agents and their configurations.
@@ -172,16 +174,43 @@ async def get_available_agents():
     return AGENT_CONFIGS
 
 
-@app.get("/healthcheck")
+@app.get("/healthcheck", tags=["System"])
 async def healthcheck():
+    """
+    Simple health check endpoint to verify the API is running.
+    """
     return {"status": "ok"}
 
 
-@app.get("/api/ollama/models")
+# Define response models for Ollama models endpoint
+class OllamaModel(BaseModel):
+    tag: str
+    base_name: str
+
+class OllamaModelsResponse(BaseModel):
+    models: List[OllamaModel]
+
+@app.get("/api/ollama/models", response_model=OllamaModelsResponse, tags=["Ollama"])
 async def get_ollama_models():
     """
     Fetches available models from a local Ollama instance using the 'ollama list' command.
-    Returns a list of model objects with full tags and base names that can be used with Ollama.
+    
+    Returns:
+        A list of model objects with full tags and base names that can be used with Ollama.
+        
+    Example response:
+        {
+            "models": [
+                {
+                    "tag": "llama2:7b",
+                    "base_name": "llama2"
+                },
+                {
+                    "tag": "mistral:7b",
+                    "base_name": "mistral"
+                }
+            ]
+        }
     """
     try:
         result = subprocess.run(
