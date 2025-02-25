@@ -1,5 +1,5 @@
-'use client';
-import { useState } from 'react';
+"use client";
+import { useState } from "react";
 
 import {
   Dialog,
@@ -7,12 +7,12 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
-import { cn } from '@/lib/utils';
+import { cn } from "@/lib/utils";
 
-import { useSettings } from '@/app/contexts/SettingsContext';
+import { useSettings } from "@/app/contexts/SettingsContext";
 
 interface AuthModalProps {
   provider: string;
@@ -21,26 +21,26 @@ interface AuthModalProps {
 }
 
 export function AuthModal({ provider, isOpen, onSubmit }: AuthModalProps) {
-  const [apiKey, setApiKey] = useState('');
-  const [error, setError] = useState('');
+  const [apiKey, setApiKey] = useState("");
+  const [error, setError] = useState("");
 
   const handleSubmit = () => {
     if (apiKey.length < 32) {
-      setError('API key must be at least 32 characters long');
+      setError("API key must be at least 32 characters long");
       return;
     }
     onSubmit(apiKey);
-    setApiKey('');
-    setError('');
+    setApiKey("");
+    setError("");
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={() => {}}>
       <DialogContent
         className={cn(
-          'flex w-[400px] shrink-0 flex-col',
-          'rounded-[20px] border border-[--gray-3] bg-[--gray-1]',
-          'p-6 text-[--gray-12] shadow-[0_16px_32px_-12px_rgba(14,18,27,0.10)]'
+          "flex w-[400px] shrink-0 flex-col",
+          "rounded-[20px] border border-[--gray-3] bg-[--gray-1]",
+          "p-6 text-[--gray-12] shadow-[0_16px_32px_-12px_rgba(14,18,27,0.10)]"
         )}
       >
         <DialogHeader>
@@ -63,10 +63,10 @@ export function AuthModal({ provider, isOpen, onSubmit }: AuthModalProps) {
                 value={apiKey}
                 onChange={e => {
                   setApiKey(e.target.value);
-                  setError('');
+                  setError("");
                 }}
                 onKeyDown={e => {
-                  if (e.key === 'Enter') {
+                  if (e.key === "Enter") {
                     handleSubmit();
                   }
                 }}
@@ -79,11 +79,11 @@ export function AuthModal({ provider, isOpen, onSubmit }: AuthModalProps) {
           <button
             onClick={handleSubmit}
             className={[
-              'w-full h-8 px-2 py-1 bg-[--gray-12] rounded-full',
-              'justify-center items-center inline-flex',
-              'overflow-hidden cursor-pointer transition-colors',
-              'hover:bg-[--gray-11]',
-            ].join(' ')}
+              "w-full h-8 px-2 py-1 bg-[--gray-12] rounded-full",
+              "justify-center items-center inline-flex",
+              "overflow-hidden cursor-pointer transition-colors",
+              "hover:bg-[--gray-11]",
+            ].join(" ")}
           >
             <span className="font-['Geist'] text-sm font-medium leading-normal text-[--gray-1]">
               Submit

@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import React, { forwardRef, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Paperclip, X } from 'lucide-react';
+import React, { forwardRef, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Paperclip, X } from "lucide-react";
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { SettingsButton } from '@/components/ui/SettingsDrawer';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { SettingsButton } from "@/components/ui/SettingsDrawer";
 
-import { SendButton } from './SendButton';
-import { ChatInputProps } from './types';
+import { SendButton } from "./SendButton";
+import { ChatInputProps } from "./types";
 
 export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
   (
@@ -20,7 +20,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
       disabled,
       isLoading,
       onStop,
-      placeholder = 'Type your request here...',
+      placeholder = "Type your request here...",
     },
     ref
   ) => {
@@ -59,7 +59,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
       }
       setAttachments(updated);
       // Reset the file input so user can pick the same file again if needed
-      e.target.value = '';
+      e.target.value = "";
     }
 
     // Remove an attachment from the local list
@@ -75,7 +75,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
     function truncateFileName(file: File): string {
       const { name } = file;
       // Example: if name === "my-super-long-cat-picture.png"
-      const dotIndex = name.lastIndexOf('.');
+      const dotIndex = name.lastIndexOf(".");
       if (dotIndex < 0) return name;
       const ext = name.slice(dotIndex + 1); // "png"
       const base = name.slice(0, dotIndex); // "my-super-long-cat-picture"
@@ -100,7 +100,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
 
     function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
       // If user presses Enter without Shift, submit:
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === "Enter" && !e.shiftKey) {
         handleSubmit(e);
       }
     }
@@ -175,7 +175,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
             [&::placeholder]:text-[var(--gray-11)]
             [&:focus::placeholder]:opacity-0
           "
-            style={{ resize: 'none' }}
+            style={{ resize: "none" }}
           />
 
           {/* Bottom row: attachments button + settings + send */}
@@ -227,7 +227,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 20 }}
-                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
                 >
                   <SendButton
                     disabled={disabled || false}
@@ -244,4 +244,4 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
   }
 );
 
-ChatInput.displayName = 'ChatInput';
+ChatInput.displayName = "ChatInput";

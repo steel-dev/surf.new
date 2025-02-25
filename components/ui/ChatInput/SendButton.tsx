@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { StopIcon } from '@radix-ui/react-icons';
-import { GeistMono } from 'geist/font/mono';
+import { StopIcon } from "@radix-ui/react-icons";
+import { GeistMono } from "geist/font/mono";
 
-import { Button } from '@/components/ui/button';
+import { Button } from "@/components/ui/button";
 
 interface SendButtonProps {
   disabled: boolean;

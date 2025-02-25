@@ -1,16 +1,16 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Github, Menu, Plus, X } from 'lucide-react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useState } from "react";
+import { Github, Menu, Plus, X } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-import { cn } from '@/lib/utils';
+import { cn } from "@/lib/utils";
 
-import { useChatContext } from '@/app/contexts/ChatContext';
-import { useSteelContext } from '@/app/contexts/SteelContext';
+import { useChatContext } from "@/app/contexts/ChatContext";
+import { useSteelContext } from "@/app/contexts/SteelContext";
 
-import { Button } from './button';
+import { Button } from "./button";
 
 export function NavBar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -24,7 +24,7 @@ export function NavBar() {
     resetSession();
 
     // Navigate to home page
-    router.push('/');
+    router.push("/");
   };
 
   return (
@@ -39,8 +39,8 @@ export function NavBar() {
             <Link href="/" className="w-[95px]">
               <span
                 className={cn(
-                  'text-2xl font-normal leading-loose text-[--gray-12]',
-                  'font-instrument-serif-italic'
+                  "text-2xl font-normal leading-loose text-[--gray-12]",
+                  "font-instrument-serif-italic"
                 )}
               >
                 surf.new
@@ -94,8 +94,8 @@ export function NavBar() {
       {/* Mobile Menu */}
       <div
         className={cn(
-          'border-b border-[#282828] bg-neutral-900 md:hidden',
-          isMenuOpen ? 'block' : 'hidden'
+          "border-b border-[#282828] bg-neutral-900 md:hidden",
+          isMenuOpen ? "block" : "hidden"
         )}
       >
         <div className="mx-auto flex max-w-[1440px] flex-col gap-4 p-4">

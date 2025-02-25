@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState } from 'react';
-import { GlobeIcon } from 'lucide-react';
-import Image from 'next/image';
+import { useEffect, useRef, useState } from "react";
+import { GlobeIcon } from "lucide-react";
+import Image from "next/image";
 
-import { cn } from '@/lib/utils';
+import { cn } from "@/lib/utils";
 
-import { useSteelContext } from '@/app/contexts/SteelContext';
+import { useSteelContext } from "@/app/contexts/SteelContext";
 
 export function Browser() {
   // WebSocket and canvas state
@@ -30,14 +30,14 @@ export function Browser() {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   // Canvas rendering
   useEffect(() => {
     const renderFrame = () => {
       const canvas = canvasRef.current;
-      const ctx = canvas?.getContext('2d');
+      const ctx = canvas?.getContext("2d");
       if (canvas && ctx && latestImage && canvasSize) {
         ctx.drawImage(latestImage, 0, 0, canvasSize.width, canvasSize.height);
       }
@@ -50,18 +50,18 @@ export function Browser() {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       // Verify message origin matches debugUrl
-      const debugUrlOrigin = new URL(debugUrl || '').origin;
+      const debugUrlOrigin = new URL(debugUrl || "").origin;
       if (event.origin !== debugUrlOrigin) return;
 
       // Handle different message types
-      if (event.data?.type === 'navigation') {
+      if (event.data?.type === "navigation") {
         setUrl(event.data.url);
         setFavicon(event.data.favicon);
       }
     };
 
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
   }, [debugUrl]);
 
   return (
@@ -87,7 +87,7 @@ export function Browser() {
           <div className="mr-auto flex items-center justify-center">
             {favicon ? (
               <Image
-                src={favicon.startsWith('/') && url ? new URL(new URL(url), favicon).href : favicon}
+                src={favicon.startsWith("/") && url ? new URL(new URL(url), favicon).href : favicon}
                 alt="Favicon"
                 width={24}
                 height={24}
@@ -98,7 +98,7 @@ export function Browser() {
             )}
           </div>
           <span className="mr-auto truncate font-geist text-base font-normal leading-normal text-[--gray-12]">
-            {url ? url : 'Session not connected'}
+            {url ? url : "Session not connected"}
           </span>
         </div>
       </div>
@@ -107,7 +107,7 @@ export function Browser() {
       <div ref={parentRef} className="p2 relative flex-1">
         {debugUrl ? (
           <iframe
-            src={debugUrl + '?showControls=false'}
+            src={debugUrl + "?showControls=false"}
             sandbox="allow-same-origin allow-scripts"
             className="size-full rounded-sm border border-[--gray-3]"
           />
@@ -127,26 +127,26 @@ export function Browser() {
             <span className="flex items-center gap-2">
               <div
                 className={cn(
-                  'size-2 rounded-full',
-                  currentSession ? (isExpired ? 'bg-[--red-9]' : 'bg-[--green-9]') : 'bg-[--gray-8]'
+                  "size-2 rounded-full",
+                  currentSession ? (isExpired ? "bg-[--red-9]" : "bg-[--green-9]") : "bg-[--gray-8]"
                 )}
               />
               {currentSession
                 ? isExpired
-                  ? 'Session Expired'
-                  : 'Session Connected'
-                : 'No Session'}
+                  ? "Session Expired"
+                  : "Session Connected"
+                : "No Session"}
             </span>
             <span className="flex items-center gap-2">
               <span className="text-[--gray-12]">
-                {currentSession ? formatTime(sessionTimeElapsed) : '--:--'}
-              </span>{' '}
+                {currentSession ? formatTime(sessionTimeElapsed) : "--:--"}
+              </span>{" "}
               /<span className="text-[--gray-11]">{formatTime(maxSessionDuration)}</span>
             </span>
           </div>
 
           <span className="mt-1 flex items-center gap-2 text-sm md:mt-0">
-            Browser Powered by{' '}
+            Browser Powered by{" "}
             <a
               href="https://steel.dev"
               target="_blank"

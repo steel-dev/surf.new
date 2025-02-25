@@ -1,5 +1,5 @@
-import React from 'react';
-import { CheckIcon } from '@radix-ui/react-icons';
+import React from "react";
+import { CheckIcon } from "@radix-ui/react-icons";
 
 interface ToolInvocation {
   toolCallId: string;
@@ -26,7 +26,7 @@ interface ToolRenderProps {
  * Capitalizes the first letter and replaces all underscores with spaces.
  */
 function capitalizeAndReplaceUnderscores(str: string) {
-  return str.replaceAll('_', ' ').replace(/^./, match => match.toUpperCase());
+  return str.replaceAll("_", " ").replace(/^./, match => match.toUpperCase());
 }
 
 export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderProps) {
@@ -43,19 +43,19 @@ export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderPro
 
         // Identify if there's an image result
         const imageResult = Array.isArray(result)
-          ? (result.find((item: any) => item.type === 'image') as ImageResult | undefined)
+          ? (result.find((item: any) => item.type === "image") as ImageResult | undefined)
           : result?.image
             ? {
-                type: 'image',
+                type: "image",
                 source: {
-                  media_type: 'image/png',
+                  media_type: "image/png",
                   data: result.image,
                 },
               }
             : null;
 
         // Construct a data URL if we have an image
-        let imageSrc = '';
+        let imageSrc = "";
         if (imageResult?.source) {
           imageSrc = `data:${imageResult.source.media_type};base64,${imageResult.source.data}`;
         }
@@ -66,7 +66,7 @@ export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderPro
             className={`
               inline-flex h-28 flex-col items-start justify-start
               gap-2 rounded-2xl border border-[--gray-3] bg-[--gray-2] p-4 shadow-[0px_8px_16px_0px_rgba(0,0,0,0.08)]
-              ${state === 'call' ? 'opacity-40' : ''}
+              ${state === "call" ? "opacity-40" : ""}
             `}
           >
             {/* Header row: tool name + spinner/check */}
@@ -75,10 +75,10 @@ export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderPro
                 {displayToolName}
               </div>
               <div className="flex size-5 items-center justify-center">
-                {state === 'call' ? (
+                {state === "call" ? (
                   <div className="size-4 animate-spin rounded-full border-2 border-[--gray-12] border-t-transparent" />
                 ) : (
-                  state === 'result' && (
+                  state === "result" && (
                     <span className="flex size-4 items-center justify-center text-[--gray-12]">
                       <CheckIcon className="size-4" />
                     </span>
@@ -112,7 +112,7 @@ export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderPro
                   );
                 })}
               </div>
-              {state === 'result' && imageResult && (
+              {state === "result" && imageResult && (
                 <div className="inline-flex h-[39px] w-[71px] flex-col items-start justify-start gap-2.5">
                   <img
                     src={imageSrc}
