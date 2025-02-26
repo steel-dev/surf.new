@@ -1,8 +1,8 @@
 // app/PostHogPageView.tsx
 "use client";
 
+import { Suspense, useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, Suspense } from "react";
 import { usePostHog } from "posthog-js/react";
 
 function PostHogPageView(): null {

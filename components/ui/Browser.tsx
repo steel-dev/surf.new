@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
-import { useSteelContext } from "@/app/contexts/SteelContext";
 import { GlobeIcon } from "lucide-react";
+import Image from "next/image";
+
 import { cn } from "@/lib/utils";
+
+import { useSteelContext } from "@/app/contexts/SteelContext";
 
 export function Browser() {
   // WebSocket and canvas state
@@ -20,8 +22,7 @@ export function Browser() {
   const [isConnected, setIsConnected] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
   const [favicon, setFavicon] = useState<string | null>(null);
-  const { currentSession, sessionTimeElapsed, isExpired, maxSessionDuration } =
-    useSteelContext();
+  const { currentSession, sessionTimeElapsed, isExpired, maxSessionDuration } = useSteelContext();
 
   const debugUrl = currentSession?.debugUrl;
 
@@ -29,9 +30,7 @@ export function Browser() {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs
-      .toString()
-      .padStart(2, "0")}`;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   // Canvas rendering
@@ -69,75 +68,67 @@ export function Browser() {
     <div
       className="
         relative 
+        flex 
         aspect-[896/555] 
         w-full 
         max-w-full 
-        bg-[--gray-1] 
-        rounded-xl
-        shadow-[0px_8px_16px_0px_rgba(0,0,0,0.08)] 
+        flex-col
+        overflow-hidden 
+        rounded-xl 
         border 
         border-[--gray-3] 
-        flex 
-        flex-col 
-        overflow-hidden
+        bg-[--gray-1] 
+        shadow-[0px_8px_16px_0px_rgba(0,0,0,0.08)]
       "
     >
       {/* Top Bar */}
-      <div className="h-[60px] bg-[--gray-1] border-b border-[--gray-3] flex items-center justify-center p-2.5">
-        <div className="w-[360px] h-10 px-4 py-3 bg-[--gray-1] rounded-full border border-[--gray-3] flex justify-center items-center">
-          <div className="flex items-center justify-center mr-auto">
+      <div className="flex h-[60px] items-center justify-center border-b border-[--gray-3] bg-[--gray-1] p-2.5">
+        <div className="flex h-10 w-[360px] items-center justify-center rounded-full border border-[--gray-3] bg-[--gray-1] px-4 py-3">
+          <div className="mr-auto flex items-center justify-center">
             {favicon ? (
               <Image
-                src={
-                  favicon.startsWith("/") && url
-                    ? new URL(new URL(url), favicon).href
-                    : favicon
-                }
+                src={favicon.startsWith("/") && url ? new URL(new URL(url), favicon).href : favicon}
                 alt="Favicon"
                 width={24}
                 height={24}
-                className="object-contain mr-2"
+                className="mr-2 object-contain"
               />
             ) : (
-              <GlobeIcon className="w-4 h-4 mr-2" />
+              <GlobeIcon className="mr-2 size-4" />
             )}
           </div>
-          <span className="text-[--gray-12] text-base font-normal font-geist leading-normal truncate mr-auto">
+          <span className="mr-auto truncate font-geist text-base font-normal leading-normal text-[--gray-12]">
             {url ? url : "Session not connected"}
           </span>
         </div>
       </div>
 
       {/* Main Content */}
-      <div ref={parentRef} className="relative flex-1 p2">
+      <div ref={parentRef} className="p2 relative flex-1">
         {debugUrl ? (
           <iframe
             src={debugUrl + "?showControls=false"}
             sandbox="allow-same-origin allow-scripts"
-            className="w-full h-full rounded-sm border border-[--gray-3]"
+            className="size-full rounded-sm border border-[--gray-3]"
           />
         ) : (
-          <div className="w-full h-full" />
+          <div className="size-full" />
         )}
 
-        <div className="absolute left-[372px] top-[236px] text-white text-base font-normal font-geist leading-normal opacity-0">
+        <div className="absolute left-[372px] top-[236px] font-geist text-base font-normal leading-normal text-white opacity-0">
           Awaiting your input...
         </div>
       </div>
 
       {/* Status Bar */}
-      <div className="h-6 p-1 bg-[--gray-1] border-t border-[--gray-3] px-3 flex items-center">
-        <div className="flex justify-between w-full text-sm text-[--gray-11] font-ibm-plex-mono">
+      <div className="flex h-6 items-center border-t border-[--gray-3] bg-[--gray-1] p-1 px-3">
+        <div className="flex w-full justify-between font-ibm-plex-mono text-sm text-[--gray-11]">
           <div className="flex gap-2">
             <span className="flex items-center gap-2">
               <div
                 className={cn(
-                  "w-2 h-2 rounded-full",
-                  currentSession
-                    ? isExpired
-                      ? "bg-[--red-9]"
-                      : "bg-[--green-9]"
-                    : "bg-[--gray-8]"
+                  "size-2 rounded-full",
+                  currentSession ? (isExpired ? "bg-[--red-9]" : "bg-[--green-9]") : "bg-[--gray-8]"
                 )}
               />
               {currentSession
@@ -150,20 +141,17 @@ export function Browser() {
               <span className="text-[--gray-12]">
                 {currentSession ? formatTime(sessionTimeElapsed) : "--:--"}
               </span>{" "}
-              /
-              <span className="text-[--gray-11]">
-                {formatTime(maxSessionDuration)}
-              </span>
+              /<span className="text-[--gray-11]">{formatTime(maxSessionDuration)}</span>
             </span>
           </div>
 
-          <span className="flex items-center text-sm gap-2 mt-1 md:mt-0">
+          <span className="mt-1 flex items-center gap-2 text-sm md:mt-0">
             Browser Powered by{" "}
             <a
               href="https://steel.dev"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[--gray-12] text-sm hover:text-[--gray-11] transition-colors duration-200 underline"
+              className="text-sm text-[--gray-12] underline transition-colors duration-200 hover:text-[--gray-11]"
             >
               Steel.dev
             </a>

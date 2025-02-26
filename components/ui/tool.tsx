@@ -1,5 +1,5 @@
-import { CheckIcon } from "@radix-ui/react-icons";
 import React from "react";
+import { CheckIcon } from "@radix-ui/react-icons";
 
 interface ToolInvocation {
   toolCallId: string;
@@ -26,38 +26,33 @@ interface ToolRenderProps {
  * Capitalizes the first letter and replaces all underscores with spaces.
  */
 function capitalizeAndReplaceUnderscores(str: string) {
-  return str.replaceAll("_", " ").replace(/^./, (match) => match.toUpperCase());
+  return str.replaceAll("_", " ").replace(/^./, match => match.toUpperCase());
 }
 
-export function ToolInvocations({
-  toolInvocations,
-  onImageClick,
-}: ToolRenderProps) {
+export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderProps) {
   if (!toolInvocations) {
     return null;
   }
 
   return (
     <div className="flex flex-col gap-2">
-      {toolInvocations.map((toolInvocation) => {
+      {toolInvocations.map(toolInvocation => {
         const { toolCallId, toolName, args, state, result } = toolInvocation;
         const displayToolName = capitalizeAndReplaceUnderscores(toolName);
         const entries = Object.entries(args || {});
 
         // Identify if there's an image result
         const imageResult = Array.isArray(result)
-          ? (result.find((item: any) => item.type === "image") as
-              | ImageResult
-              | undefined)
+          ? (result.find((item: any) => item.type === "image") as ImageResult | undefined)
           : result?.image
-          ? {
-              type: "image",
-              source: {
-                media_type: "image/png",
-                data: result.image,
-              },
-            }
-          : null;
+            ? {
+                type: "image",
+                source: {
+                  media_type: "image/png",
+                  data: result.image,
+                },
+              }
+            : null;
 
         // Construct a data URL if we have an image
         let imageSrc = "";
@@ -69,23 +64,23 @@ export function ToolInvocations({
           <div
             key={toolCallId}
             className={`
-              h-28 p-4 bg-[--gray-2] rounded-2xl shadow-[0px_8px_16px_0px_rgba(0,0,0,0.08)]
-              border border-[--gray-3] flex-col justify-start items-start gap-2 inline-flex
+              inline-flex h-28 flex-col items-start justify-start
+              gap-2 rounded-2xl border border-[--gray-3] bg-[--gray-2] p-4 shadow-[0px_8px_16px_0px_rgba(0,0,0,0.08)]
               ${state === "call" ? "opacity-40" : ""}
             `}
           >
             {/* Header row: tool name + spinner/check */}
-            <div className="self-stretch justify-center items-center gap-1 inline-flex">
-              <div className="grow shrink basis-0 text-[--gray-12] text-xs font-medium font-['Geist'] leading-tight">
+            <div className="inline-flex items-center justify-center gap-1 self-stretch">
+              <div className="shrink grow basis-0 font-['Geist'] text-xs font-medium leading-tight text-[--gray-12]">
                 {displayToolName}
               </div>
-              <div className="w-5 h-5 flex items-center justify-center">
+              <div className="flex size-5 items-center justify-center">
                 {state === "call" ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-[--gray-12] border-t-transparent" />
+                  <div className="size-4 animate-spin rounded-full border-2 border-[--gray-12] border-t-transparent" />
                 ) : (
                   state === "result" && (
-                    <span className="text-[--gray-12] h-4 w-4 flex items-center justify-center">
-                      <CheckIcon className="h-4 w-4" />
+                    <span className="flex size-4 items-center justify-center text-[--gray-12]">
+                      <CheckIcon className="size-4" />
                     </span>
                   )
                 )}
@@ -93,25 +88,24 @@ export function ToolInvocations({
             </div>
 
             {/* Divider */}
-            <div className="h-[0px] flex-col justify-start items-start flex">
-              <div className="self-stretch h-[0px] border border-[--gray-3]" />
+            <div className="flex h-0 flex-col items-start justify-start">
+              <div className="h-0 self-stretch border border-[--gray-3]" />
             </div>
 
             {/* Body: arguments + optional image */}
-            <div className="self-stretch justify-start items-end gap-2 inline-flex overflow-hidden">
-              <div className="grow shrink basis-0 self-stretch flex-col justify-start items-start gap-1 inline-flex overflow-hidden">
+            <div className="inline-flex items-end justify-start gap-2 self-stretch overflow-hidden">
+              <div className="inline-flex shrink grow basis-0 flex-col items-start justify-start gap-1 self-stretch overflow-hidden">
                 {entries.map(([paramName, paramValue]) => {
-                  const displayParamName =
-                    capitalizeAndReplaceUnderscores(paramName);
+                  const displayParamName = capitalizeAndReplaceUnderscores(paramName);
                   return (
                     <div
                       key={paramName}
-                      className="self-stretch h-5 justify-start items-center gap-6 inline-flex"
+                      className="inline-flex h-5 items-center justify-start gap-6 self-stretch"
                     >
-                      <div className="text-[--gray-11] text-xs font-medium font-['Geist'] leading-tight">
+                      <div className="font-['Geist'] text-xs font-medium leading-tight text-[--gray-11]">
                         {displayParamName}
                       </div>
-                      <div className="text-[--gray-12] text-xs font-medium font-['Geist Mono'] leading-tight overflow-hidden whitespace-nowrap truncate">
+                      <div className="font-['Geist Mono'] overflow-hidden truncate whitespace-nowrap text-xs font-medium leading-tight text-[--gray-12]">
                         {String(paramValue)}
                       </div>
                     </div>
@@ -119,11 +113,11 @@ export function ToolInvocations({
                 })}
               </div>
               {state === "result" && imageResult && (
-                <div className="w-[71px] h-[39px] flex-col justify-start items-start gap-2.5 inline-flex">
+                <div className="inline-flex h-[39px] w-[71px] flex-col items-start justify-start gap-2.5">
                   <img
                     src={imageSrc}
                     alt="Preview"
-                    className="self-stretch h-[39px] rounded-lg border border-[--gray-3] cursor-pointer hover:opacity-90 transition-opacity"
+                    className="h-[39px] cursor-pointer self-stretch rounded-lg border border-[--gray-3] transition-opacity hover:opacity-90"
                     onClick={() => onImageClick?.(imageSrc)}
                   />
                 </div>

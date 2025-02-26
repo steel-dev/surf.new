@@ -1,7 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import Steel from "steel-sdk";
+
 import { useSettings } from "./SettingsContext";
 
 interface SteelContextType {
@@ -20,9 +21,7 @@ const SteelContext = createContext<SteelContextType | undefined>(undefined);
 
 export function SteelProvider({ children }: { children: React.ReactNode }) {
   console.info("🔄 Initializing SteelProvider");
-  const [currentSession, setCurrentSession] = useState<Steel.Session | null>(
-    null
-  );
+  const [currentSession, setCurrentSession] = useState<Steel.Session | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [sessionTimeElapsed, setSessionTimeElapsed] = useState(0);
   const [isExpired, setIsExpired] = useState(false);
@@ -36,12 +35,10 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
     if (currentSession && !isExpired) {
       console.info("⏰ Starting session timer");
       intervalId = setInterval(() => {
-        setSessionTimeElapsed((prev) => {
+        setSessionTimeElapsed(prev => {
           const newTime = prev + 1;
           if (newTime >= MAX_SESSION_DURATION) {
-            console.warn(
-              "⚠️ Session expired after reaching MAX_SESSION_DURATION"
-            );
+            console.warn("⚠️ Session expired after reaching MAX_SESSION_DURATION");
             setIsExpired(true);
             clearInterval(intervalId);
             return MAX_SESSION_DURATION;
@@ -77,10 +74,7 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
     console.info("🧹 Setting up cleanup effect");
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (currentSession?.id) {
-        console.info(
-          "🔄 BeforeUnload triggered - releasing session:",
-          currentSession.id
-        );
+        console.info("🔄 BeforeUnload triggered - releasing session:", currentSession.id);
         navigator.sendBeacon(`/api/sessions/${currentSession.id}/release`);
       }
     };
@@ -135,10 +129,7 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
   const resetSession = async () => {
     console.info("🔄 Resetting session");
     if (currentSession?.id) {
-      console.info(
-        "🔓 Releasing current session before reset:",
-        currentSession.id
-      );
+      console.info("🔓 Releasing current session before reset:", currentSession.id);
       await releaseSession(currentSession.id);
     }
 

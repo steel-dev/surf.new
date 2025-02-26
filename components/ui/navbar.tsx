@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { Github, Menu, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button } from "./button";
-import { Github, Plus, Menu, X } from "lucide-react";
+
 import { cn } from "@/lib/utils";
+
 import { useChatContext } from "@/app/contexts/ChatContext";
 import { useSteelContext } from "@/app/contexts/SteelContext";
+
+import { Button } from "./button";
 
 export function NavBar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -25,19 +28,19 @@ export function NavBar() {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[--gray-3] bg-[--gray-1]">
+    <nav className="fixed inset-x-0 top-0 z-50 border-b border-[--gray-3] bg-[--gray-1]">
       <div className="mx-auto px-4">
-        <div className="h-14 px-4 flex items-center justify-between w-full">
+        <div className="flex h-14 w-full items-center justify-between px-4">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 flex items-center justify-center">
-              <img src="/logo.svg" alt="surf.new logo" className="w-5 h-5" />
+            <div className="flex size-8 items-center justify-center">
+              <img src="/logo.svg" alt="surf.new logo" className="size-5" />
             </div>
             <Link href="/" className="w-[95px]">
               <span
                 className={cn(
-                  'text-[--gray-12] text-2xl font-normal leading-loose',
-                  'font-instrument-serif-italic'
+                  "text-2xl font-normal leading-loose text-[--gray-12]",
+                  "font-instrument-serif-italic"
                 )}
               >
                 surf.new
@@ -46,18 +49,15 @@ export function NavBar() {
           </div>
 
           {/* Desktop Menu */}
-          <div className="hidden md:flex items-center gap-2.5">
+          <div className="hidden items-center gap-2.5 md:flex">
             <Button
               variant="outline"
               size="sm"
-              className="rounded-full border-[--gray-3] bg-[--gray-1] text-[--gray-11] h-8"
+              className="h-8 rounded-full border-[--gray-3] bg-[--gray-1] text-[--gray-11]"
               asChild
             >
-              <Link
-                href="https://github.com/steel-dev/surf.new"
-                target="_blank"
-              >
-                <Github className="h-4 w-4" />
+              <Link href="https://github.com/steel-dev/surf.new" target="_blank">
+                <Github className="size-4" />
                 <span className="px-1 font-geist">Github Repo</span>
               </Link>
             </Button>
@@ -65,10 +65,10 @@ export function NavBar() {
             <Button
               variant="outline"
               size="sm"
-              className="bg-[--gray-1] rounded-full border-[--gray-3] text-[--gray-11] h-8"
+              className="h-8 rounded-full border-[--gray-3] bg-[--gray-1] text-[--gray-11]"
               onClick={handleNewChat}
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="size-4" />
               <span className="px-1 font-geist">New Chat</span>
             </Button>
 
@@ -81,14 +81,11 @@ export function NavBar() {
           </div>
 
           {/* Mobile Menu Button */}
-          <button
-            className="md:hidden p-2"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-          >
+          <button className="p-2 md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)}>
             {isMenuOpen ? (
-              <X className="h-5 w-5 text-[#ededed]" />
+              <X className="size-5 text-[#ededed]" />
             ) : (
-              <Menu className="h-5 w-5 text-[#ededed]" />
+              <Menu className="size-5 text-[#ededed]" />
             )}
           </button>
         </div>
@@ -97,28 +94,28 @@ export function NavBar() {
       {/* Mobile Menu */}
       <div
         className={cn(
-          'md:hidden bg-neutral-900 border-b border-[#282828]',
-          isMenuOpen ? 'block' : 'hidden'
+          "border-b border-[#282828] bg-neutral-900 md:hidden",
+          isMenuOpen ? "block" : "hidden"
         )}
       >
-        <div className="p-4 flex flex-col gap-4 max-w-[1440px] mx-auto">
+        <div className="mx-auto flex max-w-[1440px] flex-col gap-4 p-4">
           <Button
             variant="outline"
-            className="w-full bg-neutral-900 rounded-full border-[#282828] text-[#afafaf] justify-center h-8"
+            className="h-8 w-full justify-center rounded-full border-[#282828] bg-neutral-900 text-[#afafaf]"
             asChild
           >
             <Link href="https://github.com/steel-dev/surf.new" target="_blank">
-              <Github className="h-4 w-4" />
+              <Github className="size-4" />
               <span className="px-1 font-geist">Github Repo</span>
             </Link>
           </Button>
 
           <Button
             variant="outline"
-            className="w-full bg-neutral-900 rounded-full border-[#282828] text-[#ededed] justify-center h-8"
+            className="h-8 w-full justify-center rounded-full border-[#282828] bg-neutral-900 text-[#ededed]"
             onClick={handleNewChat}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="size-4" />
             <span className="px-1 font-geist">New Chat</span>
           </Button>
 
@@ -129,14 +126,14 @@ export function NavBar() {
           {/* Footer */}
           <div className="mt-6 flex flex-col gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-[#828282] text-base font-medium font-geist leading-tight">
+              <span className="font-geist text-base font-medium leading-tight text-[#828282]">
                 powered & maintained by
               </span>
-              <span className="text-white text-base font-medium font-geist leading-tight">
+              <span className="font-geist text-base font-medium leading-tight text-white">
                 Steel
               </span>
             </div>
-            <p className="text-[#ededed] text-base font-medium font-geist leading-tight">
+            <p className="font-geist text-base font-medium leading-tight text-[#ededed]">
               A better way to take your LLMs online. © Steel · Inc. 2025.
             </p>
           </div>

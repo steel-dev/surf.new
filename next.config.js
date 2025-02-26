@@ -17,9 +17,7 @@ const nextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: `${
-          process.env.API_URL || "http://localhost:8000"
-        }/api/:path*`,
+        destination: `${process.env.API_URL || "http://localhost:8000"}/api/:path*`,
       },
       {
         source: "/docs",
@@ -27,9 +25,7 @@ const nextConfig = {
       },
       {
         source: "/openapi.json",
-        destination: `${
-          process.env.API_URL || "http://localhost:8000"
-        }/openapi.json`,
+        destination: `${process.env.API_URL || "http://localhost:8000"}/openapi.json`,
       },
     ];
   },

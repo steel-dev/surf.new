@@ -1,8 +1,9 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { GeistMono } from "geist/font/mono";
 import { StopIcon } from "@radix-ui/react-icons";
+import { GeistMono } from "geist/font/mono";
+
+import { Button } from "@/components/ui/button";
 
 interface SendButtonProps {
   disabled: boolean;
@@ -12,21 +13,15 @@ interface SendButtonProps {
 
 export function SendButton({ isLoading, onStop }: SendButtonProps) {
   return (
-    <div className="flex items-center justify-end w-full gap-6">
-      <div className="hidden md:flex h-2 items-center gap-1">
-        <div className="text-[--gray-11] text-xs font-normal font-geist">
-          New Line
-        </div>
-        <div className="pl-2.5 bg-[--gray-2] rounded-full flex items-center gap-1.5 overflow-hidden border border-[--gray-3]">
-          <div
-            className={`text-[--gray-11] text-xs font-normal font-geist leading-[14px]`}
-          >
+    <div className="flex w-full items-center justify-end gap-6">
+      <div className="hidden h-2 items-center gap-1 md:flex">
+        <div className="font-geist text-xs font-normal text-[--gray-11]">New Line</div>
+        <div className="flex items-center gap-1.5 overflow-hidden rounded-full border border-[--gray-3] bg-[--gray-2] pl-2.5">
+          <div className={`font-geist text-xs font-normal leading-[14px] text-[--gray-11]`}>
             Shift
           </div>
-          <div className="w-7 h-6 p-4 bg-[--gray-2] border-l border-[--gray-3] flex items-center justify-center gap-2.5">
-            <div
-              className={`text-[--gray-11] text-xs font-normal font-geist leading-[14px]`}
-            >
+          <div className="flex h-6 w-7 items-center justify-center gap-2.5 border-l border-[--gray-3] bg-[--gray-2] p-4">
+            <div className={`font-geist text-xs font-normal leading-[14px] text-[--gray-11]`}>
               ↵
             </div>
           </div>
@@ -37,14 +32,14 @@ export function SendButton({ isLoading, onStop }: SendButtonProps) {
         <Button
           onClick={onStop}
           type="button"
-          className="h-8 px-3 inline-flex font-geist justify-center items-center gap-2.5 flex-shrink-0 rounded-[1000px] bg-[--gray-12] hover:bg-[--gray-11] cursor-pointer"
+          className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-2.5 rounded-[1000px] bg-[--gray-12] px-3 font-geist hover:bg-[--gray-11]"
         >
-          <StopIcon className="h-4 w-4 text-[--gray-1]" />
+          <StopIcon className="size-4 text-[--gray-1]" />
         </Button>
       ) : (
         <Button
           type="submit"
-          className="h-8 px-3 inline-flex justify-center font-geist items-center gap-2.5 flex-shrink-0 rounded-[1000px] bg-white hover:bg-white/90 text-black cursor-pointer"
+          className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-2.5 rounded-[1000px] bg-white px-3 font-geist text-black hover:bg-white/90"
         >
           Send
         </Button>

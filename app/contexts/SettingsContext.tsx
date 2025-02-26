@@ -39,19 +39,19 @@ interface SettingsContextType {
   }) => void;
 }
 
-const SettingsContext = createContext<SettingsContextType | undefined>(
-  undefined
-);
+const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [currentSettings, setCurrentSettings] =
-    useLocalStorage<SurfSettings | null>("chatSettings", null);
+  const [currentSettings, setCurrentSettings] = useLocalStorage<SurfSettings | null>(
+    "chatSettings",
+    null
+  );
 
   const updateSettings = (newSettings: {
     [key in keyof SurfSettings]: SurfSettings[key];
   }) => {
     if (currentSettings) {
-      setCurrentSettings((prev) => ({ ...prev, ...newSettings }));
+      setCurrentSettings(prev => ({ ...prev, ...newSettings }));
     } else {
       setCurrentSettings(newSettings);
     }
