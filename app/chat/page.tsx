@@ -3,14 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { atomDark, solarizedDarkAtom } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { CheckIcon } from "@radix-ui/react-icons";
 import { useChat } from "ai/react";
 import { Plus } from "lucide-react";
-import { AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AuthModal } from "@/components/ui/AuthModal";
 import { Browser } from "@/components/ui/Browser";
 import { Button } from "@/components/ui/button";
@@ -23,10 +21,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useChatContext } from "@/app/contexts/ChatContext";
 import { useSettings } from "@/app/contexts/SettingsContext";
 import { useSteelContext } from "@/app/contexts/SteelContext";
-
-interface MarkdownTextProps {
-  content: string;
-}
 
 // UPDATED CodeBlock component for rendering code blocks with a copy button and language display.
 function CodeBlock({ code, language }: { code: string; language?: string }) {
@@ -226,9 +220,8 @@ function ChatScrollAnchor({ trackVisibility, isAtBottom, scrollAreaRef }: ChatSc
 export default function ChatPage() {
   console.info("🔄 Initializing ChatPage component");
   const { currentSettings, updateSettings } = useSettings();
-  const { currentSession, createSession, isCreatingSession, isExpired, resetSession } =
-    useSteelContext();
-  const { initialMessage, setInitialMessage, clearInitialState } = useChatContext();
+  const { currentSession, createSession, isCreatingSession, isExpired } = useSteelContext();
+  const { initialMessage, setInitialMessage } = useChatContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasShownConnection, setHasShownConnection] = useState(false);
   const router = useRouter();
