@@ -401,7 +401,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
           ({
             ...(prev || {}),
             [key]: value,
-          } as ModelSettings)
+          }) as ModelSettings
       );
     } else {
       setAgentSettings(
@@ -409,7 +409,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
           ({
             ...(prev || {}),
             [key]: value,
-          } as AgentSettings)
+          }) as AgentSettings
       );
     }
   };
@@ -564,7 +564,8 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                         ))
                       ) : (
                         <SelectItem value="no-models" disabled>
-                          No models found. Install models with 'ollama pull'
+                          No models found. Install models with{" "}
+                          <code className="text-xs">ollama pull</code>
                         </SelectItem>
                       )
                     ) : (
@@ -650,11 +651,11 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium">Ollama Setup</label>
               </div>
-              <div className="p-3 bg-[--gray-3] rounded-md">
-                <p className="text-sm text-[--gray-12] mb-2">
-                  Ollama runs locally on your machine and doesn't require an API key.
+              <div className="rounded-md bg-[--gray-3] p-3">
+                <p className="mb-2 text-sm text-[--gray-12]">
+                  Ollama runs locally on your machine and doesn&#39;t require an API key.
                 </p>
-                <p className="text-sm text-[--gray-11] mb-2">
+                <p className="mb-2 text-sm text-[--gray-11]">
                   1. Install Ollama from{" "}
                   <a
                     href="https://ollama.com"
@@ -665,9 +666,9 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                     ollama.com
                   </a>
                 </p>
-                <p className="text-sm text-[--gray-11] mb-2">
+                <p className="mb-2 text-sm text-[--gray-11]">
                   2. Run Ollama locally with the model of your choice:
-                  <code className="block mt-1 p-1 bg-[--gray-4] rounded text-xs">
+                  <code className="mt-1 block rounded bg-[--gray-4] p-1 text-xs">
                     ollama run {selectedModel || "MODEL_NAME"}
                   </code>
                 </p>
@@ -675,7 +676,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                   3. Surf.new will connect to your local Ollama instance automatically
                 </p>
                 {ollamaError && (
-                  <div className="mt-2 p-2 bg-[--red-3] border border-[--red-6] rounded-md text-[--red-11] text-xs">
+                  <div className="mt-2 rounded-md border border-[--red-6] bg-[--red-3] p-2 text-xs text-[--red-11]">
                     Error: {ollamaError}. Make sure Ollama is running.
                   </div>
                 )}
@@ -770,7 +771,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
         >
           <div className="flex items-start justify-start px-1">
             <div className="font-geist text-sm font-medium leading-normal text-neutral-900">
-              Apply Changes & Restart Chat
+              Apply Changes &amp; Restart Chat
             </div>
           </div>
         </div>
