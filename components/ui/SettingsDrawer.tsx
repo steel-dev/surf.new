@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Settings } from "lucide-react";
-import { Info } from "lucide-react";
+import { useState } from "react";
+import { Info, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -28,51 +27,18 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 
 import { cn } from "@/lib/utils";
 
+import { Agent, SettingConfig, SupportedModel } from "@/types/agents";
+
 import { useChatContext } from "@/app/contexts/ChatContext";
 import { AgentSettings, ModelSettings, useSettings } from "@/app/contexts/SettingsContext";
 import { useSteelContext } from "@/app/contexts/SteelContext";
-
-interface AgentConfig {
-  name: string;
-  description: string;
-  supported_models: Array<{
-    provider: string;
-    models: string[];
-  }>;
-  model_settings: ModelConfig;
-  agent_settings: {
-    [key: string]: SettingConfig;
-  };
-}
-
-interface AvailableAgents {
-  [key: string]: AgentConfig;
-}
-
-interface ModelConfig {
-  max_tokens: SettingConfig;
-  temperature: SettingConfig;
-  top_p: SettingConfig;
-  top_k: SettingConfig;
-  frequency_penalty: SettingConfig;
-  presence_penalty: SettingConfig;
-  [key: string]: SettingConfig; // Allow dynamic string keys
-}
-
-interface SettingConfig {
-  type: "integer" | "float" | "text" | "textarea";
-  default: number | string;
-  min?: number;
-  max?: number;
-  step?: number;
-  maxLength?: number;
-  description?: string;
-}
+import { useAgents } from "@/app/hooks/useAgents";
+import { useOllamaModels } from "@/app/hooks/useOllamaModels";
 
 export function SettingsButton() {
   const { currentSettings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
-  const router = useRouter();
+
   return (
     <Sheet open={showSettings} onOpenChange={setShowSettings}>
       <SheetTrigger asChild>
@@ -219,238 +185,122 @@ function SettingInput({
 }
 
 function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
-  const [agents, setAgents] = useState<AvailableAgents | null>(null);
   const { currentSettings, updateSettings } = useSettings();
   const [apiKey, setApiKey] = useState("");
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { clearInitialState } = useChatContext();
   const { resetSession } = useSteelContext();
 
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [ollamaModels, setOllamaModels] = useState<Array<{ tag: string; base_name: string }>>([]);
-  const [isLoadingOllamaModels, setIsLoadingOllamaModels] = useState(false);
-  const [ollamaError, setOllamaError] = useState<string | null>(null);
 
-  const [selectedAgent, setSelectedAgent] = useState(currentSettings?.selectedAgent);
-  const [selectedProvider, setSelectedProvider] = useState(currentSettings?.selectedProvider);
+  const { data: agents, isLoading: isLoadingAgents } = useAgents();
+  const { data: ollamaData, isLoading: isLoadingOllama, error: ollamaError } = useOllamaModels();
 
-  const [selectedModel, setSelectedModel] = useState(currentSettings?.selectedModel);
+  if (agents && (!currentSettings?.selectedAgent || !agents[currentSettings.selectedAgent])) {
+    const firstAgentKey = Object.keys(agents)[0];
+    const defaultProvider = agents[firstAgentKey].supported_models[0].provider;
+    const defaultModel = agents[firstAgentKey].supported_models[0].models[0];
+    const defaultModelSettings = Object.entries(agents[firstAgentKey].model_settings).reduce(
+      (acc, [key, value]) => {
+        acc[key] = (value as SettingConfig).default as number | string;
+        return acc;
+      },
+      {} as ModelSettings
+    );
+    const defaultAgentSettings = Object.entries(agents[firstAgentKey].agent_settings).reduce(
+      (acc, [key, value]) => {
+        acc[key] = (value as SettingConfig).default as number | string;
+        return acc;
+      },
+      {} as AgentSettings
+    );
 
-  const [modelSettings, setModelSettings] = useState<ModelSettings | undefined>(
-    currentSettings?.modelSettings
-  );
+    updateSettings({
+      selectedAgent: firstAgentKey,
+      selectedProvider: defaultProvider,
+      selectedModel: defaultModel,
+      modelSettings: defaultModelSettings,
+      agentSettings: defaultAgentSettings,
+      providerApiKeys: currentSettings?.providerApiKeys || {},
+    });
+  }
 
-  // Add state for agent settings
-  const [agentSettings, setAgentSettings] = useState<AgentSettings | undefined>(
-    currentSettings?.agentSettings
-  );
+  if (
+    agents &&
+    currentSettings?.selectedAgent &&
+    currentSettings?.selectedProvider &&
+    agents[currentSettings.selectedAgent]
+  ) {
+    const providerModels = (agents[currentSettings.selectedAgent] as Agent).supported_models.find(
+      (m: SupportedModel) => m.provider === currentSettings.selectedProvider
+    );
 
-  // Fetch Ollama models when provider is set to Ollama
-  useEffect(() => {
-    if (selectedProvider === "ollama") {
-      const fetchOllamaModels = async () => {
-        try {
-          setIsLoadingOllamaModels(true);
-          setOllamaError(null);
-          const response = await fetch("/api/ollama/models");
-
-          if (!response.ok) {
-            throw new Error(
-              `Failed to fetch Ollama models: ${response.status} ${await response.text()}`
-            );
-          }
-
-          const data = await response.json();
-          setOllamaModels(data.models || []);
-
-          // If we have models and the current selected model is not in the list,
-          // select the first available model
-          if (data.models && data.models.length > 0) {
-            // Check if the current model is in the list of tags
-            const modelTags = data.models.map((model: { tag: string }) => model.tag);
-            if (!modelTags.includes(selectedModel)) {
-              setSelectedModel(data.models[0].tag);
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching Ollama models:", error);
-          setOllamaError(error instanceof Error ? error.message : "Failed to fetch Ollama models");
-          // Fallback to default models from the agent config
-          const defaultModels =
-            (selectedAgent &&
-              agents?.[selectedAgent]?.supported_models.find((m: any) => m.provider === "ollama")
-                ?.models) ||
-            [];
-          setOllamaModels(
-            defaultModels.map((model: any) => ({
-              tag: model,
-              base_name: model,
-            }))
-          );
-        } finally {
-          setIsLoadingOllamaModels(false);
-        }
-      };
-
-      fetchOllamaModels();
+    if (
+      providerModels &&
+      providerModels.models.length > 0 &&
+      !providerModels.models.includes(currentSettings.selectedModel)
+    ) {
+      updateSettings({
+        ...currentSettings,
+        selectedModel: providerModels.models[0],
+      });
     }
-  }, [selectedProvider, selectedAgent, agents, selectedModel]);
+  }
 
-  useEffect(() => {
-    async function fetchAgents() {
-      try {
-        const response = await fetch("/api/agents");
-        if (!response.ok) {
-          throw new Error(`Failed to fetch agents: ${response.status} ${await response.text()}`);
-        }
-        const data: AvailableAgents = await response.json();
-        setAgents(data);
-        if (!currentSettings) {
-          const firstAgentKey = Object.keys(data)[0];
-          const defaultAgent = data[firstAgentKey].name;
-          const defaultProvider = data[firstAgentKey].supported_models[0].provider;
-          const defaultModel = data[firstAgentKey].supported_models[0].models[0];
-          const defaultModelSettings = Object.entries(data[firstAgentKey].model_settings).reduce(
-            (acc, [key, value]) => {
-              acc[key] = value.default;
-              return acc;
-            },
-            {} as ModelSettings
-          );
-          const defaultAgentSettings = Object.entries(data[firstAgentKey].agent_settings).reduce(
-            (acc, [key, value]) => {
-              acc[key] = value.default;
-              return acc;
-            },
-            {} as AgentSettings
-          );
-
-          updateSettings({
-            selectedAgent: firstAgentKey,
-            selectedProvider: defaultProvider,
-            selectedModel: defaultModel,
-            modelSettings: defaultModelSettings,
-            agentSettings: defaultAgentSettings,
-            providerApiKeys: {}, // Start with empty object for new settings
-          });
-          setSelectedAgent(firstAgentKey);
-          setSelectedProvider(defaultProvider);
-          setSelectedModel(defaultModel);
-          setModelSettings(defaultModelSettings);
-          setAgentSettings(defaultAgentSettings);
-        }
-      } catch (error) {
-        console.error("Error fetching agents:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    setLoading(true);
-    fetchAgents();
-  }, []);
-
-  useEffect(() => {
-    if (agents && selectedAgent) {
-      setSelectedProvider(agents[selectedAgent].supported_models[0].provider);
-      setSelectedModel(agents[selectedAgent].supported_models[0].models[0]);
-
-      // Initialize model settings with all default values from the config
-      const defaultModelSettings = Object.entries(agents[selectedAgent].model_settings).reduce(
-        (acc, [key, config]) => {
-          acc[key] = config.default;
-          return acc;
-        },
-        {} as ModelSettings
-      );
-
-      // Initialize agent settings with all default values from the config
-      const defaultAgentSettings = Object.entries(agents[selectedAgent].agent_settings).reduce(
-        (acc, [key, config]) => {
-          acc[key] = config.default;
-          return acc;
-        },
-        {} as AgentSettings
-      );
-
-      setModelSettings(defaultModelSettings);
-      setAgentSettings(defaultAgentSettings);
-    }
-  }, [selectedAgent, agents]);
-
-  // Effect to update selected model when provider changes
-  useEffect(() => {
-    if (agents && selectedAgent && selectedProvider) {
-      // Find the supported models for the selected provider
-      const providerModels = agents[selectedAgent].supported_models.find(
-        m => m.provider === selectedProvider
-      );
-
-      // If we found models for this provider, set the first one as default
-      if (providerModels && providerModels.models.length > 0) {
-        setSelectedModel(providerModels.models[0]);
-      }
-    }
-  }, [selectedProvider, selectedAgent, agents]);
-
-  // When setting agent/model settings, store only the values, not the config objects
   const handleSettingChange = (settingType: "model" | "agent", key: string, value: any) => {
+    if (!currentSettings) return;
+
     if (settingType === "model") {
-      setModelSettings(
-        prev =>
-          ({
-            ...(prev || {}),
-            [key]: value,
-          }) as ModelSettings
-      );
+      updateSettings({
+        ...currentSettings,
+        modelSettings: {
+          ...currentSettings.modelSettings,
+          [key]: value,
+        },
+      });
     } else {
-      setAgentSettings(
-        prev =>
-          ({
-            ...(prev || {}),
-            [key]: value,
-          }) as AgentSettings
-      );
+      updateSettings({
+        ...currentSettings,
+        agentSettings: {
+          ...currentSettings.agentSettings,
+          [key]: value,
+        },
+      });
     }
   };
 
-  if (!selectedAgent) {
+  if (!currentSettings?.selectedAgent) {
     return null;
   }
 
   function handleSave() {
-    if (!selectedAgent || !selectedProvider || !selectedModel || !modelSettings || !agentSettings) {
+    if (
+      !currentSettings?.selectedAgent ||
+      !currentSettings?.selectedProvider ||
+      !currentSettings?.selectedModel ||
+      !currentSettings?.modelSettings ||
+      !currentSettings?.agentSettings
+    ) {
       return;
     }
 
-    // Update settings first
-    updateSettings({
-      selectedAgent,
-      selectedProvider,
-      selectedModel,
-      modelSettings,
-      agentSettings,
-      providerApiKeys: currentSettings?.providerApiKeys || {},
-    });
-
-    // Clear all state
     clearInitialState();
     resetSession();
 
-    // Close settings drawer
     closeSettings();
 
-    // Navigate to home page
     router.push("/");
   }
 
-  if (loading || !agents) {
+  if (isLoadingAgents || !agents) {
     return (
       <div className="flex size-3 items-center justify-center">
         <div className="size-3 animate-spin rounded-full border-2 border-[--gray-8] border-t-transparent" />
       </div>
     );
   }
+
+  const currentAgent = agents[currentSettings.selectedAgent] as Agent;
 
   return (
     <SheetContent
@@ -486,8 +336,35 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
         <div className="space-y-2">
           <label className="text-sm font-medium">Agent</label>
           <Select
-            value={selectedAgent}
-            onValueChange={value => setSelectedAgent(value)}
+            value={currentSettings.selectedAgent}
+            onValueChange={value => {
+              const agent = agents[value] as Agent;
+              const defaultProvider = agent.supported_models[0].provider;
+              const defaultModel = agent.supported_models[0].models[0];
+              const defaultModelSettings = Object.entries(agent.model_settings).reduce(
+                (acc, [key, value]) => {
+                  acc[key] = (value as SettingConfig).default as number | string;
+                  return acc;
+                },
+                {} as ModelSettings
+              );
+              const defaultAgentSettings = Object.entries(agent.agent_settings).reduce(
+                (acc, [key, value]) => {
+                  acc[key] = (value as SettingConfig).default as number | string;
+                  return acc;
+                },
+                {} as AgentSettings
+              );
+
+              updateSettings({
+                selectedAgent: value,
+                selectedProvider: defaultProvider,
+                selectedModel: defaultModel,
+                modelSettings: defaultModelSettings,
+                agentSettings: defaultAgentSettings,
+                providerApiKeys: currentSettings.providerApiKeys,
+              });
+            }}
             disabled={Object.keys(agents).length === 0}
           >
             <SelectTrigger className="settings-input">
@@ -496,7 +373,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
             <SelectContent className="settings-input border border-[--gray-3] bg-[--gray-1] text-[--gray-11]">
               {Object.entries(agents).map(([key, agent]) => (
                 <SelectItem key={key} value={key}>
-                  {agent.name} - {agent.description}
+                  {(agent as Agent).name} - {(agent as Agent).description}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -505,21 +382,30 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
 
         <div className="space-y-4">
           {/* Model Selection */}
-          {agents[selectedAgent]?.supported_models && (
+          {currentAgent?.supported_models && (
             <div className="space-y-2">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Model Provider</label>
                 <Select
-                  value={selectedProvider ?? agents[selectedAgent].supported_models[0].provider}
+                  value={currentSettings.selectedProvider}
                   onValueChange={value => {
-                    setSelectedProvider(value);
+                    const providerModels = currentAgent.supported_models.find(
+                      (m: SupportedModel) => m.provider === value
+                    );
+                    if (providerModels && providerModels.models.length > 0) {
+                      updateSettings({
+                        ...currentSettings,
+                        selectedProvider: value,
+                        selectedModel: providerModels.models[0],
+                      });
+                    }
                   }}
                 >
                   <SelectTrigger className="settings-input">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="settings-input">
-                    {agents[selectedAgent].supported_models.map(supportedModel => (
+                    {currentAgent.supported_models.map((supportedModel: SupportedModel) => (
                       <SelectItem key={supportedModel.provider} value={supportedModel.provider}>
                         {supportedModel.provider}
                       </SelectItem>
@@ -531,15 +417,20 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Model</label>
                 <Select
-                  value={selectedModel ?? agents[selectedAgent].supported_models[0].models[0]}
-                  onValueChange={value => setSelectedModel(value)}
+                  value={currentSettings.selectedModel}
+                  onValueChange={value => {
+                    updateSettings({
+                      ...currentSettings,
+                      selectedModel: value,
+                    });
+                  }}
                 >
                   <SelectTrigger className="settings-input">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="settings-input">
-                    {selectedProvider === "ollama" ? (
-                      isLoadingOllamaModels ? (
+                    {currentSettings.selectedProvider === "ollama" ? (
+                      isLoadingOllama ? (
                         <SelectItem value="loading" disabled>
                           Loading Ollama models...
                         </SelectItem>
@@ -548,16 +439,18 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                           <SelectItem value="error" disabled>
                             Error loading models
                           </SelectItem>
-                          {agents[selectedAgent].supported_models
-                            .find(m => m.provider === selectedProvider)
-                            ?.models.map(model => (
+                          {currentAgent.supported_models
+                            .find(
+                              (m: SupportedModel) => m.provider === currentSettings.selectedProvider
+                            )
+                            ?.models.map((model: string) => (
                               <SelectItem key={model} value={model}>
                                 {model} (fallback)
                               </SelectItem>
                             ))}
                         </>
-                      ) : ollamaModels.length > 0 ? (
-                        ollamaModels.map(model => (
+                      ) : ollamaData?.models && ollamaData.models.length > 0 ? (
+                        ollamaData.models.map(model => (
                           <SelectItem key={model.tag} value={model.tag}>
                             {model.tag}
                           </SelectItem>
@@ -569,9 +462,11 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                         </SelectItem>
                       )
                     ) : (
-                      agents[selectedAgent].supported_models
-                        .find(m => m.provider === selectedProvider)
-                        ?.models.map(model => (
+                      currentAgent.supported_models
+                        .find(
+                          (m: SupportedModel) => m.provider === currentSettings.selectedProvider
+                        )
+                        ?.models.map((model: string) => (
                           <SelectItem key={model} value={model}>
                             {model}
                           </SelectItem>
@@ -584,16 +479,18 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
           )}
 
           {/* API Key Management */}
-          {selectedProvider && selectedProvider !== "ollama" && (
+          {currentSettings.selectedProvider && currentSettings.selectedProvider !== "ollama" && (
             <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">{selectedProvider} API Key</label>
-                {currentSettings?.providerApiKeys?.[selectedProvider] && (
+                <label className="text-sm font-medium">
+                  {currentSettings.selectedProvider} API Key
+                </label>
+                {currentSettings.providerApiKeys?.[currentSettings.selectedProvider] && (
                   <button
                     onClick={() => {
                       // Clear the API key for this provider
                       const newKeys = { ...currentSettings.providerApiKeys };
-                      delete newKeys[selectedProvider];
+                      delete newKeys[currentSettings.selectedProvider];
                       updateSettings({
                         ...currentSettings,
                         providerApiKeys: newKeys,
@@ -609,9 +506,9 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                 <Input
                   type="password"
                   placeholder={
-                    currentSettings?.providerApiKeys?.[selectedProvider]
+                    currentSettings.providerApiKeys?.[currentSettings.selectedProvider]
                       ? "••••••••••••••••"
-                      : `Enter ${selectedProvider} API Key`
+                      : `Enter ${currentSettings.selectedProvider} API Key`
                   }
                   value={apiKey}
                   onChange={e => setApiKey(e.target.value)}
@@ -621,12 +518,12 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                   <button
                     onClick={() => {
                       // Save the API key
-                      const currentKeys = currentSettings?.providerApiKeys || {};
+                      const currentKeys = currentSettings.providerApiKeys || {};
                       updateSettings({
-                        ...currentSettings!,
+                        ...currentSettings,
                         providerApiKeys: {
                           ...currentKeys,
-                          [selectedProvider]: apiKey,
+                          [currentSettings.selectedProvider]: apiKey,
                         },
                       });
                       setApiKey(""); // Clear input after saving
@@ -646,7 +543,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
           )}
 
           {/* Ollama Instructions */}
-          {selectedProvider === "ollama" && (
+          {currentSettings.selectedProvider === "ollama" && (
             <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium">Ollama Setup</label>
@@ -669,7 +566,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                 <p className="mb-2 text-sm text-[--gray-11]">
                   2. Run Ollama locally with the model of your choice:
                   <code className="mt-1 block rounded bg-[--gray-4] p-1 text-xs">
-                    ollama run {selectedModel || "MODEL_NAME"}
+                    ollama run {currentSettings.selectedModel || "MODEL_NAME"}
                   </code>
                 </p>
                 <p className="text-sm text-[--gray-11]">
@@ -677,7 +574,11 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                 </p>
                 {ollamaError && (
                   <div className="mt-2 rounded-md border border-[--red-6] bg-[--red-3] p-2 text-xs text-[--red-11]">
-                    Error: {ollamaError}. Make sure Ollama is running.
+                    Error:{" "}
+                    {ollamaError instanceof Error
+                      ? ollamaError.message
+                      : "Failed to fetch Ollama models"}
+                    . Make sure Ollama is running.
                   </div>
                 )}
               </div>
@@ -725,35 +626,28 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                 {/* Model Settings */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium">Model Settings</h3>
-                  {Object.entries(agents[selectedAgent].model_settings).map(([key, config]) => (
+                  {Object.entries(currentAgent.model_settings).map(([key, config]) => (
                     <SettingInput
                       key={key}
                       settingKey={key}
-                      config={config}
-                      value={modelSettings?.[key] ?? config.default}
+                      config={config as SettingConfig}
+                      value={
+                        currentSettings.modelSettings?.[key] ?? (config as SettingConfig).default
+                      }
                       onChange={value => handleSettingChange("model", key, value)}
                     />
                   ))}
                 </div>
 
                 {/* Agent Settings */}
-                {Object.entries(agents[selectedAgent].agent_settings).map(([key, config]) => (
+                {Object.entries(currentAgent.agent_settings).map(([key, config]) => (
                   <SettingInput
                     key={key}
                     settingKey={key}
-                    config={config}
-                    value={agentSettings?.[key] ?? config.default}
-                    onChange={value => handleSettingChange("agent", key, value)}
-                  />
-                ))}
-
-                {/* Agent Settings */}
-                {Object.entries(agents[selectedAgent].agent_settings).map(([key, config]) => (
-                  <SettingInput
-                    key={key}
-                    settingKey={key}
-                    config={config}
-                    value={agentSettings?.[key] ?? config.default}
+                    config={config as SettingConfig}
+                    value={
+                      currentSettings.agentSettings?.[key] ?? (config as SettingConfig).default
+                    }
                     onChange={value => handleSettingChange("agent", key, value)}
                   />
                 ))}
