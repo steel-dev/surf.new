@@ -8,6 +8,8 @@ import { LayoutContent } from "@/components/LayoutContent";
 
 import { cn } from "@/lib/utils";
 
+import { QueryProvider } from "./providers/QueryProvider";
+
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -48,7 +50,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       )}
     >
       <body className={inter.className}>
-        <LayoutContent>{children}</LayoutContent>
+        <QueryProvider>
+          <LayoutContent>{children}</LayoutContent>
+        </QueryProvider>
       </body>
     </html>
   );
