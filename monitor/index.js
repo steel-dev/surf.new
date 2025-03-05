@@ -108,7 +108,7 @@ async function triggerRedeploy() {
 }
 
 // Schedule the redeploy to run every 6 hours
-const CRON_SCHEDULE = "0 */6 * * *"; // At minute 0 of every 6th hour
+const CRON_SCHEDULE = "0 */3 * * *"; // At minute 0 of every 6th hour
 
 // Log startup information
 console.log("Starting Railway deployment monitor...");
@@ -116,9 +116,9 @@ console.log("Starting Railway deployment monitor...");
 // Calculate next run time (next hour divisible by 6)
 const now = new Date();
 const nextRun = new Date(now);
-nextRun.setHours(Math.ceil(now.getHours() / 6) * 6, 0, 0, 0);
+nextRun.setHours(Math.ceil(now.getHours() / 3) * 3, 0, 0, 0);
 if (nextRun <= now) {
-  nextRun.setHours(nextRun.getHours() + 6);
+  nextRun.setHours(nextRun.getHours() + 3);
 }
 console.log(`Next scheduled run: ${nextRun.toLocaleString()}`);
 
