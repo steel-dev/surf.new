@@ -571,13 +571,13 @@ export default function ChatPage() {
   return (
     <>
       <div className="flex h-[calc(100vh-3.5rem)] flex-col-reverse md:flex-row">
-        {/* Left (chat) - Set min/max width for desktop, full width on mobile */}
+        {/* Left (chat) - Fluid responsive width */}
         <div
           className="
-          flex h-[60vh] 
+          flex h-[40vh] 
           w-full flex-col border-t border-[--gray-3]
-          md:h-full md:w-[400px]
-          md:min-w-[480px] md:max-w-[480px] md:border-r md:border-t-0
+          md:h-full md:w-[clamp(280px,30vw,460px)]
+          md:border-r md:border-t-0
         "
         >
           <div className="flex-1 overflow-hidden" ref={scrollAreaRef} onScroll={handleScroll}>
@@ -699,10 +699,10 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Right (browser) - Flex grow to fill space */}
+        {/* Right (browser) - Keep more prominent */}
         <div
           className="
-          h-[40vh] 
+          h-[60vh] 
           flex-1 border-b
           border-[--gray-3] p-4 md:h-full 
           md:border-b-0
