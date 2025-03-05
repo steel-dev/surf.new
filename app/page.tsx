@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 
 import { isLocalhost } from "@/lib/utils";
 
+import Clouds from "@/public/clouds.png";
+
 import { useChatContext } from "./contexts/ChatContext";
 import { useSettings } from "./contexts/SettingsContext";
 import { useSteelContext } from "./contexts/SteelContext";
@@ -137,7 +139,7 @@ export default function Home() {
             <div className="h-24 self-stretch overflow-hidden rounded-t-[20px] border border-[--gray-3]">
               <div className="relative h-32 px-6 pb-2 pt-8">
                 <Image
-                  src="/img_clouds.png"
+                  src={Clouds}
                   alt="Decorative clouds background"
                   fill
                   className="object-cover"
@@ -145,7 +147,7 @@ export default function Home() {
                 />
               </div>
             </div>
-            <div className="self-stretch rounded-b-[20px] border border-t-0 border-[--gray-3] bg-[--gray-1] px-6 pb-3 pt-6">
+            <div className="self-stretch rounded-b-[20px] border border-t-0 border-[--gray-3] bg-[--gray-1] p-4">
               <ChatInput
                 ref={inputRef}
                 value={query}
