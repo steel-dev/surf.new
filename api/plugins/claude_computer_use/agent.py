@@ -152,7 +152,7 @@ class BetaChatAnthropic(ChatAnthropic):
         return super().bind(tools=anthropic_tools, **kwargs)
 
 
-async def claude_steel_agent(
+async def claude_computer_use(
     model_config: ModelConfig,
     agent_settings: AgentSettings,
     history: List[Mapping[str, Any]],
@@ -260,7 +260,7 @@ async def claude_steel_agent(
         ]
 
         try:
-            print("Initializing claude_steel_agent...")  # Debug log
+            print("Initializing claude_computer_use...")  # Debug log
             llm = create_llm(
                 ModelConfig(
                     provider=ModelProvider.ANTHROPIC_COMPUTER_USE,
@@ -334,7 +334,7 @@ async def claude_steel_agent(
                 else:
                     break
         except Exception as e:
-            print(f"Error in claude_steel_agent: {str(e)}")
+            print(f"Error in claude_computer_use: {str(e)}")
             raise
 
 
@@ -360,7 +360,7 @@ def main():
     try:
 
         async def run_agent():
-            async for response_chunk in claude_steel_agent(model_config, history):
+            async for response_chunk in claude_computer_use(model_config, history):
                 print(response_chunk, end="", flush=True)
 
         asyncio.run(run_agent())

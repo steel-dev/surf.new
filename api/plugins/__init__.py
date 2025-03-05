@@ -11,10 +11,10 @@ from typing import (
 )
 from ..models import ModelConfig, ModelProvider
 from .base import base_agent
-from .claude_steel_use import claude_steel_agent
+from .claude_computer_use import claude_computer_use
 from .browser_use import browser_use_agent
 from ..utils.types import AgentSettings
-from .claude_steel_use.prompts import SYSTEM_PROMPT
+from .claude_computer_use.prompts import SYSTEM_PROMPT
 
 # from .example_plugin import example_agent
 
@@ -22,7 +22,7 @@ from .claude_steel_use.prompts import SYSTEM_PROMPT
 class WebAgentType(Enum):
     BASE = "base"
     EXAMPLE = "example"
-    CLAUDE_STEEL_USE = "claude_steel_agent"
+    CLAUDE_COMPUTER_USE = "claude_computer_use"
     BROWSER_USE = "browser_use_agent"
 
 
@@ -156,8 +156,8 @@ AGENT_CONFIGS = {
             },
         },
     },
-    WebAgentType.CLAUDE_STEEL_USE.value: {
-        "name": "Claude Steel Agent",
+    WebAgentType.CLAUDE_COMPUTER_USE.value: {
+        "name": "Claude Computer Use",
         "description": "Advanced agent with Claude-specific capabilities",
         "supported_models": [
             {
@@ -228,8 +228,8 @@ def get_web_agent(
 ]:
     if name == WebAgentType.BASE:
         return base_agent
-    elif name == WebAgentType.CLAUDE_STEEL_USE:
-        return claude_steel_agent
+    elif name == WebAgentType.CLAUDE_COMPUTER_USE:
+        return claude_computer_use
     elif name == WebAgentType.BROWSER_USE:
         return browser_use_agent
     else:
