@@ -123,7 +123,7 @@ export function Browser() {
       {/* Status Bar */}
       <div className="flex h-6 items-center border-t border-[--gray-3] bg-[--gray-1] p-1 px-3">
         <div className="flex w-full justify-between font-ibm-plex-mono text-sm text-[--gray-11]">
-          <div className="flex gap-2">
+          <div className="flex gap-2 font-sans">
             <span className="flex items-center gap-2">
               <div
                 className={cn(
@@ -145,7 +145,7 @@ export function Browser() {
             </span>
           </div>
 
-          <span className="mt-1 flex items-center gap-2 text-sm md:mt-0">
+          <span className="mt-1 flex items-center gap-2 font-sans text-sm md:mt-0">
             Browser Powered by{" "}
             <a
               href="https://steel.dev"
