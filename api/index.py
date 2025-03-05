@@ -53,7 +53,7 @@ async def create_session(request: SessionRequest):
     """
     Creates a new session.
     """
-    if request.agent_type == WebAgentType.CLAUDE_STEEL_USE:
+    if request.agent_type == WebAgentType.CLAUDE_COMPUTER_USE:
         return steel_client.sessions.create(
             dimensions={
                 "width": 1280,
