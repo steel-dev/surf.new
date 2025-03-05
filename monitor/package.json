@@ -1,0 +1,15 @@
+{
+  "name": "surf-monitor",
+  "version": "1.0.0",
+  "description": "Health check and auto-redeploy service for Surf backend",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.4.5"
+  }
+}
