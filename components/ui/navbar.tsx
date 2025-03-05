@@ -33,7 +33,7 @@ export function NavBar() {
   return (
     <nav className="fixed inset-x-0 top-0 z-50 border-b border-[--gray-3] bg-[--gray-1]">
       <div className="mx-auto px-4">
-        <div className="flex h-14 w-full items-center justify-between px-4">
+        <div className="flex h-14 w-full items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-2">
             <div className="flex size-8 items-center justify-center">
