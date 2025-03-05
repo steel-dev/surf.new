@@ -116,6 +116,27 @@ export default function Home() {
     }
   };
 
+  const starterButtons = [
+    {
+      icon: "/icons/pixel_plane.svg",
+      title: "Scrape & Compare",
+      text: "Find me the cheapest one-way flight from San Francisco to Tokyo next week.",
+      iconBgColor: "text-[--blue-9]",
+    },
+    {
+      icon: "/icons/pixel_square.svg",
+      title: "Collect a List",
+      text: "Go to Hacker News and summarize the top 5 stories for me.",
+      iconBgColor: "text-[--yellow-9]",
+    },
+    {
+      icon: "/icons/pixel_dollar.svg",
+      title: "Investigate for me",
+      text: "Investigate the trade-in value for iPhone 13 Pro Max on apple.com",
+      iconBgColor: "text-[--blue-9]",
+    },
+  ];
+
   return (
     <main className="flex h-screen flex-col items-center justify-center">
       <div className="flex w-full flex-col gap-6 px-4 md:max-w-[740px]">
@@ -159,146 +180,54 @@ export default function Home() {
             </div>
           </div>
           {/* Starter Buttons */}
-          <div className="mt-4 flex flex-col gap-2">
-            <Link
-              href="#"
-              onClick={e => {
-                e.preventDefault();
-                const text =
-                  "Find me the cheapest one-way flight from San Francisco to Tokyo next week.";
-                if (!loading) {
-                  resetSession();
-                  if (!checkApiKey()) {
-                    if (currentSettings?.selectedProvider === "ollama" && !isLocalhost()) {
-                      toast({
-                        title: "Cannot use Ollama",
-                        className:
-                          "text-[var(--gray-12)] border border-[var(--red-11)] bg-[var(--red-2)] text-sm",
-                        description:
-                          "Please select a different model provider or run the app locally to use Ollama.",
-                      });
-                    } else {
-                      pendingQueryRef.current = text;
-                      setShowApiKeyModal(true);
+          <div className="mt-4 flex gap-4 overflow-x-auto pb-4 md:flex-col md:overflow-x-visible md:pb-0">
+            {starterButtons.map((button, index) => (
+              <Link
+                key={index}
+                href="#"
+                onClick={e => {
+                  e.preventDefault();
+                  if (!loading) {
+                    resetSession();
+                    if (!checkApiKey()) {
+                      if (currentSettings?.selectedProvider === "ollama" && !isLocalhost()) {
+                        toast({
+                          title: "Cannot use Ollama",
+                          className:
+                            "text-[var(--gray-12)] border border-[var(--red-11)] bg-[var(--red-2)] text-sm",
+                          description:
+                            "Please select a different model provider or run the app locally to use Ollama.",
+                        });
+                      } else {
+                        pendingQueryRef.current = button.text;
+                        setShowApiKeyModal(true);
+                      }
+                      return;
                     }
-                    return;
+                    proceedToChat(button.text);
                   }
-                  proceedToChat(text);
-                }
-              }}
-              className="rounded-[20px] border border-[--gray-3] bg-[--gray-1] p-4 transition-colors hover:bg-[--gray-2]"
-            >
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-8 items-center justify-center rounded-full bg-[--gray-5]">
-                    <Image
-                      src="/icons/pixel_plane.svg"
-                      alt="Plane icon"
-                      width={16}
-                      height={16}
-                      className="text-[--blue-9]"
-                    />
+                }}
+                className="flex-shrink-0 w-[250px] rounded-[20px] border border-[--gray-3] bg-[--gray-1] p-4 transition-colors hover:bg-[--gray-2] md:w-auto md:flex-shrink"
+              >
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-6 w-8 items-center justify-center rounded-full bg-[--gray-5]">
+                      <Image
+                        src={button.icon}
+                        alt={`${button.title} icon`}
+                        width={16}
+                        height={16}
+                        className={button.iconBgColor}
+                      />
+                    </div>
+                    <div className="text-sm font-medium text-[--gray-12]">{button.title}</div>
                   </div>
-                  <div className="text-sm font-medium text-[--gray-12]">Scrape & Compare</div>
-                </div>
-                <div className="text-sm font-medium leading-tight text-[--gray-11]">
-                  Find me the cheapest one-way flight from San Francisco to Tokyo next week.
-                </div>
-              </div>
-            </Link>
-
-            <Link
-              href="#"
-              onClick={e => {
-                e.preventDefault();
-                const text =
-                  "Go to Hacker News and summarize the top 5 stories for me. Format your response in markdown.";
-                if (!loading) {
-                  resetSession();
-                  if (!checkApiKey()) {
-                    if (currentSettings?.selectedProvider === "ollama" && !isLocalhost()) {
-                      toast({
-                        title: "Cannot use Ollama",
-                        className:
-                          "text-[var(--gray-12)] border border-[var(--red-11)] bg-[var(--red-2)] text-sm",
-                        description:
-                          "Please select a different model provider or run the app locally to use Ollama.",
-                      });
-                    } else {
-                      pendingQueryRef.current = text;
-                      setShowApiKeyModal(true);
-                    }
-                    return;
-                  }
-                  proceedToChat(text);
-                }
-              }}
-              className="rounded-[20px] border border-[--gray-3] bg-[--gray-1] p-4 transition-colors hover:bg-[--gray-2]"
-            >
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-8 items-center justify-center rounded-full bg-[--gray-5]">
-                    <Image
-                      src="/icons/pixel_square.svg"
-                      alt="Square icon"
-                      width={16}
-                      height={16}
-                      className="text-[--yellow-9]"
-                    />
+                  <div className="text-sm font-medium leading-tight text-[--gray-11]">
+                    {button.text}
                   </div>
-                  <div className="text-sm font-medium text-[--gray-12]">Collect a List</div>
                 </div>
-                <div className="text-sm font-medium leading-tight text-[--gray-11]">
-                  Go to Hacker News and summarize the top 5 stories for me.
-                </div>
-              </div>
-            </Link>
-
-            <Link
-              href="#"
-              onClick={e => {
-                e.preventDefault();
-                const text = "Investigate the trade-in value for iPhone 13 Pro Max on apple.com";
-                if (!loading) {
-                  resetSession();
-                  if (!checkApiKey()) {
-                    if (currentSettings?.selectedProvider === "ollama" && !isLocalhost()) {
-                      toast({
-                        title: "Cannot use Ollama",
-                        className:
-                          "text-[var(--gray-12)] border border-[var(--red-11)] bg-[var(--red-2)] text-sm",
-                        description:
-                          "Please select a different model provider or run the app locally to use Ollama.",
-                      });
-                    } else {
-                      pendingQueryRef.current = text;
-                      setShowApiKeyModal(true);
-                    }
-                    return;
-                  }
-                  proceedToChat(text);
-                }
-              }}
-              className="rounded-[20px] border border-[--gray-3] bg-[--gray-1] p-4 transition-colors hover:bg-[--gray-2]"
-            >
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-8 items-center justify-center rounded-full bg-[--gray-5]">
-                    <Image
-                      src="/icons/pixel_dollar.svg"
-                      alt="Dollar icon"
-                      width={16}
-                      height={16}
-                      className="text-[--blue-9]"
-                    />
-                  </div>
-                  <div className="text-sm font-medium text-[--gray-12]">Investigate for me</div>
-                </div>
-                <div className="text-sm font-medium leading-tight text-[--gray-11]">
-                  Investigate the trade-in value for iPhone 13 Pro Max on apple.com
-                </div>
-              </div>
-            </Link>
+              </Link>
+            ))}
           </div>
         </div>
       </div>
