@@ -311,7 +311,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
       className={cn(
         "flex h-full w-1/3 min-w-[380px] max-w-full shrink-0 flex-col",
         "rounded-[20px] border border-[--gray-3] bg-[--gray-1]",
-        "p-6 text-[--gray-12] shadow-[0_16px_32px_-12px_rgba(14,18,27,0.10)]"
+        "p-5 text-[--gray-12]"
       )}
     >
       <SheetHeader>
@@ -323,10 +323,9 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
 
       {/* Add a scrollable container with styled scrollbar */}
       <div
-        className="scrollbar-gutter-stable scrollbar-thin my-6 flex-1 
+        className="scrollbar-gutter-stable scrollbar-thin my-6 flex-1
         space-y-4
         overflow-y-auto
-        pr-4
         [&::-webkit-scrollbar-thumb]:rounded-full
         [&::-webkit-scrollbar-thumb]:border-4
         [&::-webkit-scrollbar-thumb]:bg-[--gray-7]
@@ -729,7 +728,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
       {/* Keep the button at the bottom */}
       <div className="mt-auto">
         <div
-          className="inline-flex h-8 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[--gray-12] px-2 py-1"
+          className="inline-flex h-8 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[--gray-12] px-3 py-1"
           onClick={() => {
             // Prevent saving if Ollama is selected when not running locally
             if (currentSettings.selectedProvider === "ollama" && !isLocalhost()) {
@@ -745,7 +744,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
             handleSave();
           }}
         >
-          <div className="flex items-start justify-start px-1">
+          <div className="flex items-start justify-start">
             <div className="font-geist text-sm font-medium leading-normal text-neutral-900">
               Apply Changes &amp; Restart Chat
             </div>
