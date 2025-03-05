@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import { Github, Menu, Plus, X } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
+
+import SurfLogo from "@/public/logo.svg";
 
 import { useChatContext } from "@/app/contexts/ChatContext";
 import { useSteelContext } from "@/app/contexts/SteelContext";
@@ -34,7 +37,7 @@ export function NavBar() {
           {/* Logo */}
           <div className="flex items-center gap-2">
             <div className="flex size-8 items-center justify-center">
-              <img src="/logo.svg" alt="surf.new logo" className="size-5" />
+              <Image src={SurfLogo} alt="surf.new logo" className="size-9" />
             </div>
             <Link href="/" className="w-[95px]">
               <span
