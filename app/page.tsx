@@ -305,6 +305,7 @@ export default function Home() {
         provider={currentSettings?.selectedProvider || ""}
         isOpen={showApiKeyModal}
         onSubmit={handleApiKeySubmit}
+        onClose={() => setShowApiKeyModal(false)}
       />
     </main>
   );
