@@ -74,7 +74,7 @@ export function Browser() {
         max-w-full 
         flex-col
         overflow-hidden 
-        rounded-xl 
+        rounded-[1.75rem]
         border 
         border-[--gray-3] 
         bg-[--gray-1] 
@@ -83,7 +83,7 @@ export function Browser() {
     >
       {/* Top Bar */}
       <div className="flex h-[60px] items-center justify-center border-b border-[--gray-3] bg-[--gray-1] p-2.5">
-        <div className="flex h-10 w-[360px] items-center justify-center rounded-full border border-[--gray-3] bg-[--gray-1] px-4 py-3">
+        <div className="flex h-10 w-[360px] items-center justify-center rounded-[0.5rem] border border-[--gray-3] bg-[--gray-1] px-4 py-3">
           <div className="mr-auto flex items-center justify-center">
             {favicon ? (
               <Image
@@ -104,7 +104,7 @@ export function Browser() {
       </div>
 
       {/* Main Content */}
-      <div ref={parentRef} className="p2 relative flex-1">
+      <div ref={parentRef} className="relative flex-1">
         {debugUrl ? (
           <iframe
             src={debugUrl + "?showControls=false"}
@@ -121,7 +121,7 @@ export function Browser() {
       </div>
 
       {/* Status Bar */}
-      <div className="flex h-6 items-center border-t border-[--gray-3] bg-[--gray-1] p-1 px-3">
+      <div className="flex h-[40px] items-center border-t border-[--gray-3] bg-[--gray-1] p-1 px-3">
         <div className="flex w-full justify-between font-ibm-plex-mono text-sm text-[--gray-11]">
           <div className="flex gap-2 font-sans">
             <span className="flex items-center gap-2">
