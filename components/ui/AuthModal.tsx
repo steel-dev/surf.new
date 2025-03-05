@@ -18,9 +18,10 @@ interface AuthModalProps {
   provider: string;
   isOpen: boolean;
   onSubmit: (key: string) => void;
+  onClose?: () => void;
 }
 
-export function AuthModal({ provider, isOpen, onSubmit }: AuthModalProps) {
+export function AuthModal({ provider, isOpen, onSubmit, onClose }: AuthModalProps) {
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState("");
 
@@ -35,7 +36,14 @@ export function AuthModal({ provider, isOpen, onSubmit }: AuthModalProps) {
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={() => {}}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={open => {
+        if (!open && onClose) {
+          onClose();
+        }
+      }}
+    >
       <DialogContent
         className={cn(
           "flex w-[400px] shrink-0 flex-col",
