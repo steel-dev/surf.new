@@ -109,7 +109,7 @@ export function Browser() {
           <iframe
             src={debugUrl + "?showControls=false"}
             sandbox="allow-same-origin allow-scripts"
-            className="size-full rounded-sm border border-[--gray-3]"
+            className="size-full border border-[--gray-3]"
           />
         ) : (
           <div className="size-full" />
