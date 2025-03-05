@@ -142,7 +142,8 @@ export default function Home() {
       <div className="flex w-full flex-col gap-6 px-4 md:max-w-[740px]">
         <div className="p-4 text-justify font-geist text-base font-medium leading-tight text-[--gray-12]">
           Surf.new® is a a playground to test out different web agents. These agents can surf the
-          web and interact with webpages similar to how a human would. Built by{" "}
+          web and interact with webpages similar to how a human would. <br className="lg:hidden" />{" "}
+          Built by{" "}
           <Link href="https://steel.dev" className="text-[--yellow-11]">
             <Image
               src="/steel_logo.svg"
