@@ -7,7 +7,7 @@ dotenv.config();
 // Configuration
 const GRAPHQL_ENDPOINT = "https://backboard.railway.app/graphql/v2";
 const PROJECT_ID = process.env.RAILWAY_PROJECT_ID;
-const SERVICE_ID = process.env.RAILWAY_SERVICE_ID;
+const SERVICE_ID = process.env.SERVICE_ID;
 const API_TOKEN = process.env.TEAM_TOKEN;
 
 // GraphQL Queries
