@@ -7,17 +7,19 @@ dotenv.config();
 // Configuration
 const GRAPHQL_ENDPOINT = "https://backboard.railway.app/graphql/v2";
 const PROJECT_ID = process.env.RAILWAY_PROJECT_ID;
+const SERVICE_ID = process.env.RAILWAY_SERVICE_ID;
 const API_TOKEN = process.env.TEAM_TOKEN;
 
 // GraphQL Queries
 const QUERIES = {
   GET_DEPLOYMENTS: `
-    query GetDeployments($projectId: String!) {
-      deployments(input: { projectId: $projectId }) {
+    query GetDeployments($projectId: String!, $serviceId: String!) {
+      deployments(input: { projectId: $projectId, serviceId: $serviceId }) {
         edges {
           node {
             id
             createdAt
+            serviceId
           }
         }
       }
@@ -64,12 +66,12 @@ async function graphqlRequest(query, variables = {}) {
   }
 }
 
-// Get latest deployment for a project
+// Get latest deployment for a project and service
 async function getLatestDeployment(projectId) {
-  const data = await graphqlRequest(QUERIES.GET_DEPLOYMENTS, { projectId });
+  const data = await graphqlRequest(QUERIES.GET_DEPLOYMENTS, { projectId, serviceId: SERVICE_ID });
 
   if (!data.deployments?.edges?.length) {
-    throw new Error("No deployments found for this project");
+    throw new Error("No deployments found for this service");
   }
 
   return data.deployments.edges.reduce((latest, current) => {
@@ -91,14 +93,16 @@ async function redeployDeployment(deploymentId) {
 // Main function to trigger redeploy
 async function triggerRedeploy() {
   try {
-    if (!PROJECT_ID || !API_TOKEN) {
-      throw new Error("Missing required environment variables: RAILWAY_PROJECT_ID or TEAM_TOKEN");
+    if (!PROJECT_ID || !API_TOKEN || !SERVICE_ID) {
+      throw new Error(
+        "Missing required environment variables: RAILWAY_PROJECT_ID, TEAM_TOKEN, or RAILWAY_SERVICE_ID"
+      );
     }
 
     const latestDeployment = await getLatestDeployment(PROJECT_ID);
     const deploymentId = latestDeployment.node.id;
 
-    console.log(`Redeploying deployment: ${deploymentId}`);
+    console.log(`Redeploying surf-api deployment: ${deploymentId}`);
     const result = await redeployDeployment(deploymentId);
     console.log("Redeploy successful:", result);
   } catch (error) {
