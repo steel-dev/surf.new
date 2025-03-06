@@ -71,7 +71,7 @@ export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderPro
           >
             {/* Header row: tool name + spinner/check */}
             <div className="inline-flex items-center justify-center gap-1 self-stretch">
-              <div className="shrink grow basis-0 font-sans text-xs font-medium leading-tight text-[--gray-12]">
+              <div className="shrink grow basis-0 font-sans text-sm font-medium leading-tight text-[--gray-12]">
                 {displayToolName}
               </div>
               <div className="flex size-5 items-center justify-center">
@@ -102,7 +102,7 @@ export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderPro
                       key={paramName}
                       className="inline-flex h-5 items-center justify-start gap-6 self-stretch"
                     >
-                      <div className="font-sans text-xs font-medium leading-tight text-[--gray-11]">
+                      <div className="font-sans text-sm font-medium leading-tight text-[--gray-11]">
                         {displayParamName}
                       </div>
                       <div className="overflow-hidden truncate whitespace-nowrap font-mono text-xs font-medium leading-tight text-[--gray-12]">

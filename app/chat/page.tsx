@@ -172,11 +172,11 @@ function MarkdownText({ content }: { content: string }) {
         )}
         <div className="rounded-2xl border border-[--gray-3] bg-[--gray-2] p-4">
           <div className="pr-8">
-            <div className="mb-1 font-medium text-[--gray-11]">{title}</div>
+            <div className="mb-1 font-medium text-[--gray-12] text-sm">{title}</div>
             {strippedContent ? (
-              parseContent(strippedContent)
+              <div className="text-sm text-[--gray-10]">{parseContent(strippedContent)}</div>
             ) : (
-              <span className="text-sm text-[--gray-11]">Empty</span>
+              <span className="text-sm text-[--gray-10]">Empty</span>
             )}
           </div>
         </div>
@@ -640,12 +640,6 @@ export default function ChatPage() {
                 [&::-webkit-scrollbar]:w-1.5"
             >
               {messages.map((message, index) => {
-                const isSpecialMessage =
-                  message.content &&
-                  (message.content.includes("*Memory*:") ||
-                    message.content.includes("*Next Goal*:") ||
-                    message.content.includes("*Previous Goal*:"));
-
                 return (
                   <div key={message.id} className="flex w-full max-w-full flex-col gap-2">
                     {/* Force message content to respect container width */}
