@@ -261,7 +261,7 @@ async def claude_computer_use(
 
         try:
             print("Initializing claude_computer_use...")  # Debug log
-            llm = create_llm(
+            llm, use_vision = create_llm(
                 ModelConfig(
                     provider=ModelProvider.ANTHROPIC_COMPUTER_USE,
                     model_name="claude-3-5-sonnet-20241022",
