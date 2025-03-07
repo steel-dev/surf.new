@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { CheckIcon } from "@radix-ui/react-icons";
+import { CheckIcon, Crosshair2Icon, ReaderIcon } from "@radix-ui/react-icons";
 import { useChat } from "ai/react";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -153,6 +153,36 @@ function MarkdownText({ content }: { content: string }) {
     }
     return elements;
   };
+
+  const isMemory = content.startsWith("*Memory*:");
+  const isGoal = content.startsWith("*Next Goal*:") || content.startsWith("*Previous Goal*:");
+
+  if (isMemory || isGoal) {
+    // Extract the title and content
+    const titleMatch = content.match(/^\*(Memory|Next Goal|Previous Goal)\*:/);
+    const title = titleMatch ? titleMatch[1] : ""; // Remove the asterisks and colon
+    const strippedContent = content.replace(/^\*(Memory|Next Goal|Previous Goal)\*:/, "").trim();
+
+    return (
+      <div className="relative">
+        {isMemory ? (
+          <ReaderIcon className="absolute right-4 top-4 size-4 text-[--gray-11]" />
+        ) : (
+          <Crosshair2Icon className="absolute right-4 top-4 size-4 text-[--gray-11]" />
+        )}
+        <div className="rounded-2xl border border-[--gray-3] bg-[--gray-2] p-4">
+          <div className="pr-8">
+            <div className="mb-1 font-medium text-[--gray-12] text-sm">{title}</div>
+            {strippedContent ? (
+              <div className="text-sm text-[--gray-10]">{parseContent(strippedContent)}</div>
+            ) : (
+              <span className="text-sm text-[--gray-10]">Empty</span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return <>{parseContent(content)}</>;
 }
@@ -319,6 +349,18 @@ export default function ChatPage() {
       onToolCall: toolCall => {
         console.info("🛠️ Tool call received:", toolCall);
       },
+      onMessage: message => {
+        console.info("📥 Incoming message:", {
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          toolInvocations: message.toolInvocations?.map(t => ({
+            id: t.id,
+            name: t.name,
+            state: t.state,
+          })),
+        });
+      },
     });
 
   // Track whether user is at the bottom
@@ -380,14 +422,18 @@ export default function ChatPage() {
   // Track message state changes
   useEffect(() => {
     if (messages.length > 0) {
-      console.info("💬 Messages state updated:", {
-        count: messages.length,
-        lastMessage: {
-          role: messages[messages.length - 1].role,
-          hasContent: !!messages[messages.length - 1].content,
-          hasToolCalls: !!messages[messages.length - 1].toolInvocations?.length,
-        },
-        allMessages: messages.map(m => ({
+      const lastMessage = messages[messages.length - 1];
+      console.info("📥 New message received:", {
+        id: lastMessage.id,
+        role: lastMessage.role,
+        content: lastMessage.content,
+        toolInvocations: lastMessage.toolInvocations?.map(t => ({
+          name: t.toolName,
+          args: t.args,
+          state: t.state,
+        })),
+        totalMessages: messages.length,
+        messageHistory: messages.map(m => ({
           id: m.id,
           role: m.role,
           hasContent: !!m.content,
@@ -593,68 +639,136 @@ export default function ChatPage() {
                 [&::-webkit-scrollbar-track]:bg-[--gray-1]
                 [&::-webkit-scrollbar]:w-1.5"
             >
-              {messages.map((message, index) => (
-                <div key={message.id} className="flex w-full max-w-full flex-col gap-2">
-                  {/* Force message content to respect container width */}
-                  <div className="w-full max-w-full">
-                    {message.role === "user" ? (
-                      <>
-                        <UserMessage content={message.content} />
-                        {index === 0 && isCreatingSession && (
-                          <div className="mx-auto mt-2 w-[85%] animate-pulse rounded-md border border-[--blue-3] bg-[--blue-2] px-4 py-2 font-geist text-sm text-[--blue-11]">
-                            Connecting to Steel Browser Session...
-                          </div>
-                        )}
-                        {index === 0 &&
-                          hasShownConnection &&
-                          !isCreatingSession &&
-                          currentSession?.id && (
-                            <div className="mx-auto mt-2 flex w-[85%] items-center gap-2 rounded-md border border-[--green-3] bg-[--green-2] px-4 py-2 font-geist text-sm text-[--green-11]">
-                              <CheckIcon className="size-4" />
-                              Steel Browser Session connected
+              {messages.map((message, index) => {
+                return (
+                  <div key={message.id} className="flex w-full max-w-full flex-col gap-2">
+                    {/* Force message content to respect container width */}
+                    <div className="w-full max-w-full">
+                      {message.role === "user" ? (
+                        <>
+                          <UserMessage content={message.content} />
+                          {index === 0 && isCreatingSession && (
+                            <div className="mx-auto mt-2 w-[85%] animate-pulse rounded-md border border-[--blue-3] bg-[--blue-2] px-4 py-2 font-geist text-sm text-[--blue-11]">
+                              Connecting to Steel Browser Session...
                             </div>
                           )}
-                      </>
-                    ) : (
-                      <div className="flex w-full max-w-full flex-col gap-2 break-words text-base text-[--gray-12]">
-                        {message.content && (
-                          <div className="w-full max-w-full whitespace-pre-wrap break-words">
-                            <MarkdownText content={message.content} />
-                          </div>
-                        )}
-                        {message.toolInvocations?.length ? (
-                          <div className="flex w-full max-w-full flex-col gap-2 rounded-[20px] border border-[--gray-3] bg-[--gray-1] p-2">
-                            <ToolInvocations
-                              toolInvocations={message.toolInvocations}
-                              onImageClick={handleImageClick}
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
-                  </div>
-                  {message.experimental_attachments?.map((attachment, idx) => (
-                    <div
-                      key={idx}
-                      className="
-                        mt-1
-                        inline-flex
-                        h-8 items-center
-                        gap-2
-                        rounded-full
-                        border
-                        border-[--gray-3]
-                        bg-[--gray-2]
-                        px-2
-                      "
-                    >
-                      <span className="font-geist text-sm font-normal leading-[18px] text-[--gray-11]">
-                        {attachment.name}
-                      </span>
+                          {index === 0 &&
+                            hasShownConnection &&
+                            !isCreatingSession &&
+                            currentSession?.id && (
+                              <div className="mx-auto mt-2 flex w-[85%] items-center gap-2 rounded-md border border-[--green-3] bg-[--green-2] px-4 py-2 font-geist text-sm text-[--green-11]">
+                                <CheckIcon className="size-4" />
+                                Steel Browser Session connected
+                              </div>
+                            )}
+                        </>
+                      ) : (
+                        <div className="flex w-full max-w-full flex-col gap-4 break-words text-base text-[--gray-12]">
+                          {messages.map((message, index) => {
+                            const isSpecialMessage =
+                              message.content &&
+                              (message.content.includes("*Memory*:") ||
+                                message.content.includes("*Next Goal*:") ||
+                                message.content.includes("*Previous Goal*:"));
+                            const hasToolInvocations =
+                              message.toolInvocations && message.toolInvocations.length > 0;
+                            const isSpecial = isSpecialMessage || hasToolInvocations;
+
+                            // Find consecutive special messages
+                            let specialMessagesGroup = [];
+                            if (isSpecial) {
+                              let i = index;
+                              while (i < messages.length) {
+                                const nextMessage = messages[i];
+                                const isNextSpecial =
+                                  (nextMessage.content &&
+                                    (nextMessage.content.includes("*Memory*:") ||
+                                      nextMessage.content.includes("*Next Goal*:") ||
+                                      nextMessage.content.includes("*Previous Goal*:"))) ||
+                                  (nextMessage.toolInvocations &&
+                                    nextMessage.toolInvocations.length > 0);
+
+                                if (!isNextSpecial) break;
+                                specialMessagesGroup.push(nextMessage);
+                                i++;
+                              }
+                            }
+
+                            // Skip if this message is part of a group but not the first one
+                            if (isSpecial && index > 0) {
+                              const prevMessage = messages[index - 1];
+                              const isPrevSpecial =
+                                (prevMessage.content &&
+                                  (prevMessage.content.includes("*Memory*:") ||
+                                    prevMessage.content.includes("*Next Goal*:") ||
+                                    prevMessage.content.includes("*Previous Goal*:"))) ||
+                                (prevMessage.toolInvocations &&
+                                  prevMessage.toolInvocations.length > 0);
+                              if (isPrevSpecial) return null;
+                            }
+
+                            return isSpecial ? (
+                              <div className="flex w-full max-w-full flex-col gap-2 rounded-[1.25rem] border border-[--gray-3] bg-[--gray-1] p-2">
+                                <div className="flex flex-col gap-2">
+                                  {specialMessagesGroup.map((groupMessage, groupIndex) => (
+                                    <React.Fragment key={groupMessage.id}>
+                                      {groupMessage.content && (
+                                        <div className="w-full">
+                                          <MarkdownText content={groupMessage.content} />
+                                        </div>
+                                      )}
+                                      {groupMessage.toolInvocations &&
+                                        groupMessage.toolInvocations.length > 0 && (
+                                          <div className="flex w-full flex-col gap-2">
+                                            {groupMessage.toolInvocations.map((tool, toolIndex) => (
+                                              <div
+                                                key={toolIndex}
+                                                className="flex w-full items-center justify-between rounded-2xl border border-[--gray-3] bg-[--gray-2] p-3"
+                                              >
+                                                <ToolInvocations
+                                                  toolInvocations={[tool]}
+                                                  onImageClick={handleImageClick}
+                                                />
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                    </React.Fragment>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : message.content ? (
+                              <div className="w-full max-w-full whitespace-pre-wrap break-words">
+                                <MarkdownText content={message.content} />
+                              </div>
+                            ) : null;
+                          })}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              ))}
+                    {message.experimental_attachments?.map((attachment, idx) => (
+                      <div
+                        key={idx}
+                        className="
+                          mt-1
+                          inline-flex
+                          h-8 items-center
+                          gap-2
+                          rounded-full
+                          border
+                          border-[--gray-3]
+                          bg-[--gray-2]
+                          px-2
+                        "
+                      >
+                        <span className="font-geist text-sm font-normal leading-[18px] text-[--gray-11]">
+                          {attachment.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
               {isLoading && (
                 <div className="size-4 animate-spin rounded-full border-2 border-[--gray-12] border-t-transparent" />
               )}

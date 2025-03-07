@@ -67,7 +67,9 @@ export function SettingsButton() {
           >
             <Settings className="size-5" />
           </div>
-          {currentSettings?.selectedAgent}
+          <div className="max-w-[60px] truncate md:max-w-[100px] lg:max-w-[160px]">
+            {currentSettings?.selectedAgent}
+          </div>
         </Button>
       </SheetTrigger>
       <SettingsContent closeSettings={() => setShowSettings(false)} />
@@ -597,7 +599,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                     </p>
                     <p className="mb-2 text-sm text-[--gray-11]">
                       2. Install Ollama from{" "}
-                      <span className="text-[--blue-11] cursor-not-allowed">ollama.com</span>
+                      <span className="cursor-not-allowed text-[--blue-11]">ollama.com</span>
                     </p>
                     <p className="mb-2 text-sm text-[--gray-11]">
                       3. Run Ollama locally with the model of your choice:
@@ -607,7 +609,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                     </p>
                     <p className="text-sm text-[--gray-11]">
                       Visit{" "}
-                      <span className="text-[--blue-11] cursor-not-allowed">
+                      <span className="cursor-not-allowed text-[--blue-11]">
                         our GitHub repository
                       </span>{" "}
                       for detailed setup instructions.

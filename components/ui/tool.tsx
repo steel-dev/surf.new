@@ -35,7 +35,7 @@ export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderPro
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex w-full flex-col gap-2">
       {toolInvocations.map(toolInvocation => {
         const { toolCallId, toolName, args, state, result } = toolInvocation;
         const displayToolName = capitalizeAndReplaceUnderscores(toolName);
@@ -64,14 +64,14 @@ export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderPro
           <div
             key={toolCallId}
             className={`
-              inline-flex h-28 flex-col items-start justify-start
-              gap-2 rounded-2xl border border-[--gray-3] bg-[--gray-2] p-4 shadow-[0px_8px_16px_0px_rgba(0,0,0,0.08)]
+              inline-flex w-full flex-col items-start justify-start
+              gap-2
               ${state === "call" ? "opacity-40" : ""}
             `}
           >
             {/* Header row: tool name + spinner/check */}
             <div className="inline-flex items-center justify-center gap-1 self-stretch">
-              <div className="shrink grow basis-0 font-['Geist'] text-xs font-medium leading-tight text-[--gray-12]">
+              <div className="shrink grow basis-0 font-sans text-sm font-medium leading-tight text-[--gray-12]">
                 {displayToolName}
               </div>
               <div className="flex size-5 items-center justify-center">
@@ -102,10 +102,10 @@ export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderPro
                       key={paramName}
                       className="inline-flex h-5 items-center justify-start gap-6 self-stretch"
                     >
-                      <div className="font-['Geist'] text-xs font-medium leading-tight text-[--gray-11]">
+                      <div className="font-sans text-sm font-medium leading-tight text-[--gray-11]">
                         {displayParamName}
                       </div>
-                      <div className="font-['Geist Mono'] overflow-hidden truncate whitespace-nowrap text-xs font-medium leading-tight text-[--gray-12]">
+                      <div className="overflow-hidden truncate whitespace-nowrap font-mono text-xs font-medium leading-tight text-[--gray-12]">
                         {String(paramValue)}
                       </div>
                     </div>
