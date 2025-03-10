@@ -349,18 +349,6 @@ export default function ChatPage() {
       onToolCall: toolCall => {
         console.info("🛠️ Tool call received:", toolCall);
       },
-      onMessage: message => {
-        console.info("📥 Incoming message:", {
-          id: message.id,
-          role: message.role,
-          content: message.content,
-          toolInvocations: message.toolInvocations?.map(t => ({
-            id: t.id,
-            name: t.name,
-            state: t.state,
-          })),
-        });
-      },
     });
 
   // Track whether user is at the bottom
@@ -641,7 +629,7 @@ export default function ChatPage() {
             >
               {messages.map((message, index) => {
                 return (
-                  <div key={message.id} className="flex w-full max-w-full flex-col gap-2">
+                  <div key={message.id || index} className="flex w-full max-w-full flex-col gap-2">
                     {/* Force message content to respect container width */}
                     <div className="w-full max-w-full">
                       {message.role === "user" ? (
@@ -666,10 +654,11 @@ export default function ChatPage() {
                         <div className="flex w-full max-w-full flex-col gap-4 break-words text-base text-[--gray-12]">
                           {messages.map((message, index) => {
                             const isSpecialMessage =
-                              message.content &&
-                              (message.content.includes("*Memory*:") ||
-                                message.content.includes("*Next Goal*:") ||
-                                message.content.includes("*Previous Goal*:"));
+                              (message.content &&
+                                (message.content.includes("*Memory*:") ||
+                                  message.content.includes("*Next Goal*:") ||
+                                  message.content.includes("*Previous Goal*:"))) ||
+                              (message.toolInvocations && message.toolInvocations.length > 0);
                             const hasToolInvocations =
                               message.toolInvocations && message.toolInvocations.length > 0;
                             const isSpecial = isSpecialMessage || hasToolInvocations;
