@@ -91,7 +91,7 @@ AGENT_CONFIGS = {
         "supported_models": [
             {
                 "provider": ModelProvider.OPENAI.value,
-                "models": ["gpt-4o", "gpt-4o-mini", "o1"],
+                "models": ["gpt-4.5-preview", "gpt-4o", "gpt-4o-mini", "o1"],
             },
             {
                 "provider": ModelProvider.ANTHROPIC.value,

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Info, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { AuthModal } from "@/components/ui/AuthModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -192,6 +193,8 @@ function SettingInput({
 function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
   const { currentSettings, updateSettings } = useSettings();
   const [apiKey, setApiKey] = useState("");
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [pendingModelChange, setPendingModelChange] = useState<string | null>(null);
   const router = useRouter();
   const { clearInitialState } = useChatContext();
   const { resetSession } = useSteelContext();
@@ -241,14 +244,23 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
       (m: SupportedModel) => m.provider === currentSettings.selectedProvider
     );
 
+    // Only reset the model if the current provider doesn't support it
     if (
       providerModels &&
       providerModels.models.length > 0 &&
-      !providerModels.models.includes(currentSettings.selectedModel)
+      !providerModels.models.includes(currentSettings.selectedModel) &&
+      currentSettings.selectedProvider === providerModels.provider
     ) {
+      // Don't auto-switch to GPT-4.5-preview if no API key
+      const defaultModel =
+        providerModels.models[0] === "gpt-4.5-preview" &&
+        !currentSettings.providerApiKeys?.[currentSettings.selectedProvider]
+          ? providerModels.models[1] // Use the next available model
+          : providerModels.models[0];
+
       updateSettings({
         ...currentSettings,
-        selectedModel: providerModels.models[0],
+        selectedModel: defaultModel,
       });
     }
   }
@@ -273,6 +285,28 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
         },
       });
     }
+  };
+
+  const handleApiKeySubmit = (key: string) => {
+    if (!currentSettings) return;
+
+    const currentKeys = currentSettings.providerApiKeys || {};
+    const updatedSettings = {
+      ...currentSettings,
+      providerApiKeys: {
+        ...currentKeys,
+        [currentSettings.selectedProvider]: key,
+      },
+    };
+
+    // If there was a pending model change, apply it now
+    if (pendingModelChange) {
+      updatedSettings.selectedModel = pendingModelChange;
+      setPendingModelChange(null);
+    }
+
+    updateSettings(updatedSettings);
+    setShowApiKeyModal(false);
   };
 
   if (!currentSettings?.selectedAgent) {
@@ -414,10 +448,29 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                       (m: SupportedModel) => m.provider === value
                     );
                     if (providerModels && providerModels.models.length > 0) {
+                      // Keep the current model if it's available in the new provider's list
+                      let newModel = providerModels.models.includes(currentSettings.selectedModel)
+                        ? currentSettings.selectedModel
+                        : providerModels.models[0];
+
+                      // If switching to GPT-4.5-preview but no API key, show modal
+                      if (
+                        newModel === "gpt-4.5-preview" &&
+                        !currentSettings.providerApiKeys?.[value]
+                      ) {
+                        setPendingModelChange(newModel);
+                        updateSettings({
+                          ...currentSettings,
+                          selectedProvider: value,
+                        });
+                        setShowApiKeyModal(true);
+                        return;
+                      }
+
                       updateSettings({
                         ...currentSettings,
                         selectedProvider: value,
-                        selectedModel: providerModels.models[0],
+                        selectedModel: newModel,
                       });
                     }
                   }}
@@ -451,6 +504,17 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                       });
                       return;
                     }
+
+                    // Check if trying to use GPT-4.5-preview without an API key
+                    if (
+                      value === "gpt-4.5-preview" &&
+                      !currentSettings.providerApiKeys?.[currentSettings.selectedProvider]
+                    ) {
+                      setPendingModelChange(value);
+                      setShowApiKeyModal(true);
+                      return;
+                    }
+
                     updateSettings({
                       ...currentSettings,
                       selectedModel: value,
@@ -753,6 +817,17 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
           </div>
         </div>
       </div>
+
+      {/* API Key Modal */}
+      <AuthModal
+        provider={currentSettings?.selectedProvider || ""}
+        isOpen={showApiKeyModal}
+        onSubmit={handleApiKeySubmit}
+        onClose={() => {
+          setShowApiKeyModal(false);
+          setPendingModelChange(null); // Clear any pending model change
+        }}
+      />
     </SheetContent>
   );
 }
