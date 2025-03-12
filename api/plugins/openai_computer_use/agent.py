@@ -138,11 +138,7 @@ async def openai_computer_use_agent(
         # Set viewport
         await page.set_viewport_size({"width": 1280, "height": 800})
         logger.info("Set viewport size to 1280x800")
-
-        # Navigate to Hacker News
-        logger.info("Navigating to Hacker News...")
-        await page.goto("https://news.ycombinator.com")
-        yield "[OPENAI-CUA] Loaded Hacker News as a starting page."
+        await page.goto("https://www.google.com")
 
         # Convert user history to base messages
         logger.info("Converting user history to base messages...")
@@ -204,6 +200,66 @@ async def openai_computer_use_agent(
         logger.info(
             f"Processed {len(conversation_items)} total conversation items")
 
+        # Create an extended tools array with new function calls
+        tools = [
+            {
+                "type": "computer-preview",
+                "display_width": 1280,
+                "display_height": 800,
+                "environment": "browser",
+            },
+            {
+                "type": "function",
+                "name": "goto",
+                "description": "Navigate to a specified URL.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "Destination URL to navigate to."
+                        }
+                    },
+                    "required": ["url"]
+                },
+            },
+            {
+                "type": "function",
+                "name": "back",
+                "description": "Go back in browser history.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                },
+            },
+            {
+                "type": "function",
+                "name": "forward",
+                "description": "Go forward in browser history.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                },
+            },
+            {
+                "type": "function",
+                "name": "change_url",
+                "description": "Change the current URL to a new one.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "New URL to navigate to."
+                        }
+                    },
+                    "required": ["url"]
+                },
+            }
+        ]
+
         # Main loop
         steps = 0
         while True:
@@ -236,10 +292,6 @@ async def openai_computer_use_agent(
                 logger.error(
                     f"Invalid model name: {model_name}. Must be one of: {valid_models}")
                 raise HTTPException(400, f"Invalid model name: {model_name}")
-
-            # The 'tools' array includes both "computer-preview" and "goto"
-            # so the model can call them
-            tools = _create_tools()
 
             headers = {
                 "Authorization": f"Bearer {openai_api_key}",
@@ -403,7 +455,7 @@ async def openai_computer_use_agent(
                     pass
 
                 elif item_type == "function_call":
-                    # The model is calling our 'goto' function or something else
+                    # The model is calling one of our functions: goto, back, forward, change_url
                     call_id = item["call_id"]
                     fn_name = item["name"]
                     try:
@@ -411,124 +463,94 @@ async def openai_computer_use_agent(
                     except:
                         fn_args = {}
 
-                    # First yield the tool call with explicit type
+                    # Let the front-end know about this function call
                     tool_call_msg = _create_tool_message(
-                        content={
-                            "name": fn_name,
-                            "args": fn_args,
-                        },
+                        content={"name": fn_name, "args": fn_args},
                         tool_call_id=call_id,
                         is_call=True
                     )
-                    logger.info(
-                        f"[TOOL_CALL] Yielding function call: {fn_name} (id: {call_id})")
                     yield tool_call_msg
 
-                    logger.info(
-                        f"[FUNCTION_CALL] Handling function call: {fn_name} with call_id: {call_id}")
+                    # Actually perform the function
+                    logger.info(f"Handling function call: {fn_name} with call_id: {call_id}")
 
-                    # If the user is calling 'goto(url)', do it
-                    if fn_name == "goto":
-                        url = fn_args.get("url", "about:blank")
-                        try:
+                    try:
+                        screenshot_b64 = None
+                        if fn_name == "goto" or fn_name == "change_url":
+                            url = fn_args.get("url", "about:blank")
                             await page.goto(url)
-                            logger.info(
-                                f"[GOTO] Successfully navigated to {url}")
-                            # Take a screenshot after navigation
-                            screenshot_bytes = await page.screenshot(full_page=False)
                             screenshot_b64 = base64.b64encode(
-                                screenshot_bytes).decode("utf-8")
+                                await page.screenshot(full_page=False)
+                            ).decode("utf-8")
 
-                            # Format output consistently with computer_call_output
-                            current_url = page.url if not page.is_closed() else "about:blank"
-                            function_output = {
-                                "type": "computer_call_output",
-                                "call_id": call_id,
-                                "output": {
-                                    "type": "input_image",
-                                    "image_url": f"data:image/png;base64,{screenshot_b64}",
-                                    "current_url": current_url,
-                                    "tool_name": "goto",
-                                    "tool_args": fn_args
-                                }
+                        elif fn_name == "back":
+                            await page.go_back()
+                            screenshot_b64 = base64.b64encode(
+                                await page.screenshot(full_page=False)
+                            ).decode("utf-8")
+
+                        elif fn_name == "forward":
+                            await page.go_forward()
+                            screenshot_b64 = base64.b64encode(
+                                await page.screenshot(full_page=False)
+                            ).decode("utf-8")
+
+                        else:
+                            raise ValueError(f"Unknown function name: {fn_name}")
+
+                        # Build success output
+                        current_url = page.url if not page.is_closed() else "about:blank"
+                        function_output = {
+                            "type": "computer_call_output",
+                            "call_id": call_id,
+                            "output": {
+                                "type": "input_image",
+                                "image_url": f"data:image/png;base64,{screenshot_b64}",
+                                "current_url": current_url,
+                                "tool_name": fn_name,
+                                "tool_args": fn_args
                             }
-                            conversation_items.append(function_output)
+                        }
+                        conversation_items.append(function_output)
 
-                            # Then yield the result with explicit type
-                            tool_result_msg = _create_tool_message(
-                                content=[{
-                                    "type": "image",
-                                    "source": {
-                                        "media_type": "image/png",
-                                        "data": screenshot_b64
-                                    },
-                                    "current_url": current_url,
-                                    "tool_name": "goto",
-                                    "tool_args": fn_args
-                                }],
-                                tool_call_id=call_id,
-                                is_call=False
-                            )
-                            logger.info(
-                                f"[TOOL_RESULT] Yielding successful goto result (id: {call_id})")
-                            yield tool_result_msg
+                        # Then yield the final "tool result" as a message
+                        tool_result_msg = _create_tool_message(
+                            content=[{
+                                "type": "image",
+                                "source": {"media_type": "image/png", "data": screenshot_b64},
+                                "current_url": current_url,
+                                "tool_name": fn_name,
+                                "tool_args": fn_args
+                            }],
+                            tool_call_id=call_id,
+                            is_call=False
+                        )
+                        yield tool_result_msg
 
-                        except Exception as nav_err:
-                            logger.error(
-                                f"[ERROR] Failed to navigate to {url}: {nav_err}")
-                            error_output = {
-                                "type": "computer_call_output",
-                                "call_id": call_id,
-                                "output": {
-                                    "type": "error",
-                                    "error": str(nav_err),
-                                    "tool_name": "goto",
-                                    "tool_args": fn_args
-                                }
-                            }
-                            conversation_items.append(error_output)
-
-                            # Yield error result with explicit type
-                            tool_result_msg = _create_tool_message(
-                                content=[{
-                                    "type": "error",
-                                    "error": str(nav_err),
-                                    "tool_name": "goto",
-                                    "tool_args": fn_args
-                                }],
-                                tool_call_id=call_id,
-                                is_call=False
-                            )
-                            logger.info(
-                                f"[TOOL_RESULT] Yielding error result for goto (id: {call_id})")
-                            yield tool_result_msg
-
-                    else:
-                        logger.warning(
-                            f"[ERROR] Unknown function name: {fn_name}")
+                    except Exception as nav_err:
+                        logger.error(f"Error in function '{fn_name}': {nav_err}")
                         error_output = {
                             "type": "computer_call_output",
                             "call_id": call_id,
                             "output": {
                                 "type": "error",
-                                "error": f"Function '{fn_name}' not recognized",
-                                "tool_name": fn_name
+                                "error": str(nav_err),
+                                "tool_name": fn_name,
+                                "tool_args": fn_args,
                             }
                         }
                         conversation_items.append(error_output)
 
-                        # Yield error result with explicit type
                         tool_result_msg = _create_tool_message(
                             content=[{
                                 "type": "error",
-                                "error": f"Function '{fn_name}' not recognized",
-                                "tool_name": fn_name
+                                "error": str(nav_err),
+                                "tool_name": fn_name,
+                                "tool_args": fn_args
                             }],
                             tool_call_id=call_id,
                             is_call=False
                         )
-                        logger.info(
-                            f"[TOOL_RESULT] Yielding error result for unknown function (id: {call_id})")
                         yield tool_result_msg
 
                 elif item_type == "assistant":

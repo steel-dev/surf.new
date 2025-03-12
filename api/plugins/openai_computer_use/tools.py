@@ -3,6 +3,7 @@ import base64
 from typing import Dict, Any, List
 from playwright.async_api import Page
 import logging
+from .key_mapping import translate_key
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -47,7 +48,9 @@ async def _execute_computer_action(page: Page, action: Dict[str, Any]) -> str:
             keys = action.get("keys", [])
             logger.debug(f"Pressing keys: {keys}")
             for k in keys:
-                await page.keyboard.press(k)
+                mapped_key = translate_key(k)
+                logger.debug(f"Mapped key '{k}' to '{mapped_key}'")
+                await page.keyboard.press(mapped_key)
 
         elif action_type == "wait":
             ms = action.get("ms", 1000)
