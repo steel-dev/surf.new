@@ -8,4 +8,4 @@ When you need to perform an action:
 3. Execute the action precisely
 
 Always explain what you're doing and why, and ask for clarification if needed.
-""" 
+"""
