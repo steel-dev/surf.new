@@ -22,6 +22,7 @@ from langchain.schema import AIMessage
 # Import from our new modules
 from .tools import _execute_computer_action, _create_tools, _make_cua_content_for_role
 from .prompts import SYSTEM_PROMPT
+from .cursor_overlay import inject_cursor_overlay
 
 load_dotenv(".env.local")
 
@@ -138,6 +139,12 @@ async def openai_computer_use_agent(
         # Set viewport
         await page.set_viewport_size({"width": 1280, "height": 800})
         logger.info("Set viewport size to 1280x800")
+
+        # Add cursor overlay to make mouse movements visible
+        logger.info("Injecting cursor overlay script...")
+        await inject_cursor_overlay(page)
+        logger.info("Cursor overlay injected successfully")
+
         await page.goto("https://www.google.com")
 
         # Convert user history to base messages
