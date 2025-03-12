@@ -14,10 +14,22 @@ export interface ModelSettings {
 }
 
 export interface AgentSettings {
+  // General settings
   system_prompt?: string;
+
+  // Image and timing settings
   num_images_to_keep?: number;
   wait_time_between_steps?: number;
-  steps?: number;
+
+  // Step control
+  max_steps?: number;
+  steps?: number; // Legacy field
+
+  // Viewport settings
+  viewport_width?: number;
+  viewport_height?: number;
+
+  // Allow additional string-keyed settings
   [key: string]: string | number | undefined;
 }
 

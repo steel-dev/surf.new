@@ -249,6 +249,12 @@ AGENT_CONFIGS = {
             },
         },
         "agent_settings": {
+            "system_prompt": {
+                "type": SettingType.TEXTAREA.value,
+                "default": "",
+                "maxLength": 4000,
+                "description": "Custom system prompt for the agent",
+            },
             "num_images_to_keep": {
                 "type": SettingType.INTEGER.value,
                 "default": 10,
@@ -263,12 +269,26 @@ AGENT_CONFIGS = {
                 "max": 10,
                 "description": "Wait time between steps in seconds",
             },
-            "steps": {
+            "max_steps": {
                 "type": SettingType.INTEGER.value,
                 "default": 30,
                 "min": 10,
                 "max": 50,
-                "description": "Max number of steps to take",
+                "description": "Maximum number of steps the agent can take",
+            },
+            "viewport_width": {
+                "type": SettingType.INTEGER.value,
+                "default": 1280,
+                "min": 800,
+                "max": 1920,
+                "description": "Width of the browser viewport in pixels",
+            },
+            "viewport_height": {
+                "type": SettingType.INTEGER.value,
+                "default": 800,
+                "min": 600,
+                "max": 1080,
+                "description": "Height of the browser viewport in pixels",
             },
         },
     },

@@ -33,10 +33,12 @@ logger = logging.getLogger("openai_computer_use")
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 
-# Hardcoded settings instead of using agent_settings
-MAX_STEPS = 30
-WAIT_TIME_BETWEEN_STEPS = 1
-NUM_IMAGES_TO_KEEP = 10
+# Default settings that can be overridden by agent_settings
+DEFAULT_MAX_STEPS = 30
+DEFAULT_WAIT_TIME_BETWEEN_STEPS = 1
+DEFAULT_NUM_IMAGES_TO_KEEP = 10
+DEFAULT_VIEWPORT_WIDTH = 1280
+DEFAULT_VIEWPORT_HEIGHT = 800
 
 
 def _create_tool_message(content: Any, tool_call_id: str, is_call: bool = True) -> ToolMessage:
@@ -78,16 +80,39 @@ async def openai_computer_use_agent(
     cancel_event: Optional[asyncio.Event] = None,
 ) -> AsyncIterator[Any]:
     """
-    Demonstration of how to integrate OpenAI's computer-use-preview model
-    in your existing app:
-      1) Connect to a Steel session.
-      2) Start a local loop with the 'responses' endpoint.
-      3) On each 'computer_call', do the requested action & screenshot.
-      4) Return the screenshot as 'computer_call_output'.
+    OpenAI's computer-use-preview model integration.
+    
+    Args:
+        model_config: Configuration for the model including:
+            - model_name: The model to use (e.g. "computer-use-preview")
+            - temperature: Model temperature
+            - api_key: OpenAI API key
+            - max_tokens: Maximum tokens to generate
+        agent_settings: Agent-specific settings including:
+            - system_prompt: Custom system prompt to use
+            - max_steps: Maximum number of steps (default: 30)
+            - wait_time_between_steps: Seconds to wait between actions (default: 1)
+            - num_images_to_keep: Number of images to keep in context (default: 10)
+            - viewport_width: Browser viewport width (default: 1280)
+            - viewport_height: Browser viewport height (default: 800)
+        history: Chat history
+        session_id: Steel session ID
+        cancel_event: Optional event to cancel execution
     """
     logger.info(
         f"Starting OpenAI Computer Use agent with session_id: {session_id}")
     logger.info(f"Using model: {model_config.model_name}")
+
+    # Extract settings from agent_settings with defaults
+    max_steps = getattr(agent_settings, "max_steps", DEFAULT_MAX_STEPS)
+    wait_time = getattr(agent_settings, "wait_time_between_steps", DEFAULT_WAIT_TIME_BETWEEN_STEPS)
+    num_images = getattr(agent_settings, "num_images_to_keep", DEFAULT_NUM_IMAGES_TO_KEEP)
+    viewport_width = getattr(agent_settings, "viewport_width", DEFAULT_VIEWPORT_WIDTH)
+    viewport_height = getattr(agent_settings, "viewport_height", DEFAULT_VIEWPORT_HEIGHT)
+
+    # Log the settings being used
+    logger.info(f"Agent settings: max_steps={max_steps}, wait_time={wait_time}s, "
+                f"num_images={num_images}, viewport={viewport_width}x{viewport_height}")
 
     # 1) Retrieve the Steel session
     STEEL_API_KEY = os.getenv("STEEL_API_KEY")
@@ -137,9 +162,12 @@ async def openai_computer_use_agent(
 
         logger.info("Successfully connected Playwright to Steel session")
 
-        # Set viewport
-        await page.set_viewport_size({"width": 1280, "height": 800})
-        logger.info("Set viewport size to 1280x800")
+        # Set viewport using configured dimensions
+        await page.set_viewport_size({
+            "width": viewport_width,
+            "height": viewport_height
+        })
+        logger.info(f"Set viewport size to {viewport_width}x{viewport_height}")
 
         # Add cursor overlay to make mouse movements visible
         logger.info("Injecting cursor overlay script...")
@@ -212,8 +240,8 @@ async def openai_computer_use_agent(
         tools = [
             {
                 "type": "computer-preview",
-                "display_width": 1280,
-                "display_height": 800,
+                "display_width": viewport_width,
+                "display_height": viewport_height,
                 "environment": "browser",
             },
             {
@@ -268,21 +296,21 @@ async def openai_computer_use_agent(
             }
         ]
 
-        # Main loop
+        # Main loop with configurable max steps
         steps = 0
         while True:
             if cancel_event and cancel_event.is_set():
                 logger.info("Cancel event detected, exiting agent loop")
                 yield "[OPENAI-CUA] Cancel event detected, stopping..."
                 break
-            if steps > MAX_STEPS:
+            if steps > max_steps:
                 logger.info(
-                    f"Reached maximum steps ({MAX_STEPS}), exiting agent loop")
-                yield f"[OPENAI-CUA] Reached max steps ({MAX_STEPS}), stopping..."
+                    f"Reached maximum steps ({max_steps}), exiting agent loop")
+                yield f"[OPENAI-CUA] Reached max steps ({max_steps}), stopping..."
                 break
 
             steps += 1
-            logger.info(f"Starting step {steps}/{MAX_STEPS}")
+            logger.info(f"Starting step {steps}/{max_steps}")
 
             # 3) Call OpenAI /v1/responses endpoint
             logger.info("Preparing OpenAI API request...")
@@ -429,10 +457,11 @@ async def openai_computer_use_agent(
                     screenshot_b64 = await _execute_computer_action(page, action)
                     logger.info(f"Executed computer action successfully")
 
-                    if WAIT_TIME_BETWEEN_STEPS > 0:
+                    # Use configured wait time between steps
+                    if wait_time > 0:
                         logger.debug(
-                            f"Waiting {WAIT_TIME_BETWEEN_STEPS}s between steps")
-                        await asyncio.sleep(WAIT_TIME_BETWEEN_STEPS)
+                            f"Waiting {wait_time}s between steps")
+                        await asyncio.sleep(wait_time)
 
                     # Add the computer_call_output to conversation items
                     current_url = page.url if not page.is_closed() else "about:blank"
