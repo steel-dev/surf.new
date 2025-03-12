@@ -18,7 +18,7 @@ from api.utils.prompt import chat_dict_to_base_messages
 from dotenv import load_dotenv
 from .prompts import SYSTEM_PROMPT
 from langchain_core.messages import ToolMessage
-
+from langchain.schema import AIMessage
 load_dotenv(".env.local")
 
 # Configure logging
@@ -445,10 +445,11 @@ async def openai_computer_use_agent(
                         "args": action,
                         "id": call_id
                     }
+
                     logger.info(f"RAW TOOL CALL OBJECT: {tool_call_msg}")
                     logger.info(f"[TOOL_CALL] Yielding computer action call: {action['type']} (id: {call_id})")
                     
-                    yield tool_call_msg
+                    yield AIMessage(content="", tool_calls=[tool_call_msg])
 
                     # Log complete action details
                     action_details = json.dumps(action, indent=2)
