@@ -5,6 +5,7 @@ import os
 import requests
 import logging
 import datetime
+import aiohttp
 
 from typing import AsyncIterator, Any, Dict, List, Mapping, Optional
 from steel import Steel
@@ -315,43 +316,60 @@ async def openai_computer_use_agent(
             }
 
             try:
-                logger.info(
-                    "Sending request to OpenAI /v1/responses endpoint...")
+                logger.info("Sending request to OpenAI /v1/responses endpoint...")
                 logger.debug(f"Request headers: {headers}")
                 logger.debug(
                     f"Request body: {json.dumps(request_body, indent=2)}")
 
-                resp = requests.post(
-                    OPENAI_RESPONSES_URL, json=request_body, headers=headers, timeout=120)
-                if not resp.ok:
-                    error_detail = ""
-                    try:
-                        error_json = resp.json()
-                        error_detail = json.dumps(error_json, indent=2)
-                    except:
-                        error_detail = resp.text
+                # Create a task for the request with a timeout
+                async def make_request():
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(
+                            OPENAI_RESPONSES_URL,
+                            json=request_body,
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=120)
+                        ) as resp:
+                            if not resp.ok:
+                                error_detail = ""
+                                try:
+                                    error_json = await resp.json()
+                                    error_detail = json.dumps(error_json, indent=2)
+                                except:
+                                    error_detail = await resp.text()
 
-                    logger.error(
-                        f"OpenAI API error response ({resp.status_code}):")
-                    logger.error(f"Response headers: {dict(resp.headers)}")
-                    logger.error(f"Response body: {error_detail}")
+                                logger.error(
+                                    f"OpenAI API error response ({resp.status}):")
+                                logger.error(f"Response headers: {dict(resp.headers)}")
+                                logger.error(f"Response body: {error_detail}")
+                                resp.raise_for_status()
 
-                resp.raise_for_status()
-                logger.info("Successfully received response from OpenAI")
+                            return await resp.json()
 
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Error calling OpenAI CUA endpoint: {str(e)}")
-                if hasattr(e, 'response') and e.response is not None:
-                    try:
-                        error_json = e.response.json()
-                        logger.error(
-                            f"Error details: {json.dumps(error_json, indent=2)}")
-                    except:
-                        logger.error(f"Error text: {e.response.text}")
-                yield f"Error calling OpenAI CUA endpoint: {str(e)}"
+                # Create the request task
+                request_task = asyncio.create_task(make_request())
+
+                # Wait for either the request to complete or cancellation
+                done, _ = await asyncio.wait(
+                    [request_task],
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+
+                # Check if we were cancelled
+                if cancel_event and cancel_event.is_set():
+                    request_task.cancel()
+                    logger.info("Request cancelled due to cancel event")
+                    yield "[OPENAI-CUA] Request cancelled..."
+                    break
+
+                # Get the result
+                data = request_task.result()
+
+            except asyncio.CancelledError:
+                logger.info("Request was cancelled")
+                yield "[OPENAI-CUA] Request cancelled..."
                 break
 
-            data = resp.json()
             if "output" not in data:
                 logger.error(f"No 'output' in response: {data}")
                 yield f"No 'output' in /v1/responses result: {data}"
