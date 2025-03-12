@@ -95,6 +95,7 @@ async def stream_vercel_format(
             elif hasattr(chunk, "tool_call_id") and chunk.tool_call_id:
                 logger.info(f"Found tool_call_id: {chunk.tool_call_id}")
                 logger.info(f"Emitting tool result for: {chunk.tool_call_id}")
+                logger.info(f'a:{{"toolCallId":"{chunk.tool_call_id}","result":{json.dumps(chunk.content)}}}\n')
                 # Only try to remove if it exists in the set
                 if chunk.tool_call_id in pending_tool_calls:
                     pending_tool_calls.remove(chunk.tool_call_id)

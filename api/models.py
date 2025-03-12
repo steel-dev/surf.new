@@ -6,6 +6,7 @@ class ModelProvider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     ANTHROPIC_COMPUTER_USE = "anthropic_computer_use"
+    OPENAI_COMPUTER_USE = "openai_computer_use"
     GEMINI = "gemini"
     DEEPSEEK = "deepseek"
     OLLAMA = "ollama"
@@ -79,6 +80,7 @@ class ModelConfig:
             ModelProvider.OPENAI: "gpt-4o-mini",
             ModelProvider.ANTHROPIC: "claude-3-7-sonnet-latest",
             ModelProvider.ANTHROPIC_COMPUTER_USE: "claude-3-5-sonnet-20241022",
+            ModelProvider.OPENAI_COMPUTER_USE: "computer-use-preview-2025-02-04",
             ModelProvider.GEMINI: "gemini-2.0-flash",
             ModelProvider.DEEPSEEK: "deepseek-chat",
             ModelProvider.OLLAMA: "llama3.3",

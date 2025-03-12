@@ -60,18 +60,18 @@ npm run dev
 ```
 
 > ### Windows Users
-> 
+>
 > If you're developing on Windows, you should use the Windows-specific command:
-> 
+>
 > ```bash
 > npm run dev:win
 > ```
-> 
+>
 > **Technical Reason:** Windows has two different asyncio event loop implementations:
-> 
+>
 > - **SelectorEventLoop** (default): Uses select-based I/O and doesn't support subprocesses properly
 > - **ProactorEventLoop**: Uses I/O completion ports and fully supports subprocesses
-> 
+>
 > Playwright requires subprocess support to launch browsers. When hot reloading is enabled, the default SelectorEventLoop is used, causing a `NotImplementedError` when Playwright tries to create a subprocess.
 > Reference Issue: https://github.com/steel-dev/surf.new/issues/32
 
