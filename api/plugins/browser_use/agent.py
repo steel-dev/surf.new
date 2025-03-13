@@ -46,7 +46,7 @@ async def browser_use_agent(
     llm, use_vision = create_llm(model_config)
     logger.info("🤖 Created LLM instance")
 
-    controller = Controller(exclude_actions=["open_tab", "switch_tab"])
+    controller = Controller()
     browser = None
     queue = asyncio.Queue()
 

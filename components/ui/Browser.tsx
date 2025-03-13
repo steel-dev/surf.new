@@ -74,7 +74,7 @@ export function Browser() {
         max-w-full 
         flex-col
         overflow-hidden 
-        rounded-[1.75rem]
+        rounded-xl
         border 
         border-[--gray-3] 
         bg-[--gray-1] 
@@ -82,7 +82,7 @@ export function Browser() {
       "
     >
       {/* Top Bar */}
-      <div className="flex h-[60px] items-center justify-center border-b border-[--gray-3] bg-[--gray-1] p-2.5">
+      {/* <div className="flex h-[60px] items-center justify-center border-b border-[--gray-3] bg-[--gray-1] p-2.5">
         <div className="flex h-10 w-[360px] items-center justify-center rounded-[0.5rem] border border-[--gray-3] bg-[--gray-1] px-4 py-3">
           <div className="mr-auto flex items-center justify-center">
             {favicon ? (
@@ -101,13 +101,13 @@ export function Browser() {
             {url ? url : "Session not connected"}
           </span>
         </div>
-      </div>
+      </div> */}
 
       {/* Main Content */}
       <div ref={parentRef} className="relative flex-1">
         {debugUrl ? (
           <iframe
-            src={debugUrl + "?showControls=false"}
+            src={debugUrl}
             sandbox="allow-same-origin allow-scripts"
             className="size-full border border-[--gray-3]"
           />
