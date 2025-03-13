@@ -1,0 +1,7 @@
+# Run frontend linting and formatting
+npm run lint:fix
+npm run format
+
+# Run Python linting and formatting
+npm run lint:py:fix
+npm run format:py 
