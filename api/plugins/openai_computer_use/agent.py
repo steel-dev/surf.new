@@ -168,7 +168,7 @@ async def openai_computer_use_agent(
         await inject_cursor_overlay(page)
         logger.info("Cursor overlay injected successfully")
 
-        await page.goto("https://www.google.com")
+        await page.goto("https://www.bing.com")
 
         # Convert user history to base messages
         logger.info("Converting user history to base messages...")
