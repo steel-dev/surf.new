@@ -456,14 +456,17 @@ async def openai_computer_use_agent(
                             f"Safety checks to acknowledge: {json.dumps(ack_checks, indent=2)}")
 
                     # Actually do the action and get screenshot
-                    screenshot_b64 = await _execute_computer_action(page, action)
+                    await _execute_computer_action(page, action)
                     logger.info(f"Executed computer action successfully")
 
                     # Use configured wait time between steps
                     if wait_time > 0:
-                        logger.debug(
-                            f"Waiting {wait_time}s between steps")
+                        logger.debug(f"Waiting {wait_time}s between steps")
                         await asyncio.sleep(wait_time)
+
+                    # Take screenshot after waiting
+                    screenshot_b64 = await page.screenshot(full_page=False)
+                    screenshot_b64 = base64.b64encode(screenshot_b64).decode("utf-8")
 
                     # Add the computer_call_output to conversation items
                     current_url = page.url if not page.is_closed() else "about:blank"
@@ -479,8 +482,7 @@ async def openai_computer_use_agent(
                     }
                     conversation_items.append(cc_output)
 
-                    logger.info(
-                        f"Added computer_call_output for {action['type']}")
+                    logger.info(f"Added computer_call_output for {action['type']}")
                     # Then yield the result with explicit type
                     tool_result_msg = ToolMessage(
                         content=[{
@@ -501,8 +503,7 @@ async def openai_computer_use_agent(
                         # Explicitly mark as result
                         metadata={"message_type": "tool_result"}
                     )
-                    logger.info(
-                        f"[TOOL_RESULT] Yielding result for {action['type']} (id: {call_id})")
+                    logger.info(f"[TOOL_RESULT] Yielding result for {action['type']} (id: {call_id})")
                     yield tool_result_msg
 
                 elif item_type == "reasoning":

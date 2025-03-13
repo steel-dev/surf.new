@@ -10,10 +10,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("openai_computer_use.tools")
 
 
-async def _execute_computer_action(page: Page, action: Dict[str, Any]) -> str:
+async def _execute_computer_action(page: Page, action: Dict[str, Any]) -> None:
     """
-    Given a single computer action dict, do that action via Playwright,
-    then return the base64 encoded screenshot.
+    Given a single computer action dict, do that action via Playwright.
+    No longer returns screenshot as that's handled by the caller.
     """
     action_type = action.get("type")
     logger.info(f"Executing computer action: {action_type}")
@@ -21,7 +21,7 @@ async def _execute_computer_action(page: Page, action: Dict[str, Any]) -> str:
     # If the page or browser closed unexpectedly, short-circuit
     if page.is_closed():
         logger.warning("Page is already closed, skipping action")
-        return ""
+        return
 
     try:
         if action_type == "click":
@@ -89,19 +89,10 @@ async def _execute_computer_action(page: Page, action: Dict[str, Any]) -> str:
             await page.goto(url, wait_until="networkidle")
 
         elif action_type == "screenshot":
-            logger.debug(
-                "CUA requested screenshot action. Just capturing screenshot.")
+            logger.debug("CUA requested screenshot action. No-op since screenshots are handled by caller.")
 
         else:
             logger.warning(f"Unknown action type: {action_type}")
-
-        logger.info("Taking screenshot after action")
-        screenshot_bytes = await page.screenshot(full_page=False)
-
-        # Convert to base64 for API
-        screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
-
-        return screenshot_b64
 
     except Exception as e:
         logger.error(f"Error executing computer action '{action_type}': {e}")
