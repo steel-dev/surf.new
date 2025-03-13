@@ -81,6 +81,13 @@ async def _execute_computer_action(page: Page, action: Dict[str, Any]) -> str:
             logger.debug("Navigating forward in browser history")
             await page.go_forward()
 
+        elif action_type == "goto":
+            url = action.get("url")
+            if not url:
+                raise ValueError("URL is required for goto action")
+            logger.debug(f"Navigating to URL: {url}")
+            await page.goto(url, wait_until="networkidle")
+
         elif action_type == "screenshot":
             logger.debug(
                 "CUA requested screenshot action. Just capturing screenshot.")
