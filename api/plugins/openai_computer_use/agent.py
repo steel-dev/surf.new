@@ -334,7 +334,10 @@ async def openai_computer_use_agent(
                 "model": model_name,
                 "input": conversation_items,
                 "tools": tools,  # include both the environment + goto function
-                "truncation": "auto"
+                "truncation": "auto",
+                "reasoning": {
+                    "generate_summary": "concise"
+                }
             }
 
             try:
@@ -498,9 +501,33 @@ async def openai_computer_use_agent(
                     yield tool_result_msg
 
                 elif item_type == "reasoning":
-                    # Reasoning item - you can ignore or store it
-                    logger.debug("Skipping reasoning item")
-                    pass
+                    # Yield reasoning tokens as thoughts
+                    logger.info("Processing reasoning item")
+                    logger.debug(f"Full reasoning item: {json.dumps(item, indent=2)}")
+                    
+                    reasoning_text = None
+                    
+                    # Check for tokens first
+                    if "tokens" in item:
+                        reasoning_text = item["tokens"]
+                        logger.info(f"Found reasoning tokens: {reasoning_text}")
+                    # Then check for summary
+                    elif "summary" in item:
+                        summary_text = [s.get("text", "") for s in item["summary"] if s.get("type") == "summary_text"]
+                        if summary_text:
+                            reasoning_text = "\n".join(summary_text)
+                            logger.info(f"Found reasoning summary: {reasoning_text}")
+                    
+                    if reasoning_text:
+                        logger.info("Yielding reasoning as AIMessage with thoughts format")
+                        formatted_message = AIMessage(content=f"*Thoughts*:\n{reasoning_text}")
+                        logger.info(f"Formatted message: {formatted_message}")
+                        yield formatted_message
+                        logger.info("Yielding stop marker for visual break")
+                        yield {"stop": True}  # Add a stop to create a visual break
+                    else:
+                        logger.warning("No tokens or summary found in reasoning item")
+                        logger.debug(f"Reasoning item content: {json.dumps(item, indent=2)}")
 
                 elif item_type == "function_call":
                     # The model is calling one of our functions: goto, back, forward, change_url
