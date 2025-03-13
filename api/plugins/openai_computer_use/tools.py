@@ -73,6 +73,14 @@ async def _execute_computer_action(page: Page, action: Dict[str, Any]) -> str:
                     await page.mouse.move(pt[0], pt[1])
                 await page.mouse.up()
 
+        elif action_type == "back":
+            logger.debug("Navigating back in browser history")
+            await page.go_back()
+
+        elif action_type == "forward":
+            logger.debug("Navigating forward in browser history")
+            await page.go_forward()
+
         elif action_type == "screenshot":
             logger.debug(
                 "CUA requested screenshot action. Just capturing screenshot.")
@@ -96,8 +104,8 @@ async def _execute_computer_action(page: Page, action: Dict[str, Any]) -> str:
 def _create_tools() -> List[Dict[str, Any]]:
     """
     Return a list of 'tools' recognized by the CUA model, including the
-    'computer-preview' tool for environment AND a 'goto' function 
-    for easy URL navigation.
+    'computer-preview' tool for environment AND navigation functions 
+    for URL navigation and browser history.
     """
     return [
         # The required computer-preview tool:
@@ -121,6 +129,28 @@ def _create_tools() -> List[Dict[str, Any]]:
                     }
                 },
                 "required": ["url"],
+                "additionalProperties": False
+            }
+        },
+        # Back navigation tool
+        {
+            "type": "function",
+            "name": "back",
+            "description": "Go back one page in browser history",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False
+            }
+        },
+        # Forward navigation tool
+        {
+            "type": "function",
+            "name": "forward",
+            "description": "Go forward one page in browser history",
+            "parameters": {
+                "type": "object",
+                "properties": {},
                 "additionalProperties": False
             }
         },
