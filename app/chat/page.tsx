@@ -655,7 +655,7 @@ export default function ChatPage() {
                         </>
                       ) : (
                         <div className="flex w-full max-w-full flex-col gap-4 break-words text-base text-[--gray-12]">
-                          {messages.map((message, index) => {
+                          {(() => {
                             const isSpecialMessage =
                               (message.content &&
                                 (message.content.includes("*Memory*:") ||
@@ -734,7 +734,7 @@ export default function ChatPage() {
                                 <MarkdownText content={message.content} />
                               </div>
                             ) : null;
-                          })}
+                          })()}
                         </div>
                       )}
                     </div>
