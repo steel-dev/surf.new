@@ -225,10 +225,7 @@ AGENT_CONFIGS = {
         "supported_models": [
             {
                 "provider": ModelProvider.OPENAI_COMPUTER_USE.value,
-                "models": [
-                    "computer-use-preview",
-                    "computer-use-preview-2025-02-04"
-                ],
+                "models": ["computer-use-preview"],
             }
         ],
         "model_settings": {

@@ -405,35 +405,38 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
           {/* Model Selection */}
           {currentAgent?.supported_models && (
             <div className="space-y-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Model Provider</label>
-                <Select
-                  value={currentSettings.selectedProvider}
-                  onValueChange={value => {
-                    const providerModels = currentAgent.supported_models.find(
-                      (m: SupportedModel) => m.provider === value
-                    );
-                    if (providerModels && providerModels.models.length > 0) {
-                      updateSettings({
-                        ...currentSettings,
-                        selectedProvider: value,
-                        selectedModel: providerModels.models[0],
-                      });
-                    }
-                  }}
-                >
-                  <SelectTrigger className="settings-input">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="settings-input">
-                    {currentAgent.supported_models.map((supportedModel: SupportedModel) => (
-                      <SelectItem key={supportedModel.provider} value={supportedModel.provider}>
-                        {supportedModel.provider}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Only show provider selection if not OpenAI computer use */}
+              {currentSettings.selectedAgent !== "openai_computer_use_agent" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Model Provider</label>
+                  <Select
+                    value={currentSettings.selectedProvider}
+                    onValueChange={value => {
+                      const providerModels = currentAgent.supported_models.find(
+                        (m: SupportedModel) => m.provider === value
+                      );
+                      if (providerModels && providerModels.models.length > 0) {
+                        updateSettings({
+                          ...currentSettings,
+                          selectedProvider: value,
+                          selectedModel: providerModels.models[0],
+                        });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="settings-input">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="settings-input">
+                      {currentAgent.supported_models.map((supportedModel: SupportedModel) => (
+                        <SelectItem key={supportedModel.provider} value={supportedModel.provider}>
+                          {supportedModel.provider}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Model</label>
@@ -497,6 +500,8 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                           <code className="text-xs">ollama pull</code>
                         </SelectItem>
                       )
+                    ) : currentSettings.selectedAgent === "openai_computer_use_agent" ? (
+                      <SelectItem value="computer-use-preview">computer-use-preview</SelectItem>
                     ) : (
                       currentAgent.supported_models
                         .find(
