@@ -5,8 +5,8 @@ interface ToolInvocation {
   toolCallId: string;
   toolName: string;
   args: Record<string, any>;
-  state: string; // "call" or "result"
-  result?: any; // Or use a more specific type
+  state: "call" | "result" | "partial-call";
+  result?: string | Array<ImageResult> | ImageResult;
 }
 
 interface ImageResult {
@@ -37,29 +37,16 @@ export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderPro
   return (
     <div className="flex w-full flex-col gap-2">
       {toolInvocations.map(toolInvocation => {
-        const { toolCallId, toolName, args, state, result } = toolInvocation;
+        const { toolCallId, toolName, args, state } = toolInvocation;
         const displayToolName = capitalizeAndReplaceUnderscores(toolName);
         const entries = Object.entries(args || {});
 
-        // Identify if there's an image result
-        const imageResult = Array.isArray(result)
-          ? (result.find((item: any) => item.type === "image") as ImageResult | undefined)
-          : result?.image
-            ? {
-                type: "image",
-                source: {
-                  media_type: "image/png",
-                  data: result.image,
-                },
-              }
-            : null;
-
-        // Construct a data URL if we have an image
-        let imageSrc = "";
-        if (imageResult?.source) {
-          imageSrc = `data:${imageResult.source.media_type};base64,${imageResult.source.data}`;
+        // Skip pause_execution tools since we handle them with custom UI
+        if (toolName === "pause_execution") {
+          return null;
         }
 
+        // Regular tool invocation rendering
         return (
           <div
             key={toolCallId}
@@ -112,14 +99,32 @@ export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderPro
                   );
                 })}
               </div>
-              {state === "result" && imageResult && (
+              {state === "result" && toolInvocation.result && (
                 <div className="inline-flex h-[39px] w-[71px] flex-col items-start justify-start gap-2.5">
-                  <img
-                    src={imageSrc}
-                    alt="Preview"
-                    className="h-[39px] cursor-pointer self-stretch rounded-lg border border-[--gray-3] transition-opacity hover:opacity-90"
-                    onClick={() => onImageClick?.(imageSrc)}
-                  />
+                  {(() => {
+                    // Identify if there's an image result
+                    const imageResult = Array.isArray(toolInvocation.result)
+                      ? (toolInvocation.result.find(item => item.type === "image") as
+                          | ImageResult
+                          | undefined)
+                      : typeof toolInvocation.result === "object" &&
+                          toolInvocation.result?.type === "image"
+                        ? (toolInvocation.result as ImageResult)
+                        : undefined;
+
+                    if (imageResult?.source) {
+                      const imageSrc = `data:${imageResult.source.media_type};base64,${imageResult.source.data}`;
+                      return (
+                        <img
+                          src={imageSrc}
+                          alt="Preview"
+                          className="h-[39px] cursor-pointer self-stretch rounded-lg border border-[--gray-3] transition-opacity hover:opacity-90"
+                          onClick={() => onImageClick?.(imageSrc)}
+                        />
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               )}
             </div>

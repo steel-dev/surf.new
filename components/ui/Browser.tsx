@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 import { useSteelContext } from "@/app/contexts/SteelContext";
 
-export function Browser() {
+export function Browser({ isPaused }: { isPaused?: boolean }) {
   // WebSocket and canvas state
   const parentRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -82,9 +82,15 @@ export function Browser() {
       "
     >
       {/* Top Bar */}
-      <div className="flex h-[60px] items-center justify-center border-b border-[--gray-3] bg-[--gray-1] p-2.5">
+      <div className="relative flex h-[60px] items-center justify-center border-b border-[--gray-3] bg-[--gray-1] p-2.5">
+        {isPaused && (
+          <div className="absolute left-4 flex items-center gap-2 rounded-full border border-[--green-6] bg-[--green-3] px-2 py-1">
+            <div className="size-2 animate-pulse rounded-full bg-[--green-9]" />
+            <span className="text-xs font-medium text-[--green-11]">Interactive</span>
+          </div>
+        )}
         <div className="flex h-10 w-[360px] items-center justify-center rounded-[0.5rem] border border-[--gray-3] bg-[--gray-1] px-4 py-3">
-          <div className="mr-auto flex items-center justify-center">
+          <div className="flex items-center justify-center">
             {favicon ? (
               <Image
                 src={favicon.startsWith("/") && url ? new URL(new URL(url), favicon).href : favicon}
@@ -96,10 +102,10 @@ export function Browser() {
             ) : (
               <GlobeIcon className="mr-2 size-4" />
             )}
+            <span className="truncate font-geist text-base font-normal leading-normal text-[--gray-12]">
+              {url ? url : "Session not connected"}
+            </span>
           </div>
-          <span className="mr-auto truncate font-geist text-base font-normal leading-normal text-[--gray-12]">
-            {url ? url : "Session not connected"}
-          </span>
         </div>
       </div>
 
@@ -107,7 +113,7 @@ export function Browser() {
       <div ref={parentRef} className="relative flex-1">
         {debugUrl ? (
           <iframe
-            src={debugUrl + "?showControls=false"}
+            src={`${debugUrl}?showControls=false&interactive=${isPaused}`}
             sandbox="allow-same-origin allow-scripts"
             className="size-full border border-[--gray-3]"
           />
@@ -134,7 +140,9 @@ export function Browser() {
               {currentSession
                 ? isExpired
                   ? "Session Expired"
-                  : "Session Connected"
+                  : isPaused
+                    ? "Interactive Mode"
+                    : "Session Connected"
                 : "No Session"}
             </span>
             <span className="flex items-center gap-2">

@@ -18,6 +18,31 @@ class ExampleInput(BaseModel):
     )
 
 
+class PrintCallInput(BaseModel):
+    message: str = Field(
+        ...,
+        description="The message to print when the tool is called",
+    )
+
+
+class PrintCallTool(BaseTool):
+    name: str = "print_call"
+    description: str = "Prints a message when the tool is called."
+    args_schema: Type[BaseModel] = PrintCallInput
+
+    def _run(
+        self, message: str, run_manager: Optional[CallbackManagerForToolRun] = None
+    ) -> str:
+        """Print the message when tool is called."""
+        print(f"🔔 Tool call: {message}")
+        return f"Printed: {message}"
+
+    async def _arun(self, message: str) -> str:
+        """Async version of the tool."""
+        print(f"🔔 Tool call: {message}")
+        return f"Printed: {message}"
+
+
 class ExampleTool(BaseTool):
     name: str = "example_tool"
     description: str = "A sample tool that processes input data."
@@ -67,6 +92,7 @@ def get_available_tools() -> Dict[str, Type[BaseTool]]:
     return {
         "example_tool": ExampleTool(),
         "calculate_tool": CalculateTool(),
+        "print_call": PrintCallTool(),
     }
 
 

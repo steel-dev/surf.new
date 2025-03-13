@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { CheckIcon, Crosshair2Icon, ReaderIcon } from "@radix-ui/react-icons";
+import { CheckIcon, Crosshair2Icon, PlayIcon, ReaderIcon } from "@radix-ui/react-icons";
 import { useChat } from "ai/react";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -172,7 +172,7 @@ function MarkdownText({ content }: { content: string }) {
         )}
         <div className="rounded-2xl border border-[--gray-3] bg-[--gray-2] p-4">
           <div className="pr-8">
-            <div className="mb-1 font-medium text-[--gray-12] text-sm">{title}</div>
+            <div className="mb-1 text-sm font-medium text-[--gray-12]">{title}</div>
             {strippedContent ? (
               <div className="text-sm text-[--gray-10]">{parseContent(strippedContent)}</div>
             ) : (
@@ -298,6 +298,40 @@ export default function ChatPage() {
     }
   };
 
+  const [isPaused, setIsPaused] = useState(false);
+  const [pauseReason, setPauseReason] = useState<string>("");
+
+  // Add function to handle resume
+  const handleResume = async () => {
+    if (!currentSession?.id) return;
+
+    try {
+      const response = await fetch(`/api/sessions/${currentSession.id}/resume`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to resume execution");
+      }
+
+      setIsPaused(false);
+      setPauseReason("");
+
+      toast({
+        title: "Resumed",
+        description: "Execution resumed",
+        className: "border border-[--green-6] bg-[--green-3] text-[--green-11]",
+      });
+    } catch (error) {
+      console.error("Error resuming execution:", error);
+      toast({
+        title: "Error",
+        description: "Failed to resume execution",
+        className: "border border-[--red-6] bg-[--red-3] text-[--red-11]",
+      });
+    }
+  };
+
   const { messages, handleSubmit, isLoading, input, handleInputChange, setMessages, reload, stop } =
     useChat({
       api: "/api/chat",
@@ -350,6 +384,63 @@ export default function ChatPage() {
         console.info("🛠️ Tool call received:", toolCall);
       },
     });
+
+  // Watch for pause messages and tool calls
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      console.info("🔍 Checking message for pause:", {
+        content: lastMessage.content,
+        role: lastMessage.role,
+        toolInvocations: lastMessage.toolInvocations,
+        isPausedState: isPaused,
+        currentReason: pauseReason,
+      });
+
+      // Check if this is a pause message
+      if (lastMessage.role === "assistant") {
+        // Check for pause tool call
+        if (lastMessage.toolInvocations?.length) {
+          const pauseToolCall = lastMessage.toolInvocations.find(
+            tool => tool.toolName === "pause_execution"
+          );
+
+          if (pauseToolCall) {
+            const reason = pauseToolCall.args.reason;
+            console.info("⏸️ Found pause tool call:", {
+              toolCall: pauseToolCall,
+              extractedReason: reason,
+              currentStates: {
+                isPaused,
+                pauseReason,
+              },
+            });
+            setIsPaused(true);
+            setPauseReason(reason || "Unknown reason");
+          }
+        }
+        // Also check for pause message in content
+        else if (lastMessage.content) {
+          const isPauseMessage = lastMessage.content.includes("⏸️ Pausing execution");
+          if (isPauseMessage) {
+            const parts = lastMessage.content.split("⏸️ Pausing execution: ");
+            const reason = parts[1]?.trim();
+            console.info("⏸️ Found pause message:", {
+              originalContent: lastMessage.content,
+              parts,
+              extractedReason: reason,
+              currentStates: {
+                isPaused,
+                pauseReason,
+              },
+            });
+            setIsPaused(true);
+            setPauseReason(reason || "Unknown reason");
+          }
+        }
+      }
+    }
+  }, [messages]);
 
   // Track whether user is at the bottom
   const [isAtBottom, setIsAtBottom] = useState<boolean>(false);
@@ -407,7 +498,7 @@ export default function ChatPage() {
     });
   }, [currentSettings]);
 
-  // Track message state changes
+  // Track message state changes with enhanced logging
   useEffect(() => {
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
@@ -415,10 +506,13 @@ export default function ChatPage() {
         id: lastMessage.id,
         role: lastMessage.role,
         content: lastMessage.content,
+        hasToolInvocations: !!lastMessage.toolInvocations,
+        toolInvocationsCount: lastMessage.toolInvocations?.length || 0,
         toolInvocations: lastMessage.toolInvocations?.map(t => ({
           name: t.toolName,
           args: t.args,
           state: t.state,
+          hasResult: !!t.args,
         })),
         totalMessages: messages.length,
         messageHistory: messages.map(m => ({
@@ -440,6 +534,18 @@ export default function ChatPage() {
       messagesCount: messages.length,
     });
   }, [isLoading, isSubmitting, input, messages.length]);
+
+  // Add pause state monitoring
+  useEffect(() => {
+    console.info("🎯 Pause state changed:", {
+      isPaused,
+      pauseReason,
+      isExpired,
+      isLoading,
+      hasInput: !!input,
+      messagesCount: messages.length,
+    });
+  }, [isPaused, pauseReason, isExpired, isLoading, input, messages.length]);
 
   // Enhanced handleSend with more logging
   async function handleSend(e: React.FormEvent, messageText: string, attachments: File[]) {
@@ -608,11 +714,11 @@ export default function ChatPage() {
         {/* Left (chat) - Fluid responsive width */}
         <div
           className="
-          flex h-[40vh] 
-          w-full flex-col border-t border-[--gray-3]
-          md:h-full md:w-[clamp(280px,30vw,460px)]
-          md:border-r md:border-t-0
-        "
+            flex h-[40vh] 
+            w-full flex-col border-t border-[--gray-3]
+            md:h-full md:w-[clamp(280px,30vw,460px)]
+            md:border-r md:border-t-0
+          "
         >
           <div className="flex-1 overflow-hidden" ref={scrollAreaRef} onScroll={handleScroll}>
             <div
@@ -652,7 +758,8 @@ export default function ChatPage() {
                         </>
                       ) : (
                         <div className="flex w-full max-w-full flex-col gap-4 break-words text-base text-[--gray-12]">
-                          {messages.map((message, index) => {
+                          {/* Check if this is a special message */}
+                          {(() => {
                             const isSpecialMessage =
                               (message.content &&
                                 (message.content.includes("*Memory*:") ||
@@ -710,15 +817,47 @@ export default function ChatPage() {
                                         groupMessage.toolInvocations.length > 0 && (
                                           <div className="flex w-full flex-col gap-2">
                                             {groupMessage.toolInvocations.map((tool, toolIndex) => (
-                                              <div
-                                                key={toolIndex}
-                                                className="flex w-full items-center justify-between rounded-2xl border border-[--gray-3] bg-[--gray-2] p-3"
-                                              >
-                                                <ToolInvocations
-                                                  toolInvocations={[tool]}
-                                                  onImageClick={handleImageClick}
-                                                />
-                                              </div>
+                                              <React.Fragment key={toolIndex}>
+                                                {tool.toolName === "pause_execution" ? (
+                                                  <div className="flex w-full max-w-full flex-col gap-3 rounded-xl border border-[--gray-3] bg-[--gray-2] p-4">
+                                                    <div className="flex flex-col gap-1">
+                                                      <h3 className="font-geist text-sm font-medium text-[--gray-12]">
+                                                        {isPaused
+                                                          ? "Take control"
+                                                          : "Control released"}
+                                                      </h3>
+                                                      <p className="font-geist text-sm text-[--gray-11]">
+                                                        {isPaused
+                                                          ? pauseReason
+                                                          : "Execution resumed"}
+                                                      </p>
+                                                    </div>
+                                                    <Button
+                                                      variant="outline"
+                                                      size="sm"
+                                                      className={`h-8 w-fit rounded-full ${
+                                                        isPaused
+                                                          ? "border-[--green-6] bg-[--green-3] text-[--green-11] hover:bg-[--green-4]"
+                                                          : "border-[--gray-3] bg-[--gray-2] text-[--gray-8]"
+                                                      }`}
+                                                      onClick={handleResume}
+                                                      disabled={!isPaused}
+                                                    >
+                                                      <PlayIcon className="size-4" />
+                                                      <span className="px-1 font-geist">
+                                                        Resume
+                                                      </span>
+                                                    </Button>
+                                                  </div>
+                                                ) : (
+                                                  <div className="flex w-full items-center justify-between rounded-2xl border border-[--gray-3] bg-[--gray-2] p-3">
+                                                    <ToolInvocations
+                                                      toolInvocations={[tool]}
+                                                      onImageClick={handleImageClick}
+                                                    />
+                                                  </div>
+                                                )}
+                                              </React.Fragment>
                                             ))}
                                           </div>
                                         )}
@@ -731,7 +870,7 @@ export default function ChatPage() {
                                 <MarkdownText content={message.content} />
                               </div>
                             ) : null;
-                          })}
+                          })()}
                         </div>
                       )}
                     </div>
@@ -771,7 +910,7 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {/* Chat input or Expired State */}
+          {/* Chat input or Expired/Paused State */}
           <div className="border-t border-[--gray-3]" />
           <div className="min-h-44 flex-none p-4 drop-shadow-md">
             {isExpired ? (
@@ -790,14 +929,20 @@ export default function ChatPage() {
                 </Button>
               </div>
             ) : (
-              <ChatInput
-                value={input}
-                onChange={(value: string) => handleInputChange({ target: { value } } as any)}
-                onSubmit={handleSend}
-                disabled={isLoading}
-                isLoading={isLoading}
-                onStop={handleStop}
-              />
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <ChatInput
+                      value={input}
+                      onChange={(value: string) => handleInputChange({ target: { value } } as any)}
+                      onSubmit={handleSend}
+                      disabled={isLoading || isPaused}
+                      isLoading={isLoading}
+                      onStop={handleStop}
+                    />
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -805,13 +950,13 @@ export default function ChatPage() {
         {/* Right (browser) - Keep more prominent */}
         <div
           className="
-          h-[60vh] 
-          flex-1 border-b
-          border-[--gray-3] p-4 md:h-full 
-          md:border-b-0
-        "
+            h-[60vh] 
+            flex-1 border-b
+            border-[--gray-3] p-4 md:h-full 
+            md:border-b-0
+          "
         >
-          <Browser />
+          <Browser isPaused={isPaused} />
         </div>
       </div>
 

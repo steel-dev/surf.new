@@ -19,8 +19,10 @@ from browser_use.agent.views import (
     AgentStepInfo,
 )
 import asyncio
-from pydantic import ValidationError
+from pydantic import ValidationError, BaseModel
 import uuid
+from ...plugins.base.tools import get_available_tools
+from .system_prompt import LoggingSystemPrompt
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,6 +33,48 @@ os.environ["ANONYMIZED_TELEMETRY"] = "false"
 
 STEEL_API_KEY = os.getenv("STEEL_API_KEY")
 STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
+
+# Initialize the controller
+class SessionAwareController(Controller):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.session_id = None
+        self.agent = None
+
+    def set_session_id(self, session_id: str):
+        self.session_id = session_id
+
+    def set_agent(self, agent: Agent):
+        self.agent = agent
+
+controller = SessionAwareController(exclude_actions=["open_tab", "switch_tab"])
+
+@controller.action('Print a message')
+def print_call(message: str) -> str:
+    """Print a message when the tool is called."""
+    print(f"🔔 Tool call: {message}")
+    return f"Printed: {message}"
+
+@controller.action('Pause execution')
+async def pause_execution(reason: str) -> str:
+    """Pause execution using agent's pause mechanism."""
+    if not controller.agent:
+        raise ValueError("No agent set in controller")
+        
+    print(f"⏸️ Pausing execution: {reason}")
+    controller.agent.pause()
+    return "Agent paused"
+
+class ResumeRequest(BaseModel):
+    session_id: str
+
+async def resume_execution(request: ResumeRequest) -> dict:
+    """API endpoint to resume agent execution."""
+    if not controller.agent:
+        return {"status": "error", "message": "No agent found"}
+    
+    controller.agent.resume()
+    return {"status": "success", "message": "Agent resumed"}
 
 async def browser_use_agent(
     model_config: ModelConfig,
@@ -46,9 +90,20 @@ async def browser_use_agent(
     llm, use_vision = create_llm(model_config)
     logger.info("🤖 Created LLM instance")
 
-    controller = Controller(exclude_actions=["open_tab", "switch_tab"])
+    # Set the session_id in the controller
+    controller.set_session_id(session_id)
+
     browser = None
     queue = asyncio.Queue()
+
+    # Use our custom browser class
+    browser = Browser(
+        BrowserConfig(
+            cdp_url=f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session_id}"
+        )
+    )
+    # Use our custom browser context instead of the default one.
+    browser_context = BrowserContext(browser=browser)
 
     def yield_data(
         browser_state: "BrowserState", agent_output: "AgentOutput", step_number: int
@@ -108,15 +163,6 @@ async def browser_use_agent(
     def yield_done(history: "AgentHistoryList"):
         asyncio.get_event_loop().call_soon_threadsafe(queue.put_nowait, "END")
 
-    # Use our custom browser class
-    browser = Browser(
-        BrowserConfig(
-            cdp_url=f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session_id}"
-        )
-    )
-    # Use our custom browser context instead of the default one.
-    browser_context = BrowserContext(browser=browser)
-
     agent = Agent(
         llm=llm,
         task=history[-1]["content"],
@@ -127,8 +173,56 @@ async def browser_use_agent(
         use_vision=use_vision,
         register_new_step_callback=yield_data,
         register_done_callback=yield_done,
+        system_prompt_class=LoggingSystemPrompt,  # Pass the class, not an instance
     )
     logger.info("🌐 Created Agent with browser instance (use_vision=%s)", use_vision)
+
+    # Set the agent in the controller
+    controller.set_agent(agent)
+
+    # Create initial safety pause using the same pattern as in yield_data
+    tool_calls = []
+    tool_outputs = []
+
+    # Add print_call
+    print_id = f"tool_call_{uuid.uuid4()}"
+    tool_calls.append({
+        "name": "print_call",
+        "args": {"message": "⚠️ BROWSER SAFETY: This agent requires verification before proceeding"},
+        "id": print_id
+    })
+    tool_outputs.append(ToolMessage(content="", tool_call_id=print_id))
+
+    # Add pause_execution
+    pause_id = f"tool_call_{uuid.uuid4()}"
+    tool_calls.append({
+        "name": "pause_execution",
+        "args": {"reason": "⏸️ Click 'Resume' to allow the agent to start browsing"},
+        "id": pause_id
+    })
+    tool_outputs.append(ToolMessage(content="", tool_call_id=pause_id))
+
+    # Send the message with tool calls
+    asyncio.get_event_loop().call_soon_threadsafe(
+        queue.put_nowait,
+        AIMessage(content="", tool_calls=tool_calls)
+    )
+
+    # Send tool outputs
+    for tool_output in tool_outputs:
+        asyncio.get_event_loop().call_soon_threadsafe(
+            queue.put_nowait,
+            tool_output
+        )
+
+    asyncio.get_event_loop().call_soon_threadsafe(
+        queue.put_nowait,
+        {"stop": True}
+    )
+
+    # Execute the actual tools
+    print_call("⚠️ BROWSER SAFETY: This agent requires verification before proceeding")
+    await pause_execution("⏸️ Click 'Resume' to allow the agent to start browsing")
 
     steps = agent_settings.steps or 25
 

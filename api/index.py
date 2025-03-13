@@ -81,6 +81,20 @@ async def release_session(session_id: str):
         raise e
 
 
+@app.post("/api/sessions/{session_id}/resume", tags=["Sessions"])
+async def resume_session(session_id: str):
+    """
+    Resume execution for a paused session.
+    """
+    from .plugins.browser_use.agent import resume_execution, ResumeRequest
+    
+    try:
+        result = await resume_execution(ResumeRequest(session_id=session_id))
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/chat", tags=["Chat"])
 async def handle_chat(request: ChatRequest):
     """
