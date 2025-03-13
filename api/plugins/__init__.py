@@ -15,7 +15,8 @@ from .claude_computer_use import claude_computer_use
 from .browser_use import browser_use_agent
 from .openai_computer_use import openai_computer_use_agent
 from ..utils.types import AgentSettings
-from .claude_computer_use.prompts import SYSTEM_PROMPT
+from .claude_computer_use.prompts import SYSTEM_PROMPT as CLAUDE_SYSTEM_PROMPT
+from .openai_computer_use.prompts import SYSTEM_PROMPT as OPENAI_SYSTEM_PROMPT
 
 # from .example_plugin import example_agent
 
@@ -199,7 +200,7 @@ AGENT_CONFIGS = {
         "agent_settings": {
             "system_prompt": {
                 "type": SettingType.TEXTAREA.value,
-                "default": SYSTEM_PROMPT,
+                "default": CLAUDE_SYSTEM_PROMPT,
                 "maxLength": 4000,
                 "description": "System prompt for the agent",
             },
@@ -248,7 +249,7 @@ AGENT_CONFIGS = {
         "agent_settings": {
             "system_prompt": {
                 "type": SettingType.TEXTAREA.value,
-                "default": "",
+                "default": OPENAI_SYSTEM_PROMPT,
                 "maxLength": 4000,
                 "description": "Custom system prompt for the agent",
             },

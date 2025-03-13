@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Info, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -93,8 +93,24 @@ function SettingInput({
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 
+  // Extract text content from formatted structure if it exists
+  const extractTextContent = (val: any) => {
+    if (Array.isArray(val) && val.length > 0 && val[0]?.type === "input_text") {
+      return val[0].text;
+    }
+    return val;
+  };
+
   // Use config.default if value is undefined
-  const currentValue = value ?? config.default;
+  const currentValue = extractTextContent(value ?? config.default);
+
+  // Prepare value for saving
+  const prepareValueForSave = (val: any) => {
+    if (settingKey === "system_prompt" && val) {
+      return [{ type: "input_text", text: val }];
+    }
+    return val;
+  };
 
   // Sanitize number inputs
   const sanitizeNumber = (value: number) => {
@@ -181,7 +197,7 @@ function SettingInput({
         <Textarea
           value={currentValue}
           maxLength={config.maxLength}
-          onChange={e => onChange(e.target.value)}
+          onChange={e => onChange(prepareValueForSave(e.target.value))}
           className="settings-input min-h-[100px]"
         />
       )}
@@ -197,7 +213,17 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
   const { resetSession } = useSteelContext();
   const { toast } = useToast();
 
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  // Initialize showAdvanced based on the agent type
+  const [showAdvanced, setShowAdvanced] = useState(
+    () => currentSettings?.selectedAgent === "openai_computer_use_agent"
+  );
+
+  // Update showAdvanced when agent changes
+  useEffect(() => {
+    if (currentSettings?.selectedAgent === "openai_computer_use_agent") {
+      setShowAdvanced(true);
+    }
+  }, [currentSettings?.selectedAgent]);
 
   const { data: agents, isLoading: isLoadingAgents } = useAgents();
   const { data: ollamaData, isLoading: isLoadingOllama, error: ollamaError } = useOllamaModels();
