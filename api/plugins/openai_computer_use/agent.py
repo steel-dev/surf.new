@@ -422,7 +422,12 @@ async def openai_computer_use_agent(
                     if full_text.strip():
                         logger.info(
                             f"Yielding message text: {full_text[:100]}...")
-                        yield full_text
+                        # If this is an output_text message, treat it as an assistant message
+                        if any(seg["type"] == "output_text" for seg in text_segments):
+                            received_assistant = True
+                            yield AIMessage(content=full_text)
+                        else:
+                            yield full_text
 
                 elif item_type == "computer_call":
                     # The model wants us to do something (e.g. click, type, etc.)
