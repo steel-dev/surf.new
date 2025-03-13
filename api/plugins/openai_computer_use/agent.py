@@ -37,8 +37,6 @@ OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 DEFAULT_MAX_STEPS = 30
 DEFAULT_WAIT_TIME_BETWEEN_STEPS = 1
 DEFAULT_NUM_IMAGES_TO_KEEP = 10
-DEFAULT_VIEWPORT_WIDTH = 1280
-DEFAULT_VIEWPORT_HEIGHT = 800
 
 
 def _create_tool_message(content: Any, tool_call_id: str, is_call: bool = True) -> ToolMessage:
@@ -93,8 +91,6 @@ async def openai_computer_use_agent(
             - max_steps: Maximum number of steps (default: 30)
             - wait_time_between_steps: Seconds to wait between actions (default: 1)
             - num_images_to_keep: Number of images to keep in context (default: 10)
-            - viewport_width: Browser viewport width (default: 1280)
-            - viewport_height: Browser viewport height (default: 800)
         history: Chat history
         session_id: Steel session ID
         cancel_event: Optional event to cancel execution
@@ -107,12 +103,6 @@ async def openai_computer_use_agent(
     max_steps = getattr(agent_settings, "max_steps", DEFAULT_MAX_STEPS)
     wait_time = getattr(agent_settings, "wait_time_between_steps", DEFAULT_WAIT_TIME_BETWEEN_STEPS)
     num_images = getattr(agent_settings, "num_images_to_keep", DEFAULT_NUM_IMAGES_TO_KEEP)
-    viewport_width = getattr(agent_settings, "viewport_width", DEFAULT_VIEWPORT_WIDTH)
-    viewport_height = getattr(agent_settings, "viewport_height", DEFAULT_VIEWPORT_HEIGHT)
-
-    # Log the settings being used
-    logger.info(f"Agent settings: max_steps={max_steps}, wait_time={wait_time}s, "
-                f"num_images={num_images}, viewport={viewport_width}x{viewport_height}")
 
     # 1) Retrieve the Steel session
     STEEL_API_KEY = os.getenv("STEEL_API_KEY")
@@ -162,12 +152,16 @@ async def openai_computer_use_agent(
 
         logger.info("Successfully connected Playwright to Steel session")
 
-        # Set viewport using configured dimensions
-        await page.set_viewport_size({
-            "width": viewport_width,
-            "height": viewport_height
-        })
-        logger.info(f"Set viewport size to {viewport_width}x{viewport_height}")
+        # Get the window size
+        viewport_size = await page.evaluate("""() => ({
+            width: window.innerWidth,
+            height: window.innerHeight
+        })""")
+        logger.info(f"Got viewport size: {viewport_size}")
+
+        # Set viewport using the window size
+        await page.set_viewport_size(viewport_size)
+        logger.info(f"Set viewport size to {viewport_size['width']}x{viewport_size['height']}")
 
         # Add cursor overlay to make mouse movements visible
         logger.info("Injecting cursor overlay script...")
@@ -240,8 +234,8 @@ async def openai_computer_use_agent(
         tools = [
             {
                 "type": "computer-preview",
-                "display_width": viewport_width,
-                "display_height": viewport_height,
+                "display_width": viewport_size["width"],
+                "display_height": viewport_size["height"],
                 "environment": "browser",
             },
             {

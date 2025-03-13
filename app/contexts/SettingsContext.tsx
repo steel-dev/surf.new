@@ -25,10 +25,6 @@ export interface AgentSettings {
   max_steps?: number;
   steps?: number; // Legacy field
 
-  // Viewport settings
-  viewport_width?: number;
-  viewport_height?: number;
-
   // Allow additional string-keyed settings
   [key: string]: string | number | undefined;
 }

@@ -272,21 +272,7 @@ AGENT_CONFIGS = {
                 "min": 10,
                 "max": 50,
                 "description": "Maximum number of steps the agent can take",
-            },
-            "viewport_width": {
-                "type": SettingType.INTEGER.value,
-                "default": 1280,
-                "min": 800,
-                "max": 1920,
-                "description": "Width of the browser viewport in pixels",
-            },
-            "viewport_height": {
-                "type": SettingType.INTEGER.value,
-                "default": 800,
-                "min": 600,
-                "max": 1080,
-                "description": "Height of the browser viewport in pixels",
-            },
+            }
         },
     },
 }

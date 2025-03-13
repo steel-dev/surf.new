@@ -20,10 +20,6 @@ class AgentSettings(BaseModel):
     # Step control
     max_steps: Optional[int] = Field(default=30, ge=10, le=50)
     
-    # Viewport settings
-    viewport_width: Optional[int] = Field(default=1280, ge=800, le=1920)
-    viewport_height: Optional[int] = Field(default=800, ge=600, le=1080)
-    
     # Legacy field for backward compatibility
     steps: Optional[int] = None  # Deprecated in favor of max_steps
 
