@@ -200,7 +200,7 @@ async def openai_computer_use_agent(
         """)
         logger.info("Same-tab navigation script injected successfully")
 
-        await page.goto("https://www.bing.com")
+        await page.goto("https://www.google.com")
 
         # Convert user history to base messages
         logger.info("Converting user history to base messages...")
