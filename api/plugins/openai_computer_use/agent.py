@@ -168,6 +168,38 @@ async def openai_computer_use_agent(
         await inject_cursor_overlay(page)
         logger.info("Cursor overlay injected successfully")
 
+        logger.info("Injecting same-tab navigation script...")
+        await page.add_init_script("""
+            window.addEventListener('load', () => {
+                // Initial cleanup
+                document.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
+                
+                // Watch for dynamic changes
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.addedNodes) {
+                            mutation.addedNodes.forEach((node) => {
+                                if (node.nodeType === 1) { // ELEMENT_NODE
+                                    // Check the added element itself
+                                    if (node.tagName === 'A' && node.target === '_blank') {
+                                        node.target = '_self';
+                                    }
+                                    // Check any anchor children
+                                    node.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
+                                }
+                            });
+                        }
+                    });
+                });
+                
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                });
+            });
+        """)
+        logger.info("Same-tab navigation script injected successfully")
+
         await page.goto("https://www.bing.com")
 
         # Convert user history to base messages
