@@ -883,8 +883,13 @@ export default function ChatPage() {
                         </>
                       ) : (
                         <div className="flex w-full max-w-full flex-col gap-4 break-words text-base text-[--gray-12]">
-                          {/* Check if this is a special message */}
                           {(() => {
+                            const isSpecialMessage =
+                              (message.content &&
+                                (message.content.includes("*Memory*:") ||
+                                  message.content.includes("*Next Goal*:") ||
+                                  message.content.includes("*Previous Goal*:"))) ||
+                              (message.toolInvocations && message.toolInvocations.length > 0);
                             const hasToolInvocations =
                               message.toolInvocations && message.toolInvocations.length > 0;
 
@@ -1173,6 +1178,7 @@ export default function ChatPage() {
                                 <MarkdownText content={message.content} />
                               </div>
                             ) : null;
+                          })()}
                           })()}
                         </div>
                       )}
