@@ -337,6 +337,9 @@ export default function ChatPage() {
       onFinish: message => {
         console.info("✅ Chat finished:", message);
       },
+      onResponse: response => {
+        console.info("🔄 Chat response:", response);
+      },
       onError: error => {
         console.error("❌ Chat error:", error);
         toast({

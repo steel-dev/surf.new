@@ -76,7 +76,7 @@ monotonic==1.6
 multidict==6.1.0
 numpy==1.26.4
 ollama==0.4.7
-openai==1.60.2
+openai==1.66.2
 opentelemetry-api==1.29.0
 opentelemetry-exporter-otlp-proto-common==1.29.0
 opentelemetry-exporter-otlp-proto-grpc==1.29.0

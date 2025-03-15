@@ -10,11 +10,18 @@ class ToolInvocation(BaseModel):
 
 
 class AgentSettings(BaseModel):
-    steps: Optional[int] = None
+    # General settings
     system_prompt: Optional[str] = None
+    
+    # Image and timing settings
     num_images_to_keep: Optional[int] = Field(default=10, ge=1, le=50)
     wait_time_between_steps: Optional[int] = Field(default=1, ge=0, le=10)
-    steps: Optional[int] = None
+    
+    # Step control
+    max_steps: Optional[int] = Field(default=30, ge=10, le=50)
+    
+    # Legacy field for backward compatibility
+    steps: Optional[int] = None  # Deprecated in favor of max_steps
 
 
 class ModelSettings(BaseModel):

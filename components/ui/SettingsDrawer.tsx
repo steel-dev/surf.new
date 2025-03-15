@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Info, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -93,8 +93,24 @@ function SettingInput({
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 
+  // Extract text content from formatted structure if it exists
+  const extractTextContent = (val: any) => {
+    if (Array.isArray(val) && val.length > 0 && val[0]?.type === "input_text") {
+      return val[0].text;
+    }
+    return val;
+  };
+
   // Use config.default if value is undefined
-  const currentValue = value ?? config.default;
+  const currentValue = extractTextContent(value ?? config.default);
+
+  // Prepare value for saving
+  const prepareValueForSave = (val: any) => {
+    if (settingKey === "system_prompt" && val) {
+      return [{ type: "input_text", text: val }];
+    }
+    return val;
+  };
 
   // Sanitize number inputs
   const sanitizeNumber = (value: number) => {
@@ -181,7 +197,7 @@ function SettingInput({
         <Textarea
           value={currentValue}
           maxLength={config.maxLength}
-          onChange={e => onChange(e.target.value)}
+          onChange={e => onChange(prepareValueForSave(e.target.value))}
           className="settings-input min-h-[100px]"
         />
       )}
@@ -197,7 +213,17 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
   const { resetSession } = useSteelContext();
   const { toast } = useToast();
 
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  // Initialize showAdvanced based on the agent type
+  const [showAdvanced, setShowAdvanced] = useState(
+    () => currentSettings?.selectedAgent === "openai_computer_use_agent"
+  );
+
+  // Update showAdvanced when agent changes
+  useEffect(() => {
+    if (currentSettings?.selectedAgent === "openai_computer_use_agent") {
+      setShowAdvanced(true);
+    }
+  }, [currentSettings?.selectedAgent]);
 
   const { data: agents, isLoading: isLoadingAgents } = useAgents();
   const { data: ollamaData, isLoading: isLoadingOllama, error: ollamaError } = useOllamaModels();
@@ -405,35 +431,38 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
           {/* Model Selection */}
           {currentAgent?.supported_models && (
             <div className="space-y-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Model Provider</label>
-                <Select
-                  value={currentSettings.selectedProvider}
-                  onValueChange={value => {
-                    const providerModels = currentAgent.supported_models.find(
-                      (m: SupportedModel) => m.provider === value
-                    );
-                    if (providerModels && providerModels.models.length > 0) {
-                      updateSettings({
-                        ...currentSettings,
-                        selectedProvider: value,
-                        selectedModel: providerModels.models[0],
-                      });
-                    }
-                  }}
-                >
-                  <SelectTrigger className="settings-input">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="settings-input">
-                    {currentAgent.supported_models.map((supportedModel: SupportedModel) => (
-                      <SelectItem key={supportedModel.provider} value={supportedModel.provider}>
-                        {supportedModel.provider}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Only show provider selection if not OpenAI computer use */}
+              {currentSettings.selectedAgent !== "openai_computer_use_agent" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Model Provider</label>
+                  <Select
+                    value={currentSettings.selectedProvider}
+                    onValueChange={value => {
+                      const providerModels = currentAgent.supported_models.find(
+                        (m: SupportedModel) => m.provider === value
+                      );
+                      if (providerModels && providerModels.models.length > 0) {
+                        updateSettings({
+                          ...currentSettings,
+                          selectedProvider: value,
+                          selectedModel: providerModels.models[0],
+                        });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="settings-input">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="settings-input">
+                      {currentAgent.supported_models.map((supportedModel: SupportedModel) => (
+                        <SelectItem key={supportedModel.provider} value={supportedModel.provider}>
+                          {supportedModel.provider}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Model</label>
@@ -497,6 +526,8 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
                           <code className="text-xs">ollama pull</code>
                         </SelectItem>
                       )
+                    ) : currentSettings.selectedAgent === "openai_computer_use_agent" ? (
+                      <SelectItem value="computer-use-preview">computer-use-preview</SelectItem>
                     ) : (
                       currentAgent.supported_models
                         .find(
