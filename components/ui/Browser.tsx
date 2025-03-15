@@ -83,12 +83,6 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
     >
       {/* Top Bar */}
       <div className="relative flex h-[60px] items-center justify-center border-b border-[--gray-3] bg-[--gray-1] p-2.5">
-        {isPaused && (
-          <div className="absolute left-4 flex items-center gap-2 rounded-full border border-[--green-6] bg-[--green-3] px-2 py-1">
-            <div className="size-2 animate-pulse rounded-full bg-[--green-9]" />
-            <span className="text-xs font-medium text-[--green-11]">Interactive</span>
-          </div>
-        )}
         <div className="flex h-10 w-[360px] items-center justify-center rounded-[0.5rem] border border-[--gray-3] bg-[--gray-1] px-4 py-3">
           <div className="flex items-center justify-center">
             {favicon ? (
@@ -112,18 +106,27 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
       {/* Main Content */}
       <div ref={parentRef} className="relative flex-1">
         {debugUrl ? (
-          <iframe
-            src={`${debugUrl}?showControls=false&interactive=${isPaused}`}
-            sandbox="allow-same-origin allow-scripts"
-            className="size-full border border-[--gray-3]"
-          />
+          <>
+            <iframe
+              src={`${debugUrl}?showControls=false&interactive=${isPaused}`}
+              sandbox="allow-same-origin allow-scripts"
+              className="size-full border border-[--gray-3]"
+            />
+            {isPaused && (
+              <div
+                className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 hover:opacity-0"
+                style={{
+                  background:
+                    "linear-gradient(0deg, rgba(23, 23, 23, 0.80) 0%, rgba(23, 23, 23, 0.80) 100%)",
+                }}
+              >
+                <span className="font-geist font-normal text-white">Awaiting your input...</span>
+              </div>
+            )}
+          </>
         ) : (
           <div className="size-full" />
         )}
-
-        <div className="absolute left-[372px] top-[236px] font-geist text-base font-normal leading-normal text-white opacity-0">
-          Awaiting your input...
-        </div>
       </div>
 
       {/* Status Bar */}
