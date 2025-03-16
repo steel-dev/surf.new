@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { GlobeIcon } from "lucide-react";
 import Image from "next/image";
 
+import { Button } from "@/components/ui/button";
+
 import { cn } from "@/lib/utils";
 
 import { useSteelContext } from "@/app/contexts/SteelContext";
@@ -22,6 +24,7 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
   const [isConnected, setIsConnected] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
   const [favicon, setFavicon] = useState<string | null>(null);
+  const [isHovering, setIsHovering] = useState(false);
   const { currentSession, sessionTimeElapsed, isExpired, maxSessionDuration } = useSteelContext();
 
   const debugUrl = currentSession?.debugUrl;
@@ -64,6 +67,26 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
     return () => window.removeEventListener("message", handleMessage);
   }, [debugUrl]);
 
+  // Add function to handle taking control
+  const handleTakeControl = async () => {
+    if (!currentSession?.id) return;
+
+    try {
+      const response = await fetch(`/api/sessions/${currentSession.id}/pause`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to pause session");
+      }
+
+      // Optionally reload the page or update state to reflect the change
+      window.location.reload();
+    } catch (error) {
+      console.error("Error taking control:", error);
+    }
+  };
+
   return (
     <div
       className="
@@ -104,7 +127,12 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
       </div>
 
       {/* Main Content */}
-      <div ref={parentRef} className="relative flex-1">
+      <div
+        ref={parentRef}
+        className="relative flex-1"
+        onMouseEnter={() => setIsHovering(true)}
+        onMouseLeave={() => setIsHovering(false)}
+      >
         {debugUrl ? (
           <>
             <iframe
@@ -121,6 +149,25 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
                 }}
               >
                 <span className="font-geist font-normal text-white">Awaiting your input...</span>
+              </div>
+            )}
+            {!isPaused && currentSession && !isExpired && (
+              <div
+                className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${
+                  isHovering ? "opacity-100" : "opacity-0"
+                }`}
+                style={{
+                  background:
+                    "linear-gradient(0deg, rgba(23, 23, 23, 0.70) 0%, rgba(23, 23, 23, 0.70) 100%)",
+                  pointerEvents: isHovering ? "auto" : "none",
+                }}
+              >
+                <Button
+                  onClick={handleTakeControl}
+                  className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-12] hover:text-white"
+                >
+                  Take Control
+                </Button>
               </div>
             )}
           </>
