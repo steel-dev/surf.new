@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { ChatInput } from "@/components/ui/ChatInput";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ToolInvocations } from "@/components/ui/tool";
-import { MarkdownText } from "@/components/Markdown";
+import { MarkdownText } from "@/components/markdown";
 
 import { useToast } from "@/hooks/use-toast";
 
