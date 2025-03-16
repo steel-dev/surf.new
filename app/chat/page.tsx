@@ -801,7 +801,7 @@ export default function ChatPage() {
                                     <div className="flex gap-3">
                                       <Button
                                         onClick={handleResume}
-                                        className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-12] hover:text-white"
+                                        className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
                                       >
                                         Take Control
                                       </Button>

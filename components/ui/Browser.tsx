@@ -79,11 +79,27 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
       if (!response.ok) {
         throw new Error("Failed to pause session");
       }
-
-      // Optionally reload the page or update state to reflect the change
-      window.location.reload();
     } catch (error) {
       console.error("Error taking control:", error);
+    }
+  };
+
+  // Add function to handle resuming AI control
+  const handleResume = async () => {
+    if (!currentSession?.id) return;
+
+    try {
+      const response = await fetch(`/api/sessions/${currentSession.id}/resume`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to resume control");
+      }
+
+      window.location.reload();
+    } catch (error) {
+      console.error("Error resuming AI control:", error);
     }
   };
 
@@ -164,7 +180,7 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
               >
                 <Button
                   onClick={handleTakeControl}
-                  className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-12] hover:text-white"
+                  className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
                 >
                   Take Control
                 </Button>
@@ -216,6 +232,24 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
           </span>
         </div>
       </div>
+
+      {isPaused && currentSession && !isExpired && (
+        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
+          <div className="flex min-w-[23rem] items-center justify-between gap-4 rounded-lg border border-[--gray-3] bg-[--gray-2] p-4">
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium text-[--gray-12]">You are in control</p>
+              <p className="text-xs text-[--gray-11]">No screenshots are being taken</p>
+            </div>
+            <Button
+              onClick={handleResume}
+              variant="secondary"
+              className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
+            >
+              Resume
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
