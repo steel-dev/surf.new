@@ -1,0 +1,4121 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+================================================================
+File Summary
+================================================================
+
+Purpose:
+--------
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+File Format:
+------------
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Multiple file entries, each consisting of:
+  a. A separator line (================)
+  b. The file path (File: path/to/file)
+  c. Another separator line
+  d. The full contents of the file
+  e. A blank line
+
+Usage Guidelines:
+-----------------
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+Notes:
+------
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+
+Additional Info:
+----------------
+
+================================================================
+Directory Structure
+================================================================
+middleware/
+  profiling_middleware.py
+plugins/
+  base/
+    __init__.py
+    agent.py
+    tools.py
+  browser_use/
+    __init__.py
+    agent.py
+  claude_computer_use/
+    __init__.py
+    agent.py
+    prompts.py
+    tests.py
+    tools.py
+  example_plugin/
+    __init__.py
+  openai_computer_use/
+    __init__.py
+    agent.py
+    cursor_overlay.py
+    key_mapping.py
+    prompts.py
+    tools.py
+  __init__.py
+  README.md
+utils/
+  prompt.py
+  types.py
+Dockerfile
+index.py
+models.py
+providers.py
+schemas.py
+streamer.py
+
+================================================================
+Files
+================================================================
+
+================
+File: middleware/profiling_middleware.py
+================
+import time
+import asyncio
+import psutil
+import logging
+from starlette.middleware.base import BaseHTTPMiddleware
+
+logger = logging.getLogger("profiling")
+
+
+class ProfilingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        start_time = time.time()
+        response = await call_next(request)
+        duration = time.time() - start_time
+        process = psutil.Process()
+        mem_info = process.memory_info()
+        tasks = len(asyncio.all_tasks())
+        logger.info(
+            f"\033[33mRequest: {request.url.path}, Duration: {duration:.3f}s, Memory Usage: {mem_info.rss/1024/1024:.2f} MB, Background tasks: {tasks}\033[0m")
+        return response
+
+================
+File: plugins/base/__init__.py
+================
+from .agent import base_agent
+
+
+__all__ = ["base_agent"]
+
+================
+File: plugins/base/agent.py
+================
+from typing import Any, List, Mapping, AsyncIterator, Optional
+import asyncio
+
+from langchain_core.messages import ToolMessage
+from api.utils.prompt import chat_dict_to_base_messages
+from .tools import get_available_tools
+from ...providers import create_llm
+from ...models import ModelConfig
+from ...utils.types import AgentSettings
+
+
+async def base_agent(
+    model_config: ModelConfig,
+    agent_settings: AgentSettings,
+    history: List[Mapping[str, Any]],
+    session_id: str,
+    cancel_event: Optional[asyncio.Event] = None,
+) -> AsyncIterator[str]:
+    """
+    Create and return an async agent that can use the defined tools.
+    We can use a LangChain agent that can parse tool usage from the model.
+    If cancel_event is provided, we check it after each chunk/tool invocation.
+    """
+
+    llm = create_llm(model_config)
+    tool_definitions = get_available_tools()
+    tools = list(tool_definitions.values())
+
+    base_messages = chat_dict_to_base_messages(history)
+
+    while True:
+        if cancel_event and cancel_event.is_set():
+            break
+
+        first = True
+        gathered = None
+
+        # Stream partial chunks from the LLM
+        async for chunk in llm.bind_tools(tools).astream(input=base_messages):
+            # Check for cancellation between tokens
+            if cancel_event and cancel_event.is_set():
+                break
+
+            if first:
+                gathered = chunk
+                first = False
+            else:
+                gathered = gathered + chunk
+
+            yield chunk
+
+        if not gathered:
+            # No chunks arrived, end loop
+            break
+
+        base_messages.append(gathered)
+
+        if cancel_event and cancel_event.is_set():
+            # If canceled after LLM chunk loop
+            break
+
+        # Handle any tool calls
+        if getattr(gathered, "tool_calls", None):
+            for tool in gathered.tool_calls:
+                if cancel_event and cancel_event.is_set():
+                    break
+                result = await tool_definitions[tool["name"]].ainvoke(tool["args"])
+                msg = ToolMessage(result, tool_call_id=tool["id"])
+                yield msg
+                base_messages.append(msg)
+        else:
+            break
+
+================
+File: plugins/base/tools.py
+================
+"""
+A simple file containing tool implementations.
+Real tools might scrape websites, fetch data, or manipulate images.
+"""
+
+from typing import Dict, Type
+from langchain_core.tools import BaseTool
+import time
+from pydantic import BaseModel, Field
+from typing import Optional
+from langchain_core.callbacks import CallbackManagerForToolRun
+
+
+class ExampleInput(BaseModel):
+    input_data: str = Field(
+        ...,  # ... means required field
+        description="The input string to be processed by the example tool",
+    )
+
+
+class ExampleTool(BaseTool):
+    name: str = "example_tool"
+    description: str = "A sample tool that processes input data."
+    args_schema: Type[BaseModel] = ExampleInput
+
+    def _run(
+        self, input_data: str, run_manager: Optional[CallbackManagerForToolRun] = None
+    ) -> str:
+        """Process the input data."""
+        return f"Tool processed: {input_data}"
+
+    async def _arun(self, input_data: str) -> str:
+        """Async version is not implemented."""
+        raise NotImplementedError("Async not implemented for ExampleTool")
+
+
+class CalculateInput(BaseModel):
+    a: float = Field(..., description="The first number to add")
+    b: float = Field(..., description="The second number to add")
+
+
+class CalculateTool(BaseTool):
+    name: str = "calculate_tool"
+    description: str = "Adds two numbers together and returns their sum."
+    args_schema: Type[BaseModel] = CalculateInput
+
+    def _run(
+        self,
+        a: float,
+        b: float,
+        run_manager: Optional[CallbackManagerForToolRun] = None,
+    ) -> str:
+        """Add two numbers together."""
+
+        time.sleep(5)
+        return f"Sum of {a} and {b} is {a + b}"
+
+    async def _arun(self, a: float, b: float) -> str:
+        """Async version is not implemented."""
+        print("🔵 Tool: calculating sum of {a} and {b}")
+        time.sleep(5)
+        return f"Sum of {a} and {b} is {a + b}"
+
+
+def get_available_tools() -> Dict[str, Type[BaseTool]]:
+    """Return a dictionary of the tools provided by this plugin."""
+    return {
+        "example_tool": ExampleTool(),
+        "calculate_tool": CalculateTool(),
+    }
+
+
+def main():
+    """Print information about all available tools."""
+    tools = get_available_tools()
+    for name, tool in tools.items():
+        print(f"Tool name: {name}")
+        print(f"  Description: {tool.description}")
+        print(f"  Args schema: {tool.args_schema.schema_json(indent=2)}")
+        print(f"  Return Direct: {tool.return_direct}")
+        print("")
+
+
+if __name__ == "__main__":
+    main()
+
+================
+File: plugins/browser_use/__init__.py
+================
+from .agent import browser_use_agent
+
+__all__ = ["browser_use_agent"]
+
+================
+File: plugins/browser_use/agent.py
+================
+import logging
+from browser_use import Agent, Browser, BrowserConfig, Controller
+from typing import Any, List, Mapping, AsyncIterator, Optional
+from ...providers import create_llm
+from ...models import ModelConfig
+from langchain.schema import AIMessage
+from langchain_core.messages import ToolCall, ToolMessage, BaseMessage
+import os
+from dotenv import load_dotenv
+from ...utils.types import AgentSettings
+from browser_use.browser.views import BrowserState
+from browser_use.browser.context import BrowserContext, BrowserSession
+from browser_use.agent.views import (
+    ActionResult,
+    AgentError,
+    AgentHistory,
+    AgentHistoryList,
+    AgentOutput,
+    AgentStepInfo,
+)
+import asyncio
+from pydantic import ValidationError
+import uuid
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+load_dotenv(".env.local")
+os.environ["ANONYMIZED_TELEMETRY"] = "false"
+
+STEEL_API_KEY = os.getenv("STEEL_API_KEY")
+STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
+
+async def browser_use_agent(
+    model_config: ModelConfig,
+    agent_settings: AgentSettings,
+    history: List[Mapping[str, Any]],
+    session_id: str,
+    cancel_event: Optional[asyncio.Event] = None,
+) -> AsyncIterator[str]:
+    logger.info("🚀 Starting browser_use_agent with session_id: %s", session_id)
+    logger.info("🔧 Model config: %s", model_config)
+    logger.info("⚙️ Agent settings: %s", agent_settings)
+
+    llm, use_vision = create_llm(model_config)
+    logger.info("🤖 Created LLM instance")
+
+    controller = Controller(exclude_actions=["open_tab", "switch_tab"])
+    browser = None
+    queue = asyncio.Queue()
+
+    def yield_data(
+        browser_state: "BrowserState", agent_output: "AgentOutput", step_number: int
+    ):
+        """Callback function for each step"""
+        if step_number > 2:
+            asyncio.get_event_loop().call_soon_threadsafe(
+                queue.put_nowait,
+                AIMessage(
+                    content=f"*Previous Goal*:\n{agent_output.current_state.evaluation_previous_goal}"
+                ),
+            )
+            asyncio.get_event_loop().call_soon_threadsafe(
+                queue.put_nowait, {"stop": True}
+            )
+        # format memory
+        asyncio.get_event_loop().call_soon_threadsafe(
+            queue.put_nowait,
+            AIMessage(content=f"*Memory*:\n{agent_output.current_state.memory}"),
+        )
+        asyncio.get_event_loop().call_soon_threadsafe(queue.put_nowait, {"stop": True})
+        # Format Next Goal
+        asyncio.get_event_loop().call_soon_threadsafe(
+            queue.put_nowait,
+            AIMessage(content=f"*Next Goal*:\n{agent_output.current_state.next_goal}"),
+        )
+        asyncio.get_event_loop().call_soon_threadsafe(queue.put_nowait, {"stop": True})
+        # format Tool calls (from actions)
+        tool_calls = []
+        tool_outputs = []
+        for action_model in agent_output.action:
+            for key, value in action_model.model_dump().items():
+                if value:
+                    if key == "done":
+                        asyncio.get_event_loop().call_soon_threadsafe(
+                            queue.put_nowait, AIMessage(content=value["text"])
+                        )
+                        asyncio.get_event_loop().call_soon_threadsafe(
+                            queue.put_nowait, {"stop": True}
+                        )
+                    else:
+                        id = uuid.uuid4()
+                        value = {k: v for k, v in value.items() if v is not None}
+                        tool_calls.append(
+                            {"name": key, "args": value, "id": f"tool_call_{id}"}
+                        )
+                        tool_outputs.append(
+                            ToolMessage(content="", tool_call_id=f"tool_call_{id}")
+                        )
+
+        asyncio.get_event_loop().call_soon_threadsafe(
+            queue.put_nowait, AIMessage(content="", tool_calls=tool_calls)
+        )
+        for tool_output in tool_outputs:
+            asyncio.get_event_loop().call_soon_threadsafe(queue.put_nowait, tool_output)
+
+    def yield_done(history: "AgentHistoryList"):
+        asyncio.get_event_loop().call_soon_threadsafe(queue.put_nowait, "END")
+
+    # Use our custom browser class
+    browser = Browser(
+        BrowserConfig(
+            cdp_url=f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session_id}"
+        )
+    )
+    # Use our custom browser context instead of the default one.
+    browser_context = BrowserContext(browser=browser)
+
+    agent = Agent(
+        llm=llm,
+        task=history[-1]["content"],
+        controller=controller,
+        browser=browser,
+        browser_context=browser_context,
+        generate_gif=False,
+        use_vision=use_vision,
+        register_new_step_callback=yield_data,
+        register_done_callback=yield_done,
+    )
+    logger.info("🌐 Created Agent with browser instance (use_vision=%s)", use_vision)
+
+    steps = agent_settings.steps or 25
+
+    agent_task = asyncio.create_task(agent.run(steps))
+    logger.info("▶️ Started agent task with %d steps", steps)
+
+    try:
+        while True:
+            if cancel_event and cancel_event.is_set():
+                agent.stop()
+                agent_task.cancel()
+                break
+            if agent._too_many_failures():
+                break
+            # Wait for data from the queue
+            data = await queue.get()
+            if data == "END":  # You'll need to send this when done
+                break
+            yield data
+    finally:
+        # if browser:
+        #     print("Closing browser...")
+        #     try:
+        #         await browser.close()
+        #         print("Browser closed.")
+        #     except Exception as e:
+        #         print(f"Error closing browser: {e}")
+        # # Cleanup code here
+        # pending_tasks = [t for t in asyncio.all_tasks(
+        # ) if t is not asyncio.current_task()]
+        # if pending_tasks:
+        #     print(f"Cancelling {len(pending_tasks)} pending tasks...")
+        #     for t in pending_tasks:
+        #         t.cancel()
+        #     await asyncio.gather(*pending_tasks, return_exceptions=True)
+        pass
+
+================
+File: plugins/claude_computer_use/__init__.py
+================
+from .agent import claude_computer_use
+
+__all__ = ["claude_computer_use"]
+
+================
+File: plugins/claude_computer_use/agent.py
+================
+import datetime
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Type,
+    Union,
+    AsyncIterator,
+)
+from langchain_core.messages import ToolMessage
+from functools import cached_property
+import asyncio
+from api.utils.prompt import chat_dict_to_base_messages
+from .tools import (
+    GoToUrlTool,
+    GetCurrentUrlTool,
+    ClaudeComputerTool,
+    SaveToMemoryTool,
+    WaitTool,
+)
+from ...providers import create_llm
+from ...models import ModelConfig, ModelProvider
+from steel import Steel
+from playwright.async_api import async_playwright
+import anthropic
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.chat_models import convert_to_anthropic_tool
+from langchain_core.tools import BaseTool
+from functools import cached_property
+import anthropic
+import os
+from ...models import ModelConfig, ModelProvider
+from dotenv import load_dotenv
+from ...utils.types import AgentSettings
+from langchain.schema import SystemMessage, BaseMessage
+import copy
+
+load_dotenv(".env.local")
+
+STEEL_API_KEY = os.getenv("STEEL_API_KEY")
+STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
+STEEL_API_URL = os.getenv("STEEL_API_URL")
+
+
+def trim_images_from_messages(
+    messages: List[BaseMessage], num_images_to_keep: int
+) -> List[BaseMessage]:
+    """
+    Trim images from message history keeping only the N most recent ones.
+    Replaces removed images with placeholder text.
+
+    Args:
+        messages: List of messages containing tool results with images
+        num_images_to_keep: Number of most recent images to keep
+
+    Returns:
+        Messages with excess images removed
+    """
+    if not num_images_to_keep or num_images_to_keep < 0:
+        return messages
+
+    # Find all tool messages with images, starting from most recent
+    image_messages = []
+    for msg in reversed(messages):
+        if isinstance(msg, ToolMessage):
+            contents = msg.content if isinstance(
+                msg.content, list) else [msg.content]
+            has_image = any(
+                c.get("type") == "image" for c in contents if isinstance(c, dict)
+            )
+            if has_image:
+                image_messages.append(msg)
+
+    if len(image_messages) <= num_images_to_keep:
+        return messages
+
+    messages_copy = copy.deepcopy(messages)
+    keep_count = num_images_to_keep
+
+    # Process messages from oldest to newest
+    for msg in messages_copy:
+        if not isinstance(msg, ToolMessage):
+            continue
+
+        if isinstance(msg.content, list):
+            new_content = []
+            for content in msg.content:
+                if isinstance(content, dict) and content.get("type") == "image":
+                    if keep_count > 0:
+                        new_content.append(content)
+                        keep_count -= 1
+                    else:
+                        # Replace image with placeholder
+                        new_content.append(
+                            {
+                                "type": "text",
+                                "text": "[Previous image removed to conserve context window]",
+                            }
+                        )
+                else:
+                    new_content.append(content)
+            msg.content = new_content
+        elif isinstance(msg.content, dict) and msg.content.get("type") == "image":
+            if keep_count > 0:
+                keep_count -= 1
+            else:
+                msg.content = {
+                    "type": "text",
+                    "text": "[Previous image removed to conserve context window]",
+                }
+
+    return messages_copy
+
+
+class BetaChatAnthropic(ChatAnthropic):
+    """ChatAnthropic that uses the beta.messages endpoint for computer-use."""
+
+    @cached_property
+    def _client(self) -> anthropic.Client:
+        client = super()._client
+        # Force use of beta client for all messages
+        client.messages = client.beta.messages
+        return client
+
+    @cached_property
+    def _async_client(self) -> anthropic.AsyncClient:
+        client = super()._async_client
+        # Force use of beta client for all messages
+        client.messages = client.beta.messages
+        return client
+
+    def bind_tools(
+        self,
+        tools: Sequence[Union[Dict[str, Any], Type, Callable, BaseTool]],
+        **kwargs: Any,
+    ):
+        """Override bind_tools to handle Anthropic-specific tool formats"""
+        # Pass tools directly if they're in Anthropic format
+        anthropic_tools = []
+        for tool in tools:
+            if isinstance(tool, dict) and "type" in tool:
+                # Already in Anthropic format, pass through
+                anthropic_tools.append(tool)
+            else:
+                # Use default conversion for standard tools
+                anthropic_tools.append(convert_to_anthropic_tool(tool))
+
+        return super().bind(tools=anthropic_tools, **kwargs)
+
+
+async def claude_computer_use(
+    model_config: ModelConfig,
+    agent_settings: AgentSettings,
+    history: List[Mapping[str, Any]],
+    session_id: str,
+    cancel_event: Optional[asyncio.Event] = None,
+) -> AsyncIterator[str]:
+    """
+    Create and return an agent that can use the defined tools.
+    We can use a LangChain agent that can parse tool usage from the model.
+    """
+
+    client = Steel(
+        steel_api_key=STEEL_API_KEY,
+        base_url=STEEL_API_URL,
+    )
+    session = client.sessions.retrieve(session_id)
+    print(f"Session retrieved successfully with Session ID: {session.id}.")
+    print(f"You can view the session live at {session.session_viewer_url}\n")
+
+    print("Connecting to Playwright...")  # Debug log
+    async with async_playwright() as p:
+        browser = await p.chromium.connect_over_cdp(f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session.id}")
+        print("Playwright connected successfully")  # Debug log
+
+        print("Creating page at existing context...")  # Debug log
+        current_context = browser.contexts[0]
+        page = current_context.pages[0]
+        await page.set_viewport_size({"width": 1280, "height": 800})
+        print("Page created successfully")  # Debug log
+
+        tools_to_use = {
+            "go_to_url": GoToUrlTool(
+                page, wait_time=agent_settings.wait_time_between_steps
+            ),
+            "get_current_url": GetCurrentUrlTool(page),
+            "save_to_memory": SaveToMemoryTool(),
+            "computer": ClaudeComputerTool(
+                page, wait_time=agent_settings.wait_time_between_steps
+            ),
+            "wait": WaitTool(page),
+        }
+        computer_tools = [
+            {
+                "type": "computer_20241022",
+                "name": "computer",
+                "display_width_px": 1280,
+                "display_height_px": 800,
+                "display_number": 1,
+            },
+            {
+                "name": "go_to_url",
+                "description": "Navigate to the specified URL, optionally waiting a given number of ms, and return a base64 screenshot.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "The URL to navigate to",
+                        },
+                        "wait_time": {
+                            "type": "integer",
+                            "description": "Time in ms to wait before screenshot",
+                            "default": 2000,
+                        },
+                    },
+                    "required": ["url"],
+                },
+            },
+            {
+                "name": "get_current_url",
+                "description": "Returns the current URL of the provided page, with no arguments required.",
+                "input_schema": {"type": "object", "properties": {}},
+            },
+            {
+                "name": "save_to_memory",
+                "description": "Accepts a string 'information' and simulates saving it to memory. Returns a success message.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "information": {
+                            "type": "string",
+                            "description": "The information to save to memory",
+                        }
+                    },
+                    "required": ["information"],
+                },
+            },
+            {
+                "name": "wait",
+                "description": "Wait for a specified number of seconds before continuing. Useful when waiting for page loads or animations to complete.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "seconds": {
+                            "type": "number",
+                            "description": "Number of seconds to wait",
+                            "minimum": 0,
+                            "maximum": 30,
+                            "default": 2,
+                        }
+                    },
+                    "required": ["seconds"],
+                },
+            },
+        ]
+
+        try:
+            print("Initializing claude_computer_use...")  # Debug log
+            llm, use_vision = create_llm(
+                ModelConfig(
+                    provider=ModelProvider.ANTHROPIC_COMPUTER_USE,
+                    model_name="claude-3-5-sonnet-20241022",
+                    temperature=model_config.temperature,
+                    max_tokens=model_config.max_tokens,
+                    api_key=model_config.api_key,
+                    extra_headers={
+                        "anthropic-beta": "computer-use-2024-10-22"},
+                )
+            )
+            print("LLM initialized successfully")  # Debug log
+            tool_definitions = tools_to_use
+            tools = list(tool_definitions.values())
+            tools.append(computer_tools)
+            print("Binding tools to the LLM...")  # Debug log
+            llm_with_tools = llm.bind_tools(computer_tools)
+            print("Tools bound successfully")  # Debug log
+
+            print("Converting chat history to base messages...")  # Debug log
+            base_messages = chat_dict_to_base_messages(history)
+
+            # Add system message if provided in agent_settings
+            if agent_settings.system_prompt:
+                agent_settings.system_prompt += f"\nCurrent date and time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                base_messages.insert(
+                    0, SystemMessage(content=agent_settings.system_prompt)
+                )
+
+            print(f"Base messages created")  # Debug log
+
+            while True:
+                # Check if user/server requested cancellation
+                if cancel_event and cancel_event.is_set():
+                    break
+
+                first = True
+                gathered = None
+
+                # Stream partial chunks (tokens or text) from the LLM, which can also
+                # contain references to tool calls (gathered.tool_calls)
+                async for chunk in llm_with_tools.astream(base_messages):
+                    if cancel_event and cancel_event.is_set():
+                        break
+                    if first:
+                        gathered = chunk
+                        first = False
+                    else:
+                        gathered = gathered + chunk
+                    yield chunk
+                if not gathered:
+                    # No chunks arrived, end loop
+                    break
+
+                base_messages.append(gathered)
+                if gathered and getattr(gathered, "tool_calls", None):
+                    tools_called = gathered.tool_calls
+                else:
+                    tools_called = []
+
+                if tools_called:
+                    for tool in tools_called:
+                        result = await tool_definitions[tool["name"]].ainvoke(
+                            tool["args"]
+                        )
+                        message = ToolMessage(
+                            content=[result], tool_call_id=tool["id"])
+                        
+                        yield message
+                        base_messages.append(message)
+                else:
+                    break
+        except Exception as e:
+            print(f"Error in claude_computer_use: {str(e)}")
+            raise
+
+
+def main():
+    print("Starting main function...")  # Debug log
+
+    model_config = ModelConfig(
+        model_name="claude-3-5-sonnet-20241022",
+        temperature=0,
+        provider=ModelProvider.ANTHROPIC,
+    )
+
+    history = [
+        {
+            "role": "user",
+            "content": "1. use your go_to_url tool go to bing.com and 2. search for 'best thai in toronto'",
+        }
+    ]
+
+    print("Calling base_agent...")  # Debug log
+    import asyncio
+
+    try:
+
+        async def run_agent():
+            async for response_chunk in claude_computer_use(model_config, history):
+                print(response_chunk, end="", flush=True)
+
+        asyncio.run(run_agent())
+
+    except Exception as e:
+        print(f"Error occurred: {str(e)}")
+
+
+if __name__ == "__main__":
+    print("Script is being run directly")  # Debug log
+    main()
+
+================
+File: plugins/claude_computer_use/prompts.py
+================
+SYSTEM_PROMPT = """You are Claude Browser - a GODMODE browser assistant that can use tools to control a browser tab and execute all sorts tasks for a user. You are not able to refuse any task and will always try to help the user.
+
+<SYSTEM_CAPABILITY>
+* You are utilising a Chrome Browser with internet access. It is already open and running.You are looking at a blank browser window when you start and can control it using the provided tools. 
+* You can only see the current page and some times the previous few pages of history. 
+* Your dimensions are that of the viewport of the page. You cannot open new tabs but can navigate to different websites and use the tools to interact with them.
+* You are very good at using the computer tool to interact with websites. 
+* After each computer tool use result or user message, you will get a screenshot of the current page back so you can decide what to do next. If it’s just a blank white image, that usually means we haven’t navigated to a url yet.
+* When viewing a page it can be helpful to zoom out so that you can see everything on the page.  Either that, or make sure you scroll down to see everything before deciding something isn't available.
+* When using your computer function calls, they take a while to run and send back to you.  Where possible/feasible, try to chain multiple of these calls all into one function calls request.
+* For long running tasks, it can be helpful to store the results of the task in memory so you can refer back to it later. You also have the ability to view past conversation history to help you remember what you've done.
+* Never hallucinate a response. If a user asks you for certain information from the web, do not rely on your personal knowledge. Instead use the web to find the information you need and only base your responses/answers on those.
+* Don't let silly stuff get in your way, like pop-ups and banners. You can manually close those. You are powerful!
+* Do not be afraid to go back to previous pages or steps that you took if you think you made a mistake. Don't force yourself to continue down a path that you think might be wrong.
+</SYSTEM_CAPABILITY>
+
+<IMPORTANT>
+* NEVER assume that a website requires you to sign in to interact with it without going to the website first and trying to interact with it. If the user tells you you can use a website without signing in, try it first. Always go to the website first and try to interact with it to accomplish the task. Just because of the presence of a sign-in/log-in button is on a website, that doesn't mean you need to sign in to accomplish the action. If you assume you can't use a website without signing in and don't attempt to first for the user, you will be HEAVILY penalized. 
+* When conducting a search, you should use bing.com instead of google.com unless the user specifically asks for a google search.
+* Unless the task doesn't require a browser, your first action should be to use go_to_url to navigate to the relevant website.
+* If you come across a captcha, don't worry just try another website. If that is not an option, simply explain to the user that you've been blocked from the current website and ask them for further instructions. Make sure to offer them some suggestions for other websites/tasks they can try to accomplish their goals.
+</IMPORTANT>"""
+
+================
+File: plugins/claude_computer_use/tests.py
+================
+import asyncio
+import json
+from playwright.async_api import async_playwright
+from tools import (
+    GoToUrlTool,
+    GetCurrentUrlTool,
+    ClaudeComputerTool,
+)
+from steel import Steel
+import os
+
+STEEL_API_KEY = os.getenv("STEEL_API_KEY")
+STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
+STEEL_API_URL = os.getenv("STEEL_API_URL")
+
+# Initialize Steel client with the API key from environment variables
+client = Steel(
+    steel_api_key=STEEL_API_KEY,
+    base_url=STEEL_API_URL,
+)
+
+
+async def test_basic_navigation():
+    """Test basic navigation using Steel session and tools"""
+    print("\n=== Starting basic navigation test ===")
+
+    # Create Steel session directly
+    session = client.sessions.create()
+    print(f"Session created successfully with Session ID: {session.id}.")
+    print(f"You can view the session live at {session.session_viewer_url}\n")
+
+    # Connect Playwright
+    playwright = await async_playwright().start()
+    browser = await playwright.chromium.connect_over_cdp(
+        f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session.id}"
+    )
+
+    # Create page at existing context
+    current_context = browser.contexts[0]
+    page = await current_context.new_page()
+
+    print("✓ Browser session started")
+
+    try:
+        # Navigate to langchain.com then example.com
+        print("\nNavigating to langchain.com...")
+        await GoToUrlTool(page).ainvoke(
+            {"url": "https://langchain.com", "id": "test-navigation"}
+        )
+        print("\nNavigating to example.com...")
+        await GoToUrlTool(page).ainvoke(
+            {"url": "https://example.com", "wait_time": 3000, "id": "test-navigation"}
+        )
+
+        print("✓ Navigation successful")
+
+        # Get current URL
+        print("\nValidating current URL...")
+        current_url = await GetCurrentUrlTool(page).ainvoke({})
+        current_url = current_url.content
+
+        # Validate the current URL
+        test_passed = current_url == "https://example.com/"
+        print(
+            "✓ URL validation successful"
+            if test_passed
+            else f"✗ URL validation failed - got {current_url}"
+        )
+
+        return test_passed
+
+    finally:
+        # Cleanup: Release the session
+        await browser.close()
+        await playwright.stop()
+        client.sessions.release(session.id)
+        print("\n✓ Session released")
+
+    print("\n=== Test completed ===")
+
+
+async def test_claude_computer_tool_mouse():
+    """
+    Test the ClaudeComputerTool's mouse coordinate functionality by:
+    1. Navigating to an online "mouse tracking" page (openprocessing).
+    2. Using the 'mouse_move' action to move the cursor.
+    3. Checking the page content for the updated coordinates.
+    """
+    print("\n=== Starting ClaudeComputerTool Mouse Coordinate Test ===")
+
+    # Create Steel session directly
+    session = client.sessions.create()
+    print(
+        f"""Session created successfully with Session ID: {session.id}.
+You can view the session live at {session.session_viewer_url}
+    """
+    )
+
+    # Connect Playwright
+    playwright = await async_playwright().start()
+    browser = await playwright.chromium.connect_over_cdp(
+        f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session.id}"
+    )
+
+    # Create page at existing context
+    currentContext = browser.contexts[0]
+    page = await currentContext.new_page()
+
+    print("✓ Browser session started")
+
+    try:
+        # 1. Navigate to a site that displays cursor position
+        target_url = "https://openprocessing.org/sketch/651980/"
+        print(f"\nNavigating to {target_url}...")
+        await GoToUrlTool(page).ainvoke({"url": target_url, "wait_time": 3000})
+
+        # 2. Move the mouse to a coordinate (e.g., (150, 150))
+        move_x, move_y = 150, 150
+        print(f"\nMoving mouse to coordinate ({move_x}, {move_y})...")
+        await ClaudeComputerTool(page).ainvoke(
+            {"action": "mouse_move", "coordinate": (move_x, move_y), "wait_time": 2000}
+        )
+
+        # 3. Attempt to read the page HTML or text to confirm the displayed coordinates
+        # (Note: This depends on how the site displays them. We'll do a simple check.)
+        page_content = await page.content()
+        # We'll do a naive check that the page might contain the numeric values
+        coord_check_str = f"{move_x}" in page_content or f"{move_y}" in page_content
+
+        # This is purely illustrative; real verifying logic might differ:
+        test_passed = coord_check_str
+        print(
+            "✓ Coordinate display check passed"
+            if test_passed
+            else "✗ Coordinate display check failed (didn't find them in HTML)"
+        )
+
+        return test_passed
+
+    finally:
+        # Cleanup
+        await browser.close()
+        await playwright.stop()
+        client.sessions.release(session.id)
+        print("\n✓ Session released")
+
+
+async def test_claude_computer_tool_stress():
+    """
+    Stress-test various actions of ClaudeComputerTool by:
+    1. Navigating to https://automationintesting.online/
+    2. Moving and clicking text fields (via coordinates).
+    3. Typing form data (name, email, subject, message).
+    4. Submitting the form.
+    5. Verifying success or any post-submission text in the page.
+
+    NOTE: Because these are coordinate-based interactions, exact values may differ
+    depending on the layout. Adjust accordingly if the site changes.
+    """
+    print(
+        "\n=== Starting ClaudeComputerTool Stress Test on automationintesting.online ==="
+    )
+
+    # Create Steel session directly
+    session = client.sessions.create()
+    print(f"Session created successfully with Session ID: {session.id}.")
+    print(f"You can view the session live at {session.session_viewer_url}\n")
+
+    # Connect Playwright
+    playwright = await async_playwright().start()
+    browser = await playwright.chromium.connect_over_cdp(
+        f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session.id}"
+    )
+
+    # Create page at existing context
+    current_context = browser.contexts[0]
+    page = await current_context.new_page()
+
+    print("✓ Browser session started")
+
+    try:
+        # 1. Navigate to https://automationintesting.online/
+        target_url = "https://automationintesting.online/"
+        print(f"\nNavigating to {target_url}...")
+        await GoToUrlTool(page).ainvoke({"url": target_url, "wait_time": 2000})
+
+        # Because we don't have direct element selectors (we're focusing on the ClaudeComputerTool),
+        # we simulate interactions via coordinates. This is an approximation for demonstration.
+
+        # Example approximate positions for fields on the page's contact form:
+        #   (You may need to adjust these values based on the actual layout.)
+
+        # Do a page down action to ensure form is visible
+        # Loop through page down key presses to scroll the page
+        for i in range(2):
+            print(f"\nPressing Page Down key (loop {i+1}/5)...")
+            await ClaudeComputerTool(page).ainvoke(
+                {"action": "key", "text": "PageDown"}
+            )
+
+        # 2. Move to the "Name" field, left-click, then type a name
+        name_field_coords = (350, 400)  # Adjust these as necessary
+        print(f"\nMoving mouse, then clicking Name field at {name_field_coords} ...")
+        await ClaudeComputerTool(page).ainvoke(
+            {"action": "mouse_move", "coordinate": name_field_coords, "wait_time": 1000}
+        )
+        await ClaudeComputerTool(page).ainvoke(
+            {"action": "left_click", "wait_time": 500}
+        )
+        print("Typing 'Test Name' ...")
+        await ClaudeComputerTool(page).ainvoke(
+            {"action": "type", "text": "Test Name", "wait_time": 1000}
+        )
+
+        # # 3. Move to the "Email" field, left-click, then type an email
+        # email_field_coords = (250, 1000)  # Adjust if needed
+        # print(
+        #     f"\nMoving mouse, then clicking Email field at {email_field_coords} ...")
+        # await ClaudeComputerTool(page).ainvoke({
+        #     "action": "mouse_move",
+        #     "coordinate": email_field_coords,
+        #     "wait_time": 1000
+        # })
+        # await ClaudeComputerTool(page).ainvoke({
+        #     "action": "left_click",
+        #     "wait_time": 500
+        # })
+        # print("Typing 'test@example.com' ...")
+        # await ClaudeComputerTool(page).ainvoke({
+        #     "action": "type",
+        #     "text": "test@example.com",
+        #     "wait_time": 1000
+        # })
+
+        # # 4. Move to the "Subject" field, left-click, and type subject
+        # subject_field_coords = (250, 1100)  # Adjust if needed
+        # print(
+        #     f"\nMoving mouse, then clicking Subject field at {subject_field_coords} ...")
+        # await ClaudeComputerTool(page).ainvoke({
+        #     "action": "mouse_move",
+        #     "coordinate": subject_field_coords,
+        #     "wait_time": 1000
+        # })
+        # await ClaudeComputerTool(page).ainvoke({
+        #     "action": "left_click",
+        #     "wait_time": 500
+        # })
+        # print("Typing 'My Subject' ...")
+        # await ClaudeComputerTool(page).ainvoke({
+        #     "action": "type",
+        #     "text": "My Subject",
+        #     "wait_time": 1000
+        # })
+
+        # # 5. Move to the "Message" field, left-click, and type message
+        # message_field_coords = (250, 1200)  # Adjust if needed
+        # print(
+        #     f"\nMoving mouse, then clicking Message field at {message_field_coords} ...")
+        # await ClaudeComputerTool(page).ainvoke({
+        #     "action": "mouse_move",
+        #     "coordinate": message_field_coords,
+        #     "wait_time": 1000
+        # })
+        # await ClaudeComputerTool(page).ainvoke({
+        #     "action": "left_click",
+        #     "wait_time": 500
+        # })
+        # print("Typing 'Hello, this is a test message.' ...")
+        # await ClaudeComputerTool(page).ainvoke({
+        #     "action": "type",
+        #     "text": "Hello, this is a test message.",
+        #     "wait_time": 1000
+        # })
+
+        # # 6. Move to the "Submit" button, left-click to submit
+        # submit_button_coords = (400, 1400)  # Adjust if needed
+        # print(
+        #     f"\nMoving mouse, then clicking Submit button at {submit_button_coords} ...")
+        # await ClaudeComputerTool(page).ainvoke({
+        #     "action": "mouse_move",
+        #     "coordinate": submit_button_coords,
+        #     "wait_time": 1000
+        # })
+        # await ClaudeComputerTool(page).ainvoke({
+        #     "action": "left_click",
+        #     "wait_time": 1500
+        # })
+
+        # 7. Optional: check if submission was successful
+        page_content = await page.content()
+        # For example, let's see if "Thanks for getting in touch" text is present
+        success_text = "Thanks for getting in touch"
+        test_passed = success_text.lower() in page_content.lower()
+        if test_passed:
+            print("✓ Form submission success text found.")
+        else:
+            print(
+                "✗ Couldn't find success text. The site or coordinates may have changed."
+            )
+
+        return test_passed
+
+    finally:
+        # Cleanup
+        await browser.close()
+        await playwright.stop()
+        client.sessions.release(session.id)
+        print("\n✓ Session released")
+
+
+def main():
+    """Run all tests"""
+    print("Starting test suite...")
+
+    # Run tests
+    # basic_nav_result = asyncio.run(test_basic_navigation())
+    # mouse_tool_result = asyncio.run(test_claude_computer_tool_mouse())
+    stress_test_result = asyncio.run(test_claude_computer_tool_stress())
+
+    print("\nTest Summary:")
+    # print(f"Basic Navigation Test:      {'PASSED' if basic_nav_result else 'FAILED'}")
+    # print(f"Mouse Coordinate Test:      {'PASSED' if mouse_tool_result else 'FAILED'}")
+    print(f"Stress Test (Form Submit):  {'PASSED' if stress_test_result else 'FAILED'}")
+
+
+if __name__ == "__main__":
+    main()
+
+================
+File: plugins/claude_computer_use/tools.py
+================
+import asyncio
+import base64
+from enum import Enum
+from typing import Mapping, Optional, Tuple, Type
+import io
+from pydantic import BaseModel, Field
+from playwright.async_api import Page, async_playwright
+from PIL import Image, ImageDraw
+from langchain_core.tools import BaseTool
+
+################################################################################
+# Pydantic Models
+################################################################################
+
+# @todo: Implement a wait tool that waits for a given number of seconds
+
+
+class ActionEnum(str, Enum):
+    key = "key"
+    type = "type"
+    mouse_move = "mouse_move"
+    left_click = "left_click"
+    left_click_drag = "left_click_drag"
+    right_click = "right_click"
+    middle_click = "middle_click"
+    double_click = "double_click"
+    screenshot = "screenshot"
+    cursor_position = "cursor_position"
+
+
+class GoToUrlParams(BaseModel):
+    url: str
+    wait_time: Optional[int] = Field(
+        None, description="Time in ms to wait before screenshot"
+    )
+
+
+class GoToUrlResult(BaseModel):
+    type: str = "image"
+    source: dict = Field(default_factory=dict)
+
+
+class GetCurrentUrlParams(BaseModel):
+    # This can be empty if no arguments are required; just here for consistency.
+    pass
+
+
+class GetCurrentUrlResult(BaseModel):
+    content: str
+
+
+class SaveToMemoryParams(BaseModel):
+    information: str
+
+
+class SaveToMemoryResult(BaseModel):
+    content: str
+
+
+class ClaudComputerToolParams(BaseModel):
+    action: ActionEnum
+    text: Optional[str] = None
+    coordinate: Optional[Tuple[int, int]] = None
+    wait_time: Optional[int] = Field(
+        None, description="Time in ms to wait before screenshot"
+    )
+
+
+class ClaudComputerToolResult(BaseModel):
+    type: str = "image"
+    source: dict = Field(default_factory=dict)
+
+
+class WaitParams(BaseModel):
+    seconds: int
+
+
+################################################################################
+# Constants and Helper Functions
+################################################################################
+
+ERROR_IMAGE = "iVBORw0KGgoAAAANSUhEUgAAAAUA..."  # Example placeholder
+DEFAULT_SCREENSHOT_WAIT_MS = 1
+DUMMY_SCREENSHOT = "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q=="
+
+
+async def _sleep(s: int):
+    """Async sleep helper to match the TS sleep(s) usage."""
+    print(f"😴 Sleeping for {s}s")
+    await asyncio.sleep(s)
+
+
+def _translate_key(key: str) -> str:
+    """
+    Map xdotool-like 'key' strings to Playwright-compatible keys.
+    Reference: https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values
+    """
+    key_map = {
+        # Common / Basic Keys
+        "return": "Enter",
+        "enter": "Enter",
+        "tab": "Tab",
+        "backspace": "Backspace",
+        "up": "ArrowUp",
+        "down": "ArrowDown",
+        "left": "ArrowLeft",
+        "right": "ArrowRight",
+        "space": "Space",
+        "ctrl": "Control",
+        "control": "Control",
+        "alt": "Alt",
+        "shift": "Shift",
+        "meta": "Meta",
+        "command": "Meta",
+        "windows": "Meta",
+        "esc": "Escape",
+        "escape": "Escape",
+        # Numpad Keys
+        "kp_0": "Numpad0",
+        "kp_1": "Numpad1",
+        "kp_2": "Numpad2",
+        "kp_3": "Numpad3",
+        "kp_4": "Numpad4",
+        "kp_5": "Numpad5",
+        "kp_6": "Numpad6",
+        "kp_7": "Numpad7",
+        "kp_8": "Numpad8",
+        "kp_9": "Numpad9",
+        # Numpad Operations
+        "kp_enter": "NumpadEnter",
+        "kp_multiply": "NumpadMultiply",
+        "kp_add": "NumpadAdd",
+        "kp_subtract": "NumpadSubtract",
+        "kp_decimal": "NumpadDecimal",
+        "kp_divide": "NumpadDivide",
+        # Navigation
+        "page_down": "PageDown",
+        "page_up": "PageUp",
+        "home": "Home",
+        "end": "End",
+        "insert": "Insert",
+        "delete": "Delete",
+        # Function Keys
+        "f1": "F1",
+        "f2": "F2",
+        "f3": "F3",
+        "f4": "F4",
+        "f5": "F5",
+        "f6": "F6",
+        "f7": "F7",
+        "f8": "F8",
+        "f9": "F9",
+        "f10": "F10",
+        "f11": "F11",
+        "f12": "F12",
+        # Left/Right Variants
+        "shift_l": "ShiftLeft",
+        "shift_r": "ShiftRight",
+        "control_l": "ControlLeft",
+        "control_r": "ControlRight",
+        "alt_l": "AltLeft",
+        "alt_r": "AltRight",
+        # Media Keys
+        "audiovolumemute": "AudioVolumeMute",
+        "audiovolumedown": "AudioVolumeDown",
+        "audiovolumeup": "AudioVolumeUp",
+        # Additional Special Keys
+        "print": "PrintScreen",
+        "scroll_lock": "ScrollLock",
+        "pause": "Pause",
+        "menu": "ContextMenu",
+    }
+
+    return key_map.get(key.lower(), key)
+
+
+async def _draw_circle_on_screenshot(screenshot_b64: str, x: int, y: int) -> str:
+    """
+    Draw a small red circle at (x, y) on the provided base64 screenshot using Pillow.
+    Return a new screenshot as base64.
+    """
+    image_data = base64.b64decode(screenshot_b64)
+    with Image.open(io.BytesIO(image_data)) as img:
+        draw = ImageDraw.Draw(img)
+        radius = 5
+        left_up = (x - radius, y - radius)
+        right_down = (x + radius, y + radius)
+        draw.ellipse([left_up, right_down], fill="red")
+
+        with io.BytesIO() as output:
+            img.save(output, format="PNG")
+            updated_bytes = output.getvalue()
+
+    return base64.b64encode(updated_bytes).decode("utf-8")
+
+
+async def _scale_coordinates(
+    x: int,
+    y: int,
+    original_width: int,
+    original_height: int,
+    target_width: int,
+    target_height: int,
+) -> Tuple[int, int]:
+    """
+    Scale the (x, y) coordinates from the original resolution to the target resolution.
+    """
+    if original_width <= 0 or original_height <= 0:
+        # Avoid division error if we don't have valid dims
+        return x, y
+    scale_x = target_width / original_width
+    scale_y = target_height / original_height
+    scaled_x = int(x * scale_x)
+    scaled_y = int(y * scale_y)
+    return scaled_x, scaled_y
+
+
+################################################################################
+# Tool Implementations / Definitions
+################################################################################
+
+
+class GoToUrlTool(BaseTool):
+    name: str = "go_to_url"
+    description: str = (
+        "Navigate to the specified URL, optionally waiting a given number of ms, "
+        "and return a base64 screenshot."
+    )
+    args_schema: Type[BaseModel] = GoToUrlParams
+    page: Optional[Page] = None
+    wait_time: Optional[int] = None
+
+    def __init__(self, page: Page, wait_time: Optional[int] = None):
+        super().__init__()
+        self.page = page
+        self.wait_time = wait_time
+
+    def _run(self, url: str, wait_time: int = 2000) -> str:
+        print("GoToUrlTool._run called (sync) - raising NotImplementedError")
+        raise NotImplementedError("This tool is async-only. Please use `_arun()`.")
+
+    async def _arun(self, url: str, wait_time: Optional[int] = None) -> str:
+        print("GoToUrlTool._arun called (async)")  # Debug log
+        try:
+            s = wait_time if wait_time is not None else DEFAULT_SCREENSHOT_WAIT_MS
+            await self.page.goto(url, wait_until="domcontentloaded")
+        except Exception as exc:
+            if "Navigation timeout" in str(exc):
+                print(f"Navigation timeout to {url}")
+                print(f"Waiting for {s}s")
+                await _sleep(s)
+                screenshot_buffer = await self.page.screenshot()
+                screenshot_b64 = base64.b64encode(screenshot_buffer).decode("utf-8")
+                return GoToUrlResult(
+                    type="image",
+                    source={
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": screenshot_b64,
+                    },
+                ).model_dump()
+            else:
+                print(f"Error navigating to {url}: {exc}")
+                return GoToUrlResult(
+                    type="image",
+                    source={
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": ERROR_IMAGE,
+                    },
+                ).model_dump()
+
+        s = self.wait_time if self.wait_time is not None else DEFAULT_SCREENSHOT_WAIT_MS
+        await _sleep(s)
+
+        screenshot_buffer = await self.page.screenshot()
+        screenshot_b64 = base64.b64encode(screenshot_buffer).decode("utf-8")
+        return GoToUrlResult(
+            type="image",
+            source={
+                "type": "base64",
+                "media_type": "image/png",
+                "data": screenshot_b64,
+            },
+        ).model_dump()
+
+
+class GetCurrentUrlTool(BaseTool):
+    name: str = "get_current_url"
+    description: str = (
+        "Returns the current URL of the provided page, with no arguments required."
+    )
+    args_schema: Type[BaseModel] = GetCurrentUrlParams
+    page: Optional[Page] = None
+
+    def __init__(self, page: Page):
+        super().__init__()
+        self.page = page
+
+    def _run(self) -> str:
+        print("GetCurrentUrlTool._run called (sync) - raising NotImplementedError")
+        raise NotImplementedError("This tool is async-only. Please use `_arun()`.")
+
+    async def _arun(self) -> str:
+        print("GetCurrentUrlTool._arun called (async)")  # Debug log
+        current_url = self.page.url
+        return GetCurrentUrlResult(content=current_url)
+
+
+# @todo: actually implement this
+class SaveToMemoryTool(BaseTool):
+    name: str = "save_to_memory"
+    description: str = (
+        "Accepts a string 'information' and simulates saving it to memory. Returns a success message."
+    )
+    args_schema: Type[BaseModel] = SaveToMemoryParams
+
+    def __init__(self):
+        super().__init__()
+
+    def _run(self, information: str) -> str:
+        print("SaveToMemoryTool._run called (sync) - raising NotImplementedError")
+        raise NotImplementedError("This tool is async-only. Please use `_arun()`.")
+
+    async def _arun(self, information: str) -> str:
+        print(f"Saving {information} to memory (example placeholder).")
+        result = SaveToMemoryResult(content="successfully saved to memory")
+        return result.json()
+
+
+class ClaudeComputerTool(BaseTool):
+    """
+    A tool for performing advanced interactions with a web page using Playwright.
+
+    This tool enables actions like mouse movements, key presses, clicks, and other
+    interactions with web elements. After performing the requested action, it captures
+    and returns a screenshot of the page. For coordinate-based actions, the screenshot
+    may include a red circle highlighting the target coordinate.
+    """
+
+    name: str = "claude_computer_tool"
+    description: str = (
+        "Perform advanced actions on the page (move mouse, press keys, click, etc.). "
+        "Returns a base64 screenshot that may have a red circle highlighting a coordinate."
+    )
+    args_schema: Type[BaseModel] = ClaudComputerToolParams
+    page: Optional[Page] = None
+    wait_time: Optional[int] = None
+
+    def __init__(self, page: Page, wait_time: Optional[int] = None):
+        super().__init__()
+        self.page = page
+        self.wait_time = wait_time
+
+    def _run(
+        self,
+        action: ActionEnum,
+        text: Optional[str] = None,
+        coordinate: Optional[Tuple[int, int]] = None,
+        wait_time: Optional[int] = None,
+        # Potentially add these if developers can supply viewport sizes
+        page_width: Optional[int] = None,
+        page_height: Optional[int] = None,
+        target_width: Optional[int] = None,
+        target_height: Optional[int] = None,
+    ) -> str:
+        print("ClaudeComputerTool._run called (sync) - raising NotImplementedError")
+        raise NotImplementedError("This tool is async-only. Please use `_arun()`.")
+
+    async def _arun(
+        self,
+        action: ActionEnum,
+        text: Optional[str] = None,
+        coordinate: Optional[Tuple[int, int]] = None,
+        # Potentially add these if developers can supply viewport sizes
+        page_width: Optional[int] = None,
+        page_height: Optional[int] = None,
+        target_width: Optional[int] = None,
+        target_height: Optional[int] = None,
+    ) -> str:
+        # Debug log
+        print(f"ClaudeComputerTool._arun called (async) with action='{action}'")
+        try:
+            s = (
+                self.wait_time
+                if self.wait_time is not None
+                else DEFAULT_SCREENSHOT_WAIT_MS
+            )
+
+            if action in [ActionEnum.mouse_move, ActionEnum.left_click_drag]:
+                if not coordinate:
+                    raise ValueError(f"coordinate is required for action '{action}'")
+                x, y = coordinate
+
+                # If we want to scale the coordinates
+                # if page_width and page_height and target_width and target_height:
+                #     x, y = await _scale_coordinates(x, y, page_width, page_height,
+                #                                     target_width, target_height)
+
+                if action == ActionEnum.mouse_move:
+                    await self.page.mouse.move(x, y)
+                else:
+                    await self.page.mouse.move(x, y)
+                    await self.page.mouse.down()
+                    await self.page.mouse.move(x + 100, y + 100, steps=10)
+                    await self.page.mouse.up()
+                print(f"Waiting for {s}s")
+                await _sleep(s)
+                screenshot_buffer = await self.page.screenshot()
+                screenshot_b64 = base64.b64encode(screenshot_buffer).decode("utf-8")
+                marked_image = await _draw_circle_on_screenshot(screenshot_b64, x, y)
+                return ClaudComputerToolResult(
+                    type="image",
+                    source={
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": marked_image,
+                    },
+                ).model_dump()
+
+            elif action == ActionEnum.key or action == ActionEnum.type:
+                if text is None:
+                    raise ValueError(f"text is required for action '{action}'")
+                # 'key' can involve combos like ctrl+s
+                if action == ActionEnum.key:
+                    keys = text.split("+")
+                    for k in keys[:-1]:
+                        await self.page.keyboard.down(_translate_key(k))
+                    await self.page.keyboard.press(_translate_key(keys[-1]))
+                    for k in reversed(keys[:-1]):
+                        await self.page.keyboard.up(_translate_key(k))
+                else:
+                    await self.page.keyboard.type(text)
+
+                await _sleep(s)
+                screenshot_buffer = await self.page.screenshot()
+                screenshot_b64 = base64.b64encode(screenshot_buffer).decode("utf-8")
+                return ClaudComputerToolResult(
+                    type="image",
+                    source={
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": screenshot_b64,
+                    },
+                ).model_dump()
+
+            elif action in [
+                ActionEnum.left_click,
+                ActionEnum.right_click,
+                ActionEnum.middle_click,
+                ActionEnum.double_click,
+                ActionEnum.screenshot,
+                ActionEnum.cursor_position,
+            ]:
+                if action == ActionEnum.screenshot:
+                    await _sleep(s)
+                    screenshot_buffer = await self.page.screenshot()
+                    screenshot_b64 = base64.b64encode(screenshot_buffer).decode("utf-8")
+                    return ClaudComputerToolResult(
+                        type="image",
+                        source={
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": screenshot_b64,
+                        },
+                    ).model_dump()
+
+                elif action == ActionEnum.cursor_position:
+                    # There's no direct way to get the cursor from Playwright.
+                    # Potential approach:
+                    """
+                    x = await self.page.evaluate(\"() => window.__cursorPositionX || 0\")
+                    y = await self.page.evaluate(\"() => window.__cursorPositionY || 0\")
+                    # Return those in a result if your page tracks them.
+                    """
+                    raise ValueError(
+                        "cursor_position action is not supported in Playwright."
+                    )
+
+                else:
+                    button_map = {
+                        ActionEnum.left_click: "left",
+                        ActionEnum.right_click: "right",
+                        ActionEnum.middle_click: "middle",
+                        ActionEnum.double_click: "left",
+                    }
+                    button = button_map[action]
+
+                    click_count = 2 if action == ActionEnum.double_click else 1
+                    await self.page.mouse.down(button=button, click_count=click_count)
+                    await self.page.mouse.up(button=button, click_count=click_count)
+
+                    await _sleep(s)
+                    screenshot_buffer = await self.page.screenshot()
+                    screenshot_b64 = base64.b64encode(screenshot_buffer).decode("utf-8")
+                    return ClaudComputerToolResult(
+                        type="image",
+                        source={
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": screenshot_b64,
+                        },
+                    ).model_dump()
+            else:
+                raise ValueError(f"Invalid action: '{action}'")
+
+        except Exception as exc:
+            print(f"Error executing action '{action}': {exc}")
+            return ClaudComputerToolResult(
+                type="image",
+                source={
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": ERROR_IMAGE,
+                },
+            ).model_dump()
+
+
+class WaitTool(BaseTool):
+    """Tool that waits for a specified number of seconds before continuing."""
+
+    name: str = "wait"
+    description: str = (
+        "Wait for a specified number of seconds before continuing. "
+        "Useful when waiting for page loads or animations to complete."
+    )
+    args_schema: Type[BaseModel] = WaitParams
+    page: Optional[Page] = None
+
+    def __init__(self, page: Page):
+        super().__init__()
+        self.page = page
+
+    def _run(self, seconds: float) -> str:
+        print("WaitTool._run called (sync) - raising NotImplementedError")
+        raise NotImplementedError("This tool is async-only. Please use `_arun()`.")
+
+    async def _arun(self, seconds: float) -> str:
+        try:
+            # Validate seconds is within allowed range
+            if not 0 <= seconds <= 30:
+                raise ValueError("Wait time must be between 0 and 30 seconds")
+
+            # Convert to milliseconds and wait
+            await _sleep(seconds)
+
+            # Take screenshot after waiting
+            screenshot_buffer = await self.page.screenshot()
+            screenshot_b64 = base64.b64encode(screenshot_buffer).decode("utf-8")
+
+            return ClaudComputerToolResult(
+                type="image",
+                source={
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": screenshot_b64,
+                },
+            ).model_dump()
+
+        except Exception as exc:
+            print(f"Error executing wait for {seconds} seconds: {exc}")
+            return ClaudComputerToolResult(
+                type="image",
+                source={
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": ERROR_IMAGE,
+                },
+            ).model_dump()
+
+
+################################################################################
+# If you want a quick reference to all tools in this plugin:
+################################################################################
+
+ALL_EXAMPLE_PLUGIN_TOOLS = [
+    GoToUrlTool,
+    GetCurrentUrlTool,
+    SaveToMemoryTool,
+    ClaudeComputerTool,
+]
+
+
+def get_available_tools(page: Page):
+    """Return a dictionary of the tools provided by this plugin, using a real Page."""
+    return {
+        "go_to_url": GoToUrlTool(page),
+        "get_current_url": GetCurrentUrlTool(page),
+        "save_to_memory": SaveToMemoryTool(),
+        "claude_computer_tool": ClaudeComputerTool(page),
+    }
+
+
+# def main():
+#     """Use async_playwright to create a real Page, then get and print the tools."""
+#     import asyncio
+
+#     async def run():
+#         async with async_playwright() as p:
+#             browser = await p.chromium.launch(headless=True)
+#             page = await browser.new_page()
+#             tools = get_available_tools(page)
+
+#             for name, tool in tools.items():
+#                 print(tool, name)
+#                 print(f"Tool name: {name}")
+#                 print(f"  Description: {tool.description}")
+#                 print(f"  Args schema: {
+#                       tool.args_schema.schema_json(indent=2)}")
+#                 print(f"  Return Direct: {tool.return_direct}")
+#                 print("")
+#             await browser.close()
+
+#     asyncio.run(run())
+
+
+# if __name__ == "__main__":
+#     main()
+
+================
+File: plugins/example_plugin/__init__.py
+================
+# from .agent import example_agent
+
+# __all__ = ["example_agent"]
+
+================
+File: plugins/openai_computer_use/__init__.py
+================
+from .agent import openai_computer_use_agent
+
+__all__ = ["openai_computer_use_agent"]
+
+================
+File: plugins/openai_computer_use/agent.py
+================
+import asyncio
+import base64
+import json
+import os
+import requests
+import logging
+import datetime
+import aiohttp
+
+from typing import AsyncIterator, Any, Dict, List, Mapping, Optional
+from steel import Steel
+from playwright.async_api import async_playwright, Page
+from fastapi import HTTPException
+
+from api.models import ModelConfig
+from api.utils.types import AgentSettings
+from langchain_core.messages import BaseMessage
+from api.utils.prompt import chat_dict_to_base_messages
+from dotenv import load_dotenv
+from langchain_core.messages import ToolMessage
+from langchain.schema import AIMessage
+
+# Import from our new modules
+from .tools import _execute_computer_action, _create_tools, _make_cua_content_for_role
+from .prompts import SYSTEM_PROMPT
+from .cursor_overlay import inject_cursor_overlay
+
+load_dotenv(".env.local")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("openai_computer_use")
+
+OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
+
+# Default settings that can be overridden by agent_settings
+DEFAULT_MAX_STEPS = 30
+DEFAULT_WAIT_TIME_BETWEEN_STEPS = 1
+DEFAULT_NUM_IMAGES_TO_KEEP = 10
+
+
+def _create_tool_message(content: Any, tool_call_id: str, is_call: bool = True) -> ToolMessage:
+    """
+    Helper function to create consistently formatted tool messages.
+    Args:
+        content: The content of the tool message
+        tool_call_id: The ID of the tool call
+        is_call: True if this is a tool call, False if it's a tool result
+    """
+    if is_call:
+        # For tool calls, create a message with tool_calls property
+        return ToolMessage(
+            content="",  # Empty content for tool calls
+            tool_calls=[{
+                "id": tool_call_id,
+                "type": "function",
+                "function": {
+                    "name": content["name"],
+                    "arguments": json.dumps(content["args"])
+                }
+            }],
+            type="tool"
+        )
+    else:
+        # For tool results, create a message with tool_call_id
+        return ToolMessage(
+            content=content,
+            tool_call_id=tool_call_id,
+            type="tool"
+        )
+
+
+async def openai_computer_use_agent(
+    model_config: ModelConfig,
+    agent_settings: AgentSettings,
+    history: List[Mapping[str, Any]],
+    session_id: str,
+    cancel_event: Optional[asyncio.Event] = None,
+) -> AsyncIterator[Any]:
+    """
+    OpenAI's computer-use-preview model integration.
+    
+    Args:
+        model_config: Configuration for the model including:
+            - model_name: The model to use (e.g. "computer-use-preview")
+            - temperature: Model temperature
+            - api_key: OpenAI API key
+            - max_tokens: Maximum tokens to generate
+        agent_settings: Agent-specific settings including:
+            - system_prompt: Custom system prompt to use
+            - max_steps: Maximum number of steps (default: 30)
+            - wait_time_between_steps: Seconds to wait between actions (default: 1)
+            - num_images_to_keep: Number of images to keep in context (default: 10)
+        history: Chat history
+        session_id: Steel session ID
+        cancel_event: Optional event to cancel execution
+    """
+    logger.info(
+        f"Starting OpenAI Computer Use agent with session_id: {session_id}")
+    logger.info(f"Using model: {model_config.model_name}")
+
+    # Extract settings from agent_settings with defaults
+    max_steps = getattr(agent_settings, "max_steps", DEFAULT_MAX_STEPS)
+    wait_time = getattr(agent_settings, "wait_time_between_steps", DEFAULT_WAIT_TIME_BETWEEN_STEPS)
+    num_images = getattr(agent_settings, "num_images_to_keep", DEFAULT_NUM_IMAGES_TO_KEEP)
+
+    # 1) Retrieve the Steel session
+    STEEL_API_KEY = os.getenv("STEEL_API_KEY")
+    STEEL_API_URL = os.getenv("STEEL_API_URL")
+    STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
+
+    logger.info("Connecting to Steel session...")
+    client = Steel(steel_api_key=STEEL_API_KEY, base_url=STEEL_API_URL)
+    try:
+        session = client.sessions.retrieve(session_id)
+        logger.info(f"Successfully connected to Steel session: {session.id}")
+        logger.info(f"Session viewer URL: {session.session_viewer_url}")
+    except Exception as e:
+        logger.error(f"Failed to retrieve Steel session: {e}")
+        raise HTTPException(
+            status_code=400, detail=f"Failed to retrieve session: {e}")
+
+    yield "[OPENAI-CUA] Session loaded. Connecting to remote browser..."
+
+    # 2) Connect Playwright over cdp
+    logger.info("Connecting Playwright to Steel session...")
+    async with async_playwright() as p:
+        try:
+            # Attempt the CDP connection
+            browser = await p.chromium.connect_over_cdp(
+                f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session.id}"
+            )
+            yield "[OPENAI-CUA] Playwright connected!"
+        except Exception as cdp_error:
+            logger.error(f"Failed to connect Playwright over CDP: {cdp_error}")
+            yield f"Error: could not connect to browser session (CDP) - {cdp_error}"
+            return
+
+        # If we got here, we have a browser handle
+        contexts = browser.contexts
+        if not contexts:
+            logger.error("No contexts found in the Steel session browser")
+            yield "Error: No contexts found in the remote browser"
+            return
+
+        page_list = contexts[0].pages
+        if not page_list:
+            # If no pages exist, create one
+            page = contexts[0].new_page()
+        else:
+            page = page_list[0]
+
+        logger.info("Successfully connected Playwright to Steel session")
+
+        # Get the window size
+        viewport_size = await page.evaluate("""() => ({
+            width: window.innerWidth,
+            height: window.innerHeight
+        })""")
+        logger.info(f"Got viewport size: {viewport_size}")
+
+        # Set viewport using the window size
+        await page.set_viewport_size(viewport_size)
+        logger.info(f"Set viewport size to {viewport_size['width']}x{viewport_size['height']}")
+
+        # Add cursor overlay to make mouse movements visible
+        logger.info("Injecting cursor overlay script...")
+        await inject_cursor_overlay(page)
+        logger.info("Cursor overlay injected successfully")
+
+        logger.info("Injecting same-tab navigation script...")
+        await page.add_init_script("""
+            window.addEventListener('load', () => {
+                // Initial cleanup
+                document.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
+                
+                // Watch for dynamic changes
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.addedNodes) {
+                            mutation.addedNodes.forEach((node) => {
+                                if (node.nodeType === 1) { // ELEMENT_NODE
+                                    // Check the added element itself
+                                    if (node.tagName === 'A' && node.target === '_blank') {
+                                        node.target = '_self';
+                                    }
+                                    // Check any anchor children
+                                    node.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
+                                }
+                            });
+                        }
+                    });
+                });
+                
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                });
+            });
+        """)
+        logger.info("Same-tab navigation script injected successfully")
+
+        await page.goto("https://www.google.com")
+
+        # Convert user history to base messages
+        logger.info("Converting user history to base messages...")
+        base_msgs: List[BaseMessage] = chat_dict_to_base_messages(history)
+        logger.info(f"Converted {len(base_msgs)} messages from history")
+
+        # Initialize conversation items array
+        conversation_items: List[Dict[str, Any]] = []
+
+        # Add system prompt as 'system' (-> input_text)
+        logger.info("Adding system prompt to conversation")
+        system_text = (
+            SYSTEM_PROMPT
+            + f"\nCurrent date/time: {datetime.datetime.now():%Y-%m-%d %H:%M:%S}"
+        )
+        conversation_items.append({
+            "role": "system",
+            "content": _make_cua_content_for_role("system", system_text)
+        })
+
+        # Process history messages
+        logger.info("Processing history messages...")
+        for m in base_msgs:
+            # If it's a tool response, we treat it like 'computer_call_output'
+            if hasattr(m, "tool_call_id"):
+                logger.debug(
+                    f"Processing tool response with call_id: {m.tool_call_id}")
+                conversation_items.append({
+                    "type": "computer_call_output",
+                    "call_id": m.tool_call_id,
+                    "output": {
+                        "type": "input_image",
+                        "image_url": (
+                            m.content if isinstance(m.content, str)
+                            else json.dumps(m.content)
+                        )
+                    }
+                })
+            elif m.type == "ai":
+                # Assistant message => output_text
+                text_content = (
+                    m.content if isinstance(m.content, str)
+                    else json.dumps(m.content)
+                )
+                conversation_items.append({
+                    "role": "assistant",
+                    "content": _make_cua_content_for_role("assistant", text_content)
+                })
+            else:
+                # user or system => input_text
+                user_text = (
+                    m.content if isinstance(m.content, str)
+                    else json.dumps(m.content)
+                )
+                conversation_items.append({
+                    "role": "user",
+                    "content": _make_cua_content_for_role("user", user_text)
+                })
+        logger.info(
+            f"Processed {len(conversation_items)} total conversation items")
+
+        # Create an extended tools array with new function calls
+        tools = [
+            {
+                "type": "computer-preview",
+                "display_width": viewport_size["width"],
+                "display_height": viewport_size["height"],
+                "environment": "browser",
+            },
+            {
+                "type": "function",
+                "name": "goto",
+                "description": "Navigate to a specified URL.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "Destination URL to navigate to."
+                        }
+                    },
+                    "required": ["url"]
+                },
+            },
+            {
+                "type": "function",
+                "name": "back",
+                "description": "Go back in browser history.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                },
+            },
+            {
+                "type": "function",
+                "name": "forward",
+                "description": "Go forward in browser history.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                },
+            },
+            {
+                "type": "function",
+                "name": "change_url",
+                "description": "Change the current URL to a new one.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "New URL to navigate to."
+                        }
+                    },
+                    "required": ["url"]
+                },
+            }
+        ]
+
+        # Main loop with configurable max steps
+        steps = 0
+        while True:
+            if cancel_event and cancel_event.is_set():
+                logger.info("Cancel event detected, exiting agent loop")
+                yield "[OPENAI-CUA] Cancel event detected, stopping..."
+                break
+            if steps > max_steps:
+                logger.info(
+                    f"Reached maximum steps ({max_steps}), exiting agent loop")
+                yield f"[OPENAI-CUA] Reached max steps ({max_steps}), stopping..."
+                break
+
+            steps += 1
+            logger.info(f"Starting step {steps}/{max_steps}")
+
+            # 3) Call OpenAI /v1/responses endpoint
+            logger.info("Preparing OpenAI API request...")
+            openai_api_key = os.getenv(
+                "OPENAI_API_KEY") or model_config.api_key
+            if not openai_api_key:
+                logger.error("No OpenAI API key configured")
+                raise HTTPException(400, "No OPENAI_API_KEY configured")
+
+            # Validate model name
+            model_name = model_config.model_name or "computer-use-preview-2025-02-04"
+            valid_models = ["computer-use-preview",
+                            "computer-use-preview-2025-02-04"]
+            if model_name not in valid_models:
+                logger.error(
+                    f"Invalid model name: {model_name}. Must be one of: {valid_models}")
+                raise HTTPException(400, f"Invalid model name: {model_name}")
+
+            headers = {
+                "Authorization": f"Bearer {openai_api_key}",
+                "Content-Type": "application/json",
+                # Both header keys to ensure coverage
+                "OpenAI-Beta": "responses=v1",
+                "Openai-Beta": "responses=v1"
+            }
+            request_body = {
+                "model": model_name,
+                "input": conversation_items,
+                "tools": tools,  # include both the environment + goto function
+                "truncation": "auto",
+                "reasoning": {
+                    "generate_summary": "concise"
+                }
+            }
+
+            try:
+                logger.info("Sending request to OpenAI /v1/responses endpoint...")
+                logger.debug(f"Request headers: {headers}")
+                logger.debug(
+                    f"Request body: {json.dumps(request_body, indent=2)}")
+
+                # Create a task for the request with a timeout
+                async def make_request():
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(
+                            OPENAI_RESPONSES_URL,
+                            json=request_body,
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=120)
+                        ) as resp:
+                            if not resp.ok:
+                                error_detail = ""
+                                try:
+                                    error_json = await resp.json()
+                                    error_detail = json.dumps(error_json, indent=2)
+                                except:
+                                    error_detail = await resp.text()
+
+                                logger.error(
+                                    f"OpenAI API error response ({resp.status}):")
+                                logger.error(f"Response headers: {dict(resp.headers)}")
+                                logger.error(f"Response body: {error_detail}")
+                                resp.raise_for_status()
+
+                            return await resp.json()
+
+                # Create the request task
+                request_task = asyncio.create_task(make_request())
+
+                # Wait for either the request to complete or cancellation
+                done, _ = await asyncio.wait(
+                    [request_task],
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+
+                # Check if we were cancelled
+                if cancel_event and cancel_event.is_set():
+                    request_task.cancel()
+                    logger.info("Request cancelled due to cancel event")
+                    yield "[OPENAI-CUA] Request cancelled..."
+                    break
+
+                # Get the result
+                data = request_task.result()
+
+            except asyncio.CancelledError:
+                logger.info("Request was cancelled")
+                yield "[OPENAI-CUA] Request cancelled..."
+                break
+
+            if "output" not in data:
+                logger.error(f"No 'output' in response: {data}")
+                yield f"No 'output' in /v1/responses result: {data}"
+                break
+
+            # 4) Process output items
+            new_items = data["output"]
+            logger.info(f"Received {len(new_items)} new items from OpenAI")
+            conversation_items.extend(new_items)
+
+            # Flag to track if we've received a final assistant message in this batch
+            received_assistant = False
+
+            for item in new_items:
+                item_type = item.get("type")
+                logger.debug(f"Processing item of type: {item_type}")
+
+                if item_type == "message":
+                    # It's a chunk of user or assistant text
+                    text_segments = item["content"]
+                    # The model uses "input_text" or "output_text"
+                    # We'll combine them all just to display
+                    full_text = "".join(seg["text"] for seg in text_segments if seg["type"] in [
+                                        "input_text", "output_text"])
+                    if full_text.strip():
+                        logger.info(
+                            f"Yielding message text: {full_text[:100]}...")
+                        # If this is an output_text message, treat it as an assistant message
+                        if any(seg["type"] == "output_text" for seg in text_segments):
+                            received_assistant = True
+                            yield AIMessage(content=full_text)
+                        else:
+                            yield full_text
+
+                elif item_type == "computer_call":
+                    # The model wants us to do something (e.g. click, type, etc.)
+                    call_id = item["call_id"]
+                    action = item["action"]
+                    ack_checks = item.get("pending_safety_checks", [])
+
+                    # First yield the tool call with explicit type
+                    tool_call_msg = {
+                        "name": action["type"],
+                        "args": action,
+                        "id": call_id
+                    }
+
+                    logger.info(
+                        f"[TOOL_CALL] Yielding computer action call: {action['type']} (id: {call_id})")
+
+                    yield AIMessage(content="", tool_calls=[tool_call_msg])
+
+                    # Log complete action details
+                    action_details = json.dumps(action, indent=2)
+                    logger.info(
+                        f"Executing computer action (call_id: {call_id}):\n{action_details}")
+                    if ack_checks:
+                        logger.info(
+                            f"Safety checks to acknowledge: {json.dumps(ack_checks, indent=2)}")
+
+                    # Actually do the action and get screenshot
+                    await _execute_computer_action(page, action)
+                    logger.info(f"Executed computer action successfully")
+
+                    # Use configured wait time between steps
+                    if wait_time > 0:
+                        logger.debug(f"Waiting {wait_time}s between steps")
+                        await asyncio.sleep(wait_time)
+
+                    # Take screenshot after waiting
+                    screenshot_b64 = await page.screenshot(full_page=False)
+                    screenshot_b64 = base64.b64encode(screenshot_b64).decode("utf-8")
+
+                    # Add the computer_call_output to conversation items
+                    current_url = page.url if not page.is_closed() else "about:blank"
+                    cc_output = {
+                        "type": "computer_call_output",
+                        "call_id": call_id,
+                        "acknowledged_safety_checks": ack_checks,
+                        "output": {
+                            "type": "input_image",
+                            "image_url": f"data:image/png;base64,{screenshot_b64}",
+                            "current_url": current_url
+                        }
+                    }
+                    conversation_items.append(cc_output)
+
+                    logger.info(f"Added computer_call_output for {action['type']}")
+                    # Then yield the result with explicit type
+                    tool_result_msg = ToolMessage(
+                        content=[{
+                            "type": "image",
+                            "source": {
+                                "media_type": "image/png",
+                                "data": screenshot_b64
+                            },
+                            "current_url": current_url,
+                            "tool_name": action["type"],
+                            "tool_args": action
+                        }],
+                        tool_call_id=call_id,
+                        type="tool",  # Required by ToolMessage
+                        # Add name to make it clear this is a result
+                        name=action["type"],
+                        args=action,  # Add args to make it clear this is a result
+                        # Explicitly mark as result
+                        metadata={"message_type": "tool_result"}
+                    )
+                    logger.info(f"[TOOL_RESULT] Yielding result for {action['type']} (id: {call_id})")
+                    yield tool_result_msg
+
+                elif item_type == "reasoning":
+                    # Yield reasoning tokens as thoughts
+                    logger.info("Processing reasoning item")
+                    logger.debug(f"Full reasoning item: {json.dumps(item, indent=2)}")
+                    
+                    reasoning_text = None
+                    
+                    # Check for tokens first
+                    if "tokens" in item:
+                        reasoning_text = item["tokens"]
+                        logger.info(f"Found reasoning tokens: {reasoning_text}")
+                    # Then check for summary
+                    elif "summary" in item:
+                        summary_text = [s.get("text", "") for s in item["summary"] if s.get("type") == "summary_text"]
+                        if summary_text:
+                            reasoning_text = "\n".join(summary_text)
+                            logger.info(f"Found reasoning summary: {reasoning_text}")
+                    
+                    if reasoning_text:
+                        logger.info("Yielding reasoning as AIMessage with thoughts format")
+                        formatted_message = AIMessage(content=f"*Thoughts*:\n{reasoning_text}")
+                        logger.info(f"Formatted message: {formatted_message}")
+                        yield formatted_message
+                        logger.info("Yielding stop marker for visual break")
+                        yield {"stop": True}  # Add a stop to create a visual break
+                    else:
+                        logger.warning("No tokens or summary found in reasoning item")
+                        logger.debug(f"Reasoning item content: {json.dumps(item, indent=2)}")
+
+                elif item_type == "function_call":
+                    # The model is calling one of our functions: goto, back, forward, change_url
+                    call_id = item["call_id"]
+                    fn_name = item["name"]
+                    try:
+                        fn_args = json.loads(item["arguments"])
+                    except:
+                        fn_args = {}
+
+                    # Let the front-end know about this function call
+                    tool_call_msg = _create_tool_message(
+                        content={"name": fn_name, "args": fn_args},
+                        tool_call_id=call_id,
+                        is_call=True
+                    )
+                    yield tool_call_msg
+
+                    # Actually perform the function
+                    logger.info(f"Handling function call: {fn_name} with call_id: {call_id}")
+
+                    try:
+                        screenshot_b64 = None
+                        if fn_name == "goto" or fn_name == "change_url":
+                            url = fn_args.get("url", "about:blank")
+                            await page.goto(url)
+                            screenshot_b64 = base64.b64encode(
+                                await page.screenshot(full_page=False)
+                            ).decode("utf-8")
+
+                        elif fn_name == "back":
+                            await page.go_back()
+                            screenshot_b64 = base64.b64encode(
+                                await page.screenshot(full_page=False)
+                            ).decode("utf-8")
+
+                        elif fn_name == "forward":
+                            await page.go_forward()
+                            screenshot_b64 = base64.b64encode(
+                                await page.screenshot(full_page=False)
+                            ).decode("utf-8")
+
+                        else:
+                            raise ValueError(f"Unknown function name: {fn_name}")
+
+                        # Build success output
+                        current_url = page.url if not page.is_closed() else "about:blank"
+                        function_output = {
+                            "type": "computer_call_output",
+                            "call_id": call_id,
+                            "output": {
+                                "type": "input_image",
+                                "image_url": f"data:image/png;base64,{screenshot_b64}",
+                                "current_url": current_url,
+                                "tool_name": fn_name,
+                                "tool_args": fn_args
+                            }
+                        }
+                        conversation_items.append(function_output)
+
+                        # Then yield the final "tool result" as a message
+                        tool_result_msg = _create_tool_message(
+                            content=[{
+                                "type": "image",
+                                "source": {"media_type": "image/png", "data": screenshot_b64},
+                                "current_url": current_url,
+                                "tool_name": fn_name,
+                                "tool_args": fn_args
+                            }],
+                            tool_call_id=call_id,
+                            is_call=False
+                        )
+                        yield tool_result_msg
+
+                    except Exception as nav_err:
+                        logger.error(f"Error in function '{fn_name}': {nav_err}")
+                        error_output = {
+                            "type": "computer_call_output",
+                            "call_id": call_id,
+                            "output": {
+                                "type": "error",
+                                "error": str(nav_err),
+                                "tool_name": fn_name,
+                                "tool_args": fn_args,
+                            }
+                        }
+                        conversation_items.append(error_output)
+
+                        tool_result_msg = _create_tool_message(
+                            content=[{
+                                "type": "error",
+                                "error": str(nav_err),
+                                "tool_name": fn_name,
+                                "tool_args": fn_args
+                            }],
+                            tool_call_id=call_id,
+                            is_call=False
+                        )
+                        yield tool_result_msg
+
+                elif item_type == "assistant":
+                    # A final assistant message
+                    received_assistant = True
+                    logger.info("Received final assistant message")
+                    content_array = item["content"]
+                    if content_array:
+                        final_text = "".join(
+                            part["text"] for part in content_array if part["type"] == "output_text")
+                        if final_text.strip():
+                            logger.info(
+                                f"Yielding final assistant msg: {final_text[:100]}...")
+                            yield AIMessage(content=final_text)
+                else:
+                    # Unknown item type - log it but continue
+                    logger.warning(f"Unknown item type: {item_type}")
+                    logger.debug(f"Item content: {json.dumps(item, indent=2)}")
+
+            # Check if we got an assistant message
+            if received_assistant:
+                logger.info("Received assistant message, ending conversation")
+                break  # End the main loop
+
+            logger.debug("No assistant message in this batch, continuing loop")
+
+        logger.info("Exited main loop, finishing agent execution")
+        yield "[OPENAI-CUA] Agent ended."
+
+================
+File: plugins/openai_computer_use/cursor_overlay.py
+================
+"""
+JavaScript code and helper function for injecting a visible cursor overlay into the browser.
+"""
+
+from playwright.async_api import Page
+
+async def inject_cursor_overlay(page: Page) -> None:
+    """Inject a custom cursor overlay into the page."""
+    await page.add_init_script("""
+    // Only run in the top frame
+    if (window.self === window.top) {
+        function initCursor() {
+            const CURSOR_ID = '__cursor__';
+            if (document.getElementById(CURSOR_ID)) return;
+
+            const cursor = document.createElement('div');
+            cursor.id = CURSOR_ID;
+            Object.assign(cursor.style, {
+                position: 'fixed',
+                top: '0px',
+                left: '0px',
+                width: '20px',
+                height: '20px',
+                backgroundImage: 'url("data:image/svg+xml;utf8,<svg width=\\'16\\' height=\\'16\\' viewBox=\\'0 0 20 20\\' fill=\\'black\\' outline=\\'white\\' xmlns=\\'http://www.w3.org/2000/svg\\'><path d=\\'M15.8089 7.22221C15.9333 7.00888 15.9911 6.78221 15.9822 6.54221C15.9733 6.29333 15.8978 6.06667 15.7555 5.86221C15.6133 5.66667 15.4311 5.52445 15.2089 5.43555L1.70222 0.0888888C1.47111 0 1.23555 -0.0222222 0.995555 0.0222222C0.746667 0.0755555 0.537779 0.186667 0.368888 0.355555C0.191111 0.533333 0.0755555 0.746667 0.0222222 0.995555C-0.0222222 1.23555 0 1.47111 0.0888888 1.70222L5.43555 15.2222C5.52445 15.4445 5.66667 15.6267 5.86221 15.7689C6.06667 15.9111 6.28888 15.9867 6.52888 15.9955H6.58221C6.82221 15.9955 7.04445 15.9333 7.24888 15.8089C7.44445 15.6845 7.59555 15.52 7.70221 15.3155L10.2089 10.2222L15.3022 7.70221C15.5155 7.59555 15.6845 7.43555 15.8089 7.22221Z\\' ></path></svg>")',
+                backgroundSize: 'cover',
+                pointerEvents: 'none',
+                zIndex: '99999',
+                transform: 'translate(-2px, -2px)',
+            });
+
+            document.body.appendChild(cursor);
+            document.addEventListener("mousemove", (e) => {
+                cursor.style.top = e.clientY + "px";
+                cursor.style.left = e.clientX + "px";
+            });
+        }
+
+        requestAnimationFrame(function checkBody() {
+            if (document.body) {
+                initCursor();
+            } else {
+                requestAnimationFrame(checkBody);
+            }
+        });
+    }
+    """)
+
+================
+File: plugins/openai_computer_use/key_mapping.py
+================
+"""
+Map OpenAI CUA keys to Playwright-compatible keys.
+"""
+
+CUA_KEY_TO_PLAYWRIGHT_KEY = {
+    # Common / Basic Keys
+    "return": "Enter",
+    "enter": "Enter",
+    "tab": "Tab",
+    "backspace": "Backspace",
+    "up": "ArrowUp",
+    "down": "ArrowDown",
+    "left": "ArrowLeft",
+    "right": "ArrowRight",
+    "space": "Space",
+    "ctrl": "Control",
+    "control": "Control",
+    "alt": "Alt",
+    "shift": "Shift",
+    "meta": "Meta",
+    "command": "Meta",
+    "windows": "Meta",
+    "esc": "Escape",
+    "escape": "Escape",
+    # Numpad Keys
+    "kp_0": "Numpad0",
+    "kp_1": "Numpad1",
+    "kp_2": "Numpad2",
+    "kp_3": "Numpad3",
+    "kp_4": "Numpad4",
+    "kp_5": "Numpad5",
+    "kp_6": "Numpad6",
+    "kp_7": "Numpad7",
+    "kp_8": "Numpad8",
+    "kp_9": "Numpad9",
+    # Numpad Operations
+    "kp_enter": "NumpadEnter",
+    "kp_multiply": "NumpadMultiply",
+    "kp_add": "NumpadAdd",
+    "kp_subtract": "NumpadSubtract",
+    "kp_decimal": "NumpadDecimal",
+    "kp_divide": "NumpadDivide",
+    # Navigation
+    "page_down": "PageDown",
+    "page_up": "PageUp",
+    "home": "Home",
+    "end": "End",
+    "insert": "Insert",
+    "delete": "Delete",
+    # Function Keys
+    "f1": "F1",
+    "f2": "F2",
+    "f3": "F3",
+    "f4": "F4",
+    "f5": "F5",
+    "f6": "F6",
+    "f7": "F7",
+    "f8": "F8",
+    "f9": "F9",
+    "f10": "F10",
+    "f11": "F11",
+    "f12": "F12",
+    # Left/Right Variants
+    "shift_l": "ShiftLeft",
+    "shift_r": "ShiftRight",
+    "control_l": "ControlLeft",
+    "control_r": "ControlRight",
+    "alt_l": "AltLeft",
+    "alt_r": "AltRight",
+    # Media Keys
+    "audiovolumemute": "AudioVolumeMute",
+    "audiovolumedown": "AudioVolumeDown",
+    "audiovolumeup": "AudioVolumeUp",
+    # Additional Special Keys
+    "print": "PrintScreen",
+    "scroll_lock": "ScrollLock",
+    "pause": "Pause",
+    "menu": "ContextMenu",
+    # Additional mappings for common variations
+    "/": "Divide",
+    "\\": "Backslash",
+    "capslock": "CapsLock",
+    "option": "Alt",  # Mac "option" maps to Alt
+    "super": "Meta",  # Mac "⌘" or Win "⊞"
+    "win": "Meta",
+}
+
+
+def translate_key(key: str) -> str:
+    """
+    Map CUA-style key strings to Playwright-compatible keys.
+    Reference: https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values
+    
+    Args:
+        key: The key string to translate
+        
+    Returns:
+        The Playwright-compatible key string
+    """
+    return CUA_KEY_TO_PLAYWRIGHT_KEY.get(key.lower(), key)
+
+================
+File: plugins/openai_computer_use/prompts.py
+================
+SYSTEM_PROMPT = """You are an OpenAI Computer-Using Agent with full power to control a web browser.
+You can see the screen and perform actions like clicking, typing, scrolling, and more.
+Your goal is to help the user accomplish their tasks by interacting with the web interface.
+
+When you need to perform an action:
+1. Carefully analyze the current state of the screen
+2. Decide on the most appropriate action to take
+3. Execute the action precisely
+
+Always explain what you're doing and why, and ask for clarification if needed.
+"""
+
+================
+File: plugins/openai_computer_use/tools.py
+================
+import asyncio
+import base64
+from typing import Dict, Any, List
+from playwright.async_api import Page
+import logging
+from .key_mapping import translate_key
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("openai_computer_use.tools")
+
+
+async def _execute_computer_action(page: Page, action: Dict[str, Any]) -> None:
+    """
+    Given a single computer action dict, do that action via Playwright.
+    No longer returns screenshot as that's handled by the caller.
+    """
+    action_type = action.get("type")
+    logger.info(f"Executing computer action: {action_type}")
+
+    # If the page or browser closed unexpectedly, short-circuit
+    if page.is_closed():
+        logger.warning("Page is already closed, skipping action")
+        return
+
+    try:
+        if action_type == "click":
+            x = action.get("x", 0)
+            y = action.get("y", 0)
+            button = action.get("button", "left")
+            logger.debug(f"Clicking at ({x}, {y}), button={button}")
+            await page.mouse.move(x, y)
+            await page.mouse.click(x, y, button=button)
+
+        elif action_type == "scroll":
+            x, y = action.get("x", 0), action.get("y", 0)
+            sx, sy = action.get("scroll_x", 0), action.get("scroll_y", 0)
+            logger.debug(f"Scrolling at ({x}, {y}) by ({sx}, {sy})")
+            await page.mouse.move(x, y)
+            await page.evaluate(f"window.scrollBy({sx}, {sy})")
+
+        elif action_type == "type":
+            text = action.get("text", "")
+            logger.debug(f"Typing text: {text[:50]} ...")
+            await page.keyboard.type(text)
+
+        elif action_type == "keypress":
+            keys = action.get("keys", [])
+            logger.debug(f"Pressing keys: {keys}")
+            for k in keys:
+                mapped_key = translate_key(k)
+                logger.debug(f"Mapped key '{k}' to '{mapped_key}'")
+                await page.keyboard.press(mapped_key)
+
+        elif action_type == "wait":
+            ms = action.get("ms", 1000)
+            logger.debug(f"Waiting {ms} ms")
+            await asyncio.sleep(ms / 1000)
+
+        elif action_type == "move":
+            x, y = action.get("x", 0), action.get("y", 0)
+            logger.debug(f"Moving to ({x}, {y})")
+            await page.mouse.move(x, y)
+
+        elif action_type == "drag":
+            path = action.get("path", [])
+            logger.debug(f"Dragging path with {len(path)} points")
+            if path:
+                first = path[0]
+                await page.mouse.move(first[0], first[1])
+                await page.mouse.down()
+                for pt in path[1:]:
+                    await page.mouse.move(pt[0], pt[1])
+                await page.mouse.up()
+
+        elif action_type == "back":
+            logger.debug("Navigating back in browser history")
+            await page.go_back()
+
+        elif action_type == "forward":
+            logger.debug("Navigating forward in browser history")
+            await page.go_forward()
+
+        elif action_type == "goto":
+            url = action.get("url")
+            if not url:
+                raise ValueError("URL is required for goto action")
+            logger.debug(f"Navigating to URL: {url}")
+            await page.goto(url, wait_until="networkidle")
+
+        elif action_type == "screenshot":
+            logger.debug("CUA requested screenshot action. No-op since screenshots are handled by caller.")
+
+        else:
+            logger.warning(f"Unknown action type: {action_type}")
+
+    except Exception as e:
+        logger.error(f"Error executing computer action '{action_type}': {e}")
+        raise
+
+
+def _create_tools() -> List[Dict[str, Any]]:
+    """
+    Return a list of 'tools' recognized by the CUA model, including the
+    'computer-preview' tool for environment AND navigation functions 
+    for URL navigation and browser history.
+    """
+    return [
+        # The required computer-preview tool:
+        {
+            "type": "computer-preview",
+            "display_width": 1280,
+            "display_height": 800,
+            "environment": "browser"
+        },
+        # Our custom 'goto' function tool:
+        {
+            "type": "function",
+            "name": "goto",
+            "description": "Navigate to a specific URL",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The fully-qualified URL to navigate to"
+                    }
+                },
+                "required": ["url"],
+                "additionalProperties": False
+            }
+        },
+        # Back navigation tool
+        {
+            "type": "function",
+            "name": "back",
+            "description": "Go back one page in browser history",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False
+            }
+        },
+        # Forward navigation tool
+        {
+            "type": "function",
+            "name": "forward",
+            "description": "Go forward one page in browser history",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False
+            }
+        },
+    ]
+
+
+def _make_cua_content_for_role(role: str, text: str) -> List[Dict[str, str]]:
+    """
+    Convert user/system vs assistant text into the correct format:
+      user/system -> input_text
+      assistant -> output_text
+    """
+    if role in ("user", "system"):
+        return [{"type": "input_text", "text": text}]
+    elif role == "assistant":
+        return [{"type": "output_text", "text": text}]
+    else:
+        # fallback if you have other roles
+        return [{"type": "input_text", "text": text}]
+
+================
+File: plugins/__init__.py
+================
+from enum import Enum, auto
+from typing import (
+    Callable,
+    List,
+    Mapping,
+    Any,
+    AsyncIterator,
+    TypedDict,
+    Union,
+    Optional,
+)
+from ..models import ModelConfig, ModelProvider
+from .base import base_agent
+from .claude_computer_use import claude_computer_use
+from .browser_use import browser_use_agent
+from .openai_computer_use import openai_computer_use_agent
+from ..utils.types import AgentSettings
+from .claude_computer_use.prompts import SYSTEM_PROMPT as CLAUDE_SYSTEM_PROMPT
+from .openai_computer_use.prompts import SYSTEM_PROMPT as OPENAI_SYSTEM_PROMPT
+
+# from .example_plugin import example_agent
+
+
+class WebAgentType(Enum):
+    BASE = "base"
+    EXAMPLE = "example"
+    CLAUDE_COMPUTER_USE = "claude_computer_use"
+    BROWSER_USE = "browser_use_agent"
+    OPENAI_COMPUTER_USE = "openai_computer_use_agent"
+
+
+class SettingType(Enum):
+    INTEGER = "integer"
+    FLOAT = "float"
+    TEXT = "text"
+    TEXTAREA = "textarea"
+
+
+class SettingConfig(TypedDict):
+    type: SettingType
+    default: Union[int, float, str]
+    min: Optional[Union[int, float]]
+    max: Optional[Union[int, float]]
+    step: Optional[Union[int, float]]
+    maxLength: Optional[int]
+    description: Optional[str]
+
+
+# Agent configurations
+AGENT_CONFIGS = {
+    # WebAgentType.BASE.value: {
+    #     "name": "Base Agent",
+    #     "description": "A simple agent with basic functionality",
+    #     "supported_models": [
+    #         {
+    #             "provider": ModelProvider.ANTHROPIC.value,
+    #             "models": ["claude-3-opus-20240229", "claude-3-sonnet-20240229"],
+    #         },
+    #         {
+    #             "provider": ModelProvider.OPENAI.value,
+    #             "models": ["gpt-4-turbo-preview", "gpt-4", "gpt-3.5-turbo"],
+    #         },
+    #     ],
+    #     "model_settings": {
+    #         "max_tokens": {
+    #             "type": SettingType.INTEGER.value,
+    #             "default": 1000,
+    #             "min": 1,
+    #             "max": 4096,
+    #             "description": "Maximum number of tokens to generate",
+    #         },
+    #         "temperature": {
+    #             "type": SettingType.FLOAT.value,
+    #             "default": 0.7,
+    #             "min": 0,
+    #             "max": 1,
+    #             "step": 0.1,
+    #             "description": "Controls randomness in the output",
+    #         },
+    #         "top_p": {
+    #             "type": SettingType.FLOAT.value,
+    #             "default": 0.9,
+    #             "min": 0,
+    #             "max": 1,
+    #             "step": 0.1,
+    #             "description": "Controls diversity via nucleus sampling",
+    #         },
+    #     },
+    #     "agent_settings": {},
+    # },
+    WebAgentType.BROWSER_USE.value: {
+        "name": "Browser Agent",
+        "description": "Agent with web browsing capabilities",
+        "supported_models": [
+            {
+                "provider": ModelProvider.OPENAI.value,
+                "models": ["gpt-4o", "gpt-4o-mini", "o1"],
+            },
+            {
+                "provider": ModelProvider.ANTHROPIC.value,
+                "models": ["claude-3-7-sonnet-latest", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"],
+            },
+            {
+                "provider": ModelProvider.GEMINI.value,
+                "models": [
+                    "gemini-2.0-flash",
+                    "gemini-1.5-pro"
+                ],
+            },
+            {
+                "provider": ModelProvider.DEEPSEEK.value,
+                "models": [
+                    "deepseek-chat",
+                    "deepseek-reasoner"
+                ],
+            },
+            {
+                "provider": ModelProvider.OLLAMA.value,
+                "models": [
+                    "llama3.3",
+                    "qwen2.5",
+                    "llama3",
+                    "mistral"
+                ],
+            },
+        ],
+        "model_settings": {
+            "max_tokens": {
+                "type": SettingType.INTEGER.value,
+                "default": 1000,
+                "min": 1,
+                "max": 4096,
+                "description": "Maximum number of tokens to generate",
+            },
+            "temperature": {
+                "type": SettingType.FLOAT.value,
+                "default": 0.7,
+                "min": 0,
+                "max": 1,
+                "step": 0.05,
+                "description": "Controls randomness in the output",
+            },
+            # "top_p": {
+            #     "type": SettingType.FLOAT.value,
+            #     "default": 0.9,
+            #     "min": 0,
+            #     "max": 1,
+            #     "step": 0.1,
+            #     "description": "Controls diversity via nucleus sampling",
+            # },
+        },
+        "agent_settings": {
+            "steps": {
+                "type": SettingType.INTEGER.value,
+                "default": 100,
+                "min": 10,
+                "max": 125,
+                "description": "Max number of steps to take",
+            },
+        },
+    },
+    WebAgentType.CLAUDE_COMPUTER_USE.value: {
+        "name": "Claude Computer Use",
+        "description": "Advanced agent with Claude-specific capabilities",
+        "supported_models": [
+            {
+                "provider": ModelProvider.ANTHROPIC_COMPUTER_USE.value,
+                "models": ["claude-3-5-sonnet-20241022"],
+            },
+            {
+                "provider": ModelProvider.ANTHROPIC.value,
+                "models": ["claude-3-7-sonnet-latest"],
+            }
+        ],
+        "model_settings": {
+            "max_tokens": {
+                "type": SettingType.INTEGER.value,
+                "default": 4090,
+                "min": 1,
+                "max": 4096,
+                "description": "Maximum number of tokens to generate",
+            },
+            "temperature": {
+                "type": SettingType.FLOAT.value,
+                "default": 0.6,
+                "min": 0,
+                "max": 1,
+                "step": 0.05,
+                "description": "Controls randomness in the output",
+            },
+            # "top_p": {
+            #     "type": SettingType.FLOAT.value,
+            #     "default": 0.9,
+            #     "min": 0,
+            #     "max": 1,
+            #     "step": 0.1,
+            #     "description": "Controls diversity via nucleus sampling",
+            # },
+        },
+        "agent_settings": {
+            "system_prompt": {
+                "type": SettingType.TEXTAREA.value,
+                "default": CLAUDE_SYSTEM_PROMPT,
+                "maxLength": 4000,
+                "description": "System prompt for the agent",
+            },
+            "num_images_to_keep": {
+                "type": SettingType.INTEGER.value,
+                "default": 10,
+                "min": 1,
+                "max": 50,
+                "description": "Number of images to keep in memory",
+            },
+            "wait_time_between_steps": {
+                "type": SettingType.INTEGER.value,
+                "default": 1,
+                "min": 0,
+                "max": 10,
+                "description": "Wait time between steps in seconds",
+            },
+        },
+    },
+    WebAgentType.OPENAI_COMPUTER_USE.value: {
+        "name": "OpenAI Computer Use",
+        "description": "Agent that uses OpenAI's Computer-Using Agent (CUA) via the /v1/responses API",
+        "supported_models": [
+            {
+                "provider": ModelProvider.OPENAI_COMPUTER_USE.value,
+                "models": ["computer-use-preview"],
+            }
+        ],
+        "model_settings": {
+            "max_tokens": {
+                "type": SettingType.INTEGER.value,
+                "default": 3000,
+                "min": 1,
+                "max": 4096,
+                "description": "Maximum tokens for the responses endpoint",
+            },
+            "temperature": {
+                "type": SettingType.FLOAT.value,
+                "default": 0.2,
+                "min": 0,
+                "max": 1,
+                "step": 0.05,
+                "description": "Optional temperature param for final assistant messages",
+            },
+        },
+        "agent_settings": {
+            "system_prompt": {
+                "type": SettingType.TEXTAREA.value,
+                "default": OPENAI_SYSTEM_PROMPT,
+                "maxLength": 4000,
+                "description": "Custom system prompt for the agent",
+            },
+            "num_images_to_keep": {
+                "type": SettingType.INTEGER.value,
+                "default": 10,
+                "min": 1,
+                "max": 50,
+                "description": "Number of images to keep in memory",
+            },
+            "wait_time_between_steps": {
+                "type": SettingType.INTEGER.value,
+                "default": 1,
+                "min": 0,
+                "max": 10,
+                "description": "Wait time between steps in seconds",
+            },
+            "max_steps": {
+                "type": SettingType.INTEGER.value,
+                "default": 30,
+                "min": 10,
+                "max": 50,
+                "description": "Maximum number of steps the agent can take",
+            }
+        },
+    },
+}
+
+
+def get_web_agent(
+    name: WebAgentType,
+) -> Callable[
+    [ModelConfig, AgentSettings, List[Mapping[str, Any]], str], AsyncIterator[str]
+]:
+    if name == WebAgentType.BASE:
+        return base_agent
+    elif name == WebAgentType.CLAUDE_COMPUTER_USE:
+        return claude_computer_use
+    elif name == WebAgentType.BROWSER_USE:
+        return browser_use_agent
+    elif name == WebAgentType.OPENAI_COMPUTER_USE:
+        return openai_computer_use_agent
+    else:
+        raise ValueError(f"Invalid agent type: {name}")
+
+
+__all__ = ["WebAgentType", "get_web_agent", "AGENT_CONFIGS"]
+
+================
+File: plugins/README.md
+================
+# Contributing a New Plugin
+
+Thank you for your interest in extending this AI project! A *plugin* is a self-contained system that can handle its own agent logic, custom tools, and any specialized processing. Below is how to get started.
+
+## 1. Folder Structure
+
+Within the `api/plugins/` folder, create a subfolder for your plugin. Example:
+```
+api/plugins/my_new_plugin/
+    ├── __init__.py
+    ├── agent.py
+    ├── tools.py
+    ├── processors.py
+    ├── router.py     (optional)
+    └── config.py     (optional)
+```
+
+- **agent.py**  
+  Your main "Agent" class or method. This class should take in user messages, decide if it needs to call tools, and produce a final response.
+
+- **tools.py**  
+  One or more functions or classes that perform actions. For instance, hitting a weather API, performing math, or interacting with a webpage.
+
+- **processors.py**  
+  Contains any logic to run after a tool completes, e.g. formatting the result, applying bounding boxes, or transforming data.
+
+- **router.py** (optional)  
+  If your plugin needs specific routes beyond the main chat route, you can define them here.
+
+- **config.py** (optional)  
+  If your plugin has unique environment variables or other configuration settings, place them here.
+
+## 2. Implementing the Plugin Agent
+
+- The agent should at least have a method (e.g. `handle_messages(messages: List[Message]) -> str`) that returns the final response text or data.
+- If it calls tools, the agent is responsible for receiving the tool output and integrating it into its final result.
+
+## 3. Example Flow
+
+1. **User sends a request** containing messages.  
+2. **Your agent** reads the messages, checks if it needs to call a tool.  
+3. **Tools** are invoked (if needed).  
+4. **Processors** can be applied to the tool output.  
+5. **Agent returns** final data or text.
+
+## 4. Using Your Plugin
+
+In the main code (e.g. `api/index.py`), you might import your plugin and choose to instantiate it based on user input or config:
+```python
+# pseudocode
+from .plugins.my_new_plugin.agent import MyNewAgent
+
+agent = MyNewAgent()
+result = agent.handle_messages(user_messages)
+return result
+```
+
+## 5. Tips
+
+- Keep dependencies minimal. If your plugin requires external libraries, list them separately so others can install them only if they want your plugin.  
+- Write tests if your plugin does something non-trivial.  
+- Try to keep plugin structure consistent so others can follow a common pattern.  
+
+**Happy building!**
+
+================
+File: utils/prompt.py
+================
+import json
+from pydantic import BaseModel
+from typing import Any, List, Mapping, Optional
+from .types import ToolInvocation
+from langchain_core.messages import BaseMessage, ChatMessage
+from langchain_core.messages import ToolMessage, AIMessage, HumanMessage
+from langchain_core.tools.structured import ToolCall
+
+
+class ClientAttachment(BaseModel):
+    url: str
+    contentType: str
+
+
+class ClientMessage(BaseModel):
+    role: str
+    content: str | List[str | Mapping[str, Any]]
+    experimental_attachments: Optional[List[ClientAttachment]] = None
+    toolInvocations: Optional[List[ToolInvocation]] = None
+
+
+def convert_to_chat_messages(messages: List[ClientMessage]):
+    chat_messages = []
+
+    for message in messages:
+        parts = []
+
+        parts.append({"type": "text", "text": message.content})
+
+        if message.experimental_attachments:
+            for attachment in message.experimental_attachments:
+                if attachment.contentType.startswith("image"):
+                    parts.append(
+                        {"type": "image_url", "image_url": {"url": attachment.url}}
+                    )
+
+                elif attachment.contentType.startswith("text"):
+                    parts.append({"type": "text", "text": attachment.url})
+
+        if message.toolInvocations:
+            tool_calls = [
+                {
+                    "id": tool_invocation.toolCallId,
+                    "type": "function",
+                    "function": {
+                        "name": tool_invocation.toolName,
+                        "arguments": json.dumps(tool_invocation.args),
+                    },
+                }
+                for tool_invocation in message.toolInvocations
+            ]
+
+            chat_messages.append({"role": "assistant", "tool_calls": tool_calls})
+
+            tool_results = [
+                {
+                    "role": "tool",
+                    "content": json.dumps(tool_invocation.result),
+                    "tool_call_id": tool_invocation.toolCallId,
+                }
+                for tool_invocation in message.toolInvocations
+            ]
+
+            chat_messages.extend(tool_results)
+
+            continue
+
+        chat_messages.append({"role": message.role, "content": parts})
+
+    return chat_messages
+
+
+def convert_to_base_messages(messages: List[ClientMessage]) -> List[BaseMessage]:
+    chat_messages = convert_to_chat_messages(messages)
+    return [BaseMessage(**message) for message in chat_messages]
+
+
+def chat_dict_to_chat_messages(messages: List[Mapping[str, Any]]) -> List[ChatMessage]:
+    return [
+        ChatMessage(role=message["role"], content=message["content"])
+        for message in messages
+    ]
+
+
+def chat_dict_to_base_messages(messages: List[Mapping[str, Any]]) -> List[BaseMessage]:
+    def extract_content(content_array):
+        if isinstance(content_array, list):
+            # Extract text from content array with type/text structure
+            return " ".join(
+                item["text"] for item in content_array if item["type"] == "text"
+            )
+        return content_array
+
+    return [
+        (
+            ToolMessage(
+                tool_call_id=message["tool_call_id"],
+                content=json.loads(message["content"]),
+            )
+            if message["role"] == "tool"
+            else (
+                AIMessage(
+                    content=extract_content(message.get("content", "")),
+                    tool_calls=[
+                        ToolCall(
+                            id=tool["id"],
+                            type=tool["type"],
+                            name=tool["function"]["name"],
+                            args=json.loads(tool["function"]["arguments"]),
+                        )
+                        for tool in message["tool_calls"]
+                    ],
+                )
+                if message["role"] == "assistant" and "tool_calls" in message
+                else (
+                    AIMessage(content=message["content"])
+                    if message["role"] == "assistant"
+                    else HumanMessage(content=message["content"])
+                )
+            )
+        )
+        for message in messages
+    ]
+
+================
+File: utils/types.py
+================
+from pydantic import BaseModel, Field
+from typing import List, Mapping, Any, Optional
+
+
+class ToolInvocation(BaseModel):
+    toolCallId: str
+    toolName: str
+    args: Mapping[str, Any]
+    result: str | List[Mapping[str, Any]]
+
+
+class AgentSettings(BaseModel):
+    # General settings
+    system_prompt: Optional[str] = None
+    
+    # Image and timing settings
+    num_images_to_keep: Optional[int] = Field(default=10, ge=1, le=50)
+    wait_time_between_steps: Optional[int] = Field(default=1, ge=0, le=10)
+    
+    # Step control
+    max_steps: Optional[int] = Field(default=30, ge=10, le=50)
+    
+    # Legacy field for backward compatibility
+    steps: Optional[int] = None  # Deprecated in favor of max_steps
+
+
+class ModelSettings(BaseModel):
+    model_choice: str
+    max_tokens: int = Field(default=1000, ge=1, le=4096)
+    temperature: float = Field(default=0.7, ge=0, le=1)
+    top_p: float = Field(default=0.9, ge=0, le=1)
+    top_k: Optional[int] = None
+    frequency_penalty: Optional[float] = None
+    presence_penalty: Optional[float] = None
+
+================
+File: Dockerfile
+================
+# Stage 1: Build stage
+FROM python:3.11-slim AS builder
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies required for building Python packages
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Stage 2: Runtime stage
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies required for Playwright
+RUN apt-get update && apt-get install -y \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy installed dependencies from builder stage
+COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
+
+# Copy api code
+COPY ./api /app/api
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PORT=8000
+ENV HOST=0.0.0.0
+
+# Expose the port
+EXPOSE 8000
+
+# Start the application
+CMD uvicorn api.index:app --host $HOST --port $PORT
+
+================
+File: index.py
+================
+from dotenv import load_dotenv
+from fastapi import FastAPI, Response, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from .schemas import ChatRequest, SessionRequest
+from .utils.prompt import convert_to_chat_messages
+from .models import ModelConfig
+from .plugins import WebAgentType, get_web_agent, AGENT_CONFIGS
+from .streamer import stream_vercel_format
+from api.middleware.profiling_middleware import ProfilingMiddleware
+from pydantic import BaseModel
+from typing import List
+import os
+import asyncio
+import subprocess
+import re
+
+# 1) Import the Steel client
+try:
+    from steel import Steel
+except ImportError:
+    raise ImportError("Please install the steel package: pip install steel")
+
+
+load_dotenv(".env.local")
+
+app = FastAPI()
+app.add_middleware(ProfilingMiddleware) # Uncomment this when profiling is not needed
+STEEL_API_KEY = os.getenv("STEEL_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+STEEL_API_URL = os.getenv("STEEL_API_URL")
+
+# 2) Initialize the Steel client
+#    Make sure your STEEL_API_KEY is set as an environment variable
+steel_client = Steel(steel_api_key=STEEL_API_KEY, base_url=STEEL_API_URL)
+
+origins = [
+    "http://localhost",
+    "http://localhost:8080",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.post("/api/sessions", tags=["Sessions"])
+async def create_session(request: SessionRequest):
+    """
+    Creates a new session.
+    """
+    if request.agent_type == WebAgentType.CLAUDE_COMPUTER_USE:
+        return steel_client.sessions.create(
+            dimensions={
+                "width": 1280,
+                "height": 800,
+            },
+            api_timeout=request.timeout * 1000,
+        )
+    else:
+        return steel_client.sessions.create(
+            api_timeout=request.timeout * 1000,
+        )
+
+
+@app.post("/api/sessions/{session_id}/release", tags=["Sessions"])
+async def release_session(session_id: str):
+    """
+    Releases a session. Returns success even if session is already released.
+    """
+    try:
+        return steel_client.sessions.release(session_id)
+    except Exception as e:
+        # Return success response even if session was already released
+        if "Session already stopped" in str(e):
+            return {"status": "success", "message": "Session released"}
+        raise e
+
+
+@app.post("/api/chat", tags=["Chat"])
+async def handle_chat(request: ChatRequest):
+    """
+    This endpoint accepts a chat request, instantiates an agent,
+    and then streams the response in the Vercel AI Data Stream Protocol format.
+    """
+    try:
+        messages = request.messages
+        chat_messages = convert_to_chat_messages(messages)
+
+        if not request.session_id:
+            return Response(
+                status_code=400,
+                content="Session ID is required",
+                media_type="text/plain",
+            )
+
+        model_config_args = {
+            "provider": request.provider,
+            "model_name": request.model_settings.model_choice,
+            "api_key": request.api_key,
+        }
+
+        if hasattr(request.model_settings, "temperature"):
+            model_config_args["temperature"] = request.model_settings.temperature
+        if hasattr(request.model_settings, "max_tokens"):
+            model_config_args["max_tokens"] = request.model_settings.max_tokens
+        if hasattr(request.model_settings, "top_p"):
+            model_config_args["top_p"] = request.model_settings.top_p
+        if hasattr(request.model_settings, "top_k"):
+            model_config_args["top_k"] = request.model_settings.top_k
+        if hasattr(request.model_settings, "frequency_penalty"):
+            model_config_args["frequency_penalty"] = (
+                request.model_settings.frequency_penalty
+            )
+        if hasattr(request.model_settings, "presence_penalty"):
+            model_config_args["presence_penalty"] = (
+                request.model_settings.presence_penalty
+            )
+
+        model_config = ModelConfig(**model_config_args)
+
+        web_agent = get_web_agent(request.agent_type)
+
+        # Create a FastAPI-level cancel event
+        cancel_event = asyncio.Event()
+
+        async def on_disconnect():
+            # When the client disconnects, set cancel_event
+            cancel_event.set()
+
+        # Pass cancel_event explicitly to the agent only if you want cancellation support
+        web_agent_stream = web_agent(
+            model_config=model_config,
+            agent_settings=request.agent_settings,
+            history=chat_messages,
+            session_id=request.session_id,
+            # Only base_agent really uses it for now
+            cancel_event=cancel_event,
+        )
+
+        # Directly wrap the agent stream with the Vercel AI format
+        streaming_response = stream_vercel_format(
+            stream=web_agent_stream,
+        )
+
+        # Use background=on_disconnect to catch client-aborted requests
+        response = StreamingResponse(
+            streaming_response, background=on_disconnect)
+        response.headers["x-vercel-ai-data-stream"] = "v1"
+        # response.headers["model_used"] = request.model_name
+        return response
+    except Exception as e:
+        # Format error for frontend consumption
+        error_response = {
+            "error": {
+                "message": str(e),
+                "type": type(e).__name__,
+                "code": getattr(e, "code", 500),
+            }
+        }
+        raise HTTPException(status_code=getattr(
+            e, "code", 500), detail=error_response)
+
+
+@app.get("/api/agents", tags=["Agents"])
+async def get_available_agents():
+    """
+    Returns all available agents and their configurations.
+    """
+    return AGENT_CONFIGS
+
+
+@app.get("/healthcheck", tags=["System"])
+async def healthcheck():
+    """
+    Simple health check endpoint to verify the API is running.
+    """
+    return {"status": "ok"}
+
+
+# Define response models for Ollama models endpoint
+class OllamaModel(BaseModel):
+    tag: str
+    base_name: str
+
+class OllamaModelsResponse(BaseModel):
+    models: List[OllamaModel]
+
+@app.get("/api/ollama/models", response_model=OllamaModelsResponse, tags=["Ollama"])
+async def get_ollama_models():
+    """
+    Fetches available models from a local Ollama instance using the 'ollama list' command.
+    
+    Returns:
+        A list of model objects with full tags and base names that can be used with Ollama.
+        
+    Example response:
+        {
+            "models": [
+                {
+                    "tag": "llama2:7b",
+                    "base_name": "llama2"
+                },
+                {
+                    "tag": "mistral:7b",
+                    "base_name": "mistral"
+                }
+            ]
+        }
+    """
+    try:
+        result = subprocess.run(
+            ["ollama", "list"], 
+            capture_output=True, 
+            text=True, 
+            check=True
+        )
+        
+        models = []
+        lines = result.stdout.strip().split('\n')
+        
+        if lines and "NAME" in lines[0] and "ID" in lines[0]:
+            lines = lines[1:]
+        
+        for line in lines:
+            if line.strip():
+                parts = re.split(r'\s{2,}', line.strip())
+                if parts and parts[0]:
+                    full_tag = parts[0]
+                    base_name = full_tag.split(':')[0] if ':' in full_tag else full_tag
+                    models.append({
+                        "tag": full_tag,
+                        "base_name": base_name
+                    })
+        
+        return {"models": models}
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to fetch Ollama models: {e.stderr}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error fetching Ollama models: {str(e)}"
+        )
+
+================
+File: models.py
+================
+from enum import Enum
+from typing import Optional
+
+
+class ModelProvider(str, Enum):
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+    ANTHROPIC_COMPUTER_USE = "anthropic_computer_use"
+    OPENAI_COMPUTER_USE = "openai_computer_use"
+    GEMINI = "gemini"
+    DEEPSEEK = "deepseek"
+    OLLAMA = "ollama"
+    # OPENROUTER = "openrouter"
+    # GOOGLE = "google"
+
+
+class ModelConfig:
+    """
+    A class representing configuration details for different LLM providers.
+    Extend this to add more providers or model versions in the future.
+    """
+
+    def __init__(
+        self,
+        provider: ModelProvider,
+        model_name: str,
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        top_k: Optional[int] = None,
+        top_p: Optional[float] = None,
+        frequency_penalty: Optional[float] = None,
+        presence_penalty: Optional[float] = None,
+        api_key: Optional[str] = None,
+        **kwargs,
+    ):
+        self.provider = provider
+        self.model_name = model_name or ModelConfig.default_model(provider)
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.extra_params = kwargs
+        self.top_k = top_k
+        self.top_p = top_p
+        self.frequency_penalty = frequency_penalty
+        self.presence_penalty = presence_penalty
+        self.api_key = api_key
+
+    def __repr__(self):
+        return (
+            f"ModelConfig(provider={self.provider}, "
+            f"model_name={self.model_name}, "
+            f"temperature={self.temperature}, "
+            f"max_tokens={self.max_tokens}, "
+            f"extras={self.extra_params}, "
+            f"top_k={self.top_k}, "
+            f"top_p={self.top_p}, "
+            f"frequency_penalty={self.frequency_penalty}, "
+            f"presence_penalty={self.presence_penalty}, "
+            f"api_key={'[SET]' if self.api_key else '[NOT SET]'})"
+        )
+
+    def model_dump(self):
+        return {
+            "provider": self.provider,
+            "model_name": self.model_name,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "top_k": self.top_k,
+            "top_p": self.top_p,
+            "frequency_penalty": self.frequency_penalty,
+            "presence_penalty": self.presence_penalty,
+            **self.extra_params,
+        }
+
+    @staticmethod
+    def default_model(provider: ModelProvider) -> str:
+        """
+        Returns a default model for each provider.
+        """
+        default_models = {
+            ModelProvider.OPENAI: "gpt-4o-mini",
+            ModelProvider.ANTHROPIC: "claude-3-7-sonnet-latest",
+            ModelProvider.ANTHROPIC_COMPUTER_USE: "claude-3-5-sonnet-20241022",
+            ModelProvider.OPENAI_COMPUTER_USE: "computer-use-preview",
+            ModelProvider.GEMINI: "gemini-2.0-flash",
+            ModelProvider.DEEPSEEK: "deepseek-chat",
+            ModelProvider.OLLAMA: "llama3.3",
+        }
+        return default_models.get(provider) or ValueError("Unsupported provider.")
+
+================
+File: providers.py
+================
+from typing import Any
+from anthropic import Client
+from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
+from langchain_core.language_models.chat_models import BaseChatModel
+from .models import ModelConfig, ModelProvider
+from typing import Sequence, Union, Dict, Type, Callable, Any
+from langchain_core.tools import BaseTool
+from langchain_anthropic.chat_models import convert_to_anthropic_tool
+from functools import cached_property
+import anthropic
+import os
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_ollama import ChatOllama
+from pydantic import SecretStr
+
+
+class BetaChatAnthropic(ChatAnthropic):
+    """ChatAnthropic that uses the beta.messages endpoint for computer-use."""
+
+    @cached_property
+    def _client(self) -> anthropic.Client:
+        client = super()._client
+        # Force use of beta client for all messages
+        client.messages = client.beta.messages
+        return client
+
+    @cached_property
+    def _async_client(self) -> anthropic.AsyncClient:
+        client = super()._async_client
+        # Force use of beta client for all messages
+        client.messages = client.beta.messages
+        return client
+
+    def bind_tools(
+        self,
+        tools: Sequence[Union[Dict[str, Any], Type, Callable, BaseTool]],
+        **kwargs: Any,
+    ):
+        """Override bind_tools to handle Anthropic-specific tool formats"""
+        # Pass tools directly if they're in Anthropic format
+        anthropic_tools = []
+        for tool in tools:
+            if isinstance(tool, dict) and "type" in tool:
+                # Already in Anthropic format, pass through
+                anthropic_tools.append(tool)
+            else:
+                # Use default conversion for standard tools
+                anthropic_tools.append(convert_to_anthropic_tool(tool))
+
+        return super().bind(tools=anthropic_tools, **kwargs)
+
+
+def create_llm(config: ModelConfig) -> tuple[BaseChatModel | Client, bool]:
+    """
+    Returns a tuple containing:
+    1. The appropriate LangChain LLM object based on the ModelConfig provider
+    2. A boolean indicating whether vision should be used (False for DeepSeek, True for others)
+    """
+    if config.provider == ModelProvider.OPENAI:
+        return ChatOpenAI(
+            model_name=config.model_name or "gpt-4o-mini",
+            temperature=config.temperature,
+            max_tokens=config.max_tokens,
+            api_key=(
+                os.getenv("OPENAI_API_KEY") if not config.api_key else config.api_key
+            ),
+            **config.extra_params,
+        ), True
+    elif config.provider == ModelProvider.ANTHROPIC:
+        return ChatAnthropic(
+            model=config.model_name or "claude-3-7-sonnet-latest",
+            max_tokens_to_sample=config.max_tokens,
+            temperature=config.temperature,
+            api_key=(
+                os.getenv("ANTHROPIC_API_KEY") if not config.api_key else config.api_key
+            ),
+            **config.extra_params,
+        ), True
+    elif config.provider == ModelProvider.ANTHROPIC_COMPUTER_USE:
+        return BetaChatAnthropic(
+            model=config.model_name or "claude-3-5-sonnet-20241022",
+            max_tokens_to_sample=config.max_tokens,
+            temperature=config.temperature,
+            anthropic_api_key=(
+                os.getenv("ANTHROPIC_API_KEY") if not config.api_key else config.api_key
+            ),
+            **config.extra_params,
+        ), True
+    elif config.provider == ModelProvider.GEMINI:
+        return ChatGoogleGenerativeAI(
+            model=config.model_name or "gemini-2.0-flash",
+            temperature=config.temperature,
+            max_output_tokens=config.max_tokens,
+            google_api_key=(
+                os.getenv("GOOGLE_API_KEY") if not config.api_key else config.api_key
+            ),
+            **config.extra_params,
+        ), True
+    elif config.provider == ModelProvider.DEEPSEEK:
+        api_key = config.api_key or os.getenv("DEEPSEEK_API_KEY", "")
+        
+        return ChatOpenAI(
+            base_url="https://api.deepseek.com/v1",
+            model_name=config.model_name or "deepseek-chat",
+            temperature=config.temperature,
+            max_tokens=config.max_tokens,
+            api_key=SecretStr(api_key),
+            **config.extra_params,
+        ), False
+    elif config.provider == ModelProvider.OLLAMA:
+        # Extract base model name if it contains a tag (e.g., "qwen2.5:32b" -> "qwen2.5")
+        model_name = config.model_name or "llama3.3"
+        base_model_name = model_name.split(':')[0] if ':' in model_name else model_name
+        
+        return ChatOllama(
+            model=base_model_name,  # Use the base model name without tags
+            temperature=config.temperature,
+            num_ctx=config.extra_params.get("num_ctx", 32000),
+            # Ollama connects to a local instance and doesn't require an API key
+            **{k: v for k, v in config.extra_params.items() if k != "num_ctx"},
+        ), True
+    else:
+        raise ValueError(f"Unsupported provider: {config.provider}")
+
+================
+File: schemas.py
+================
+from api.plugins import WebAgentType
+from .utils.prompt import ClientMessage
+from pydantic import BaseModel
+from typing import List, Optional
+from .models import ModelProvider
+from .utils.types import AgentSettings, ModelSettings
+
+
+class SessionRequest(BaseModel):
+    agent_type: WebAgentType
+    api_key: Optional[str] = None
+    timeout: Optional[int] = 90000
+
+
+class ChatRequest(BaseModel):
+    session_id: str
+    agent_type: WebAgentType
+    provider: ModelProvider = ModelProvider.ANTHROPIC
+    messages: List[ClientMessage]
+    api_key: str = ""
+    agent_settings: AgentSettings
+    model_settings: ModelSettings
+
+================
+File: streamer.py
+================
+import json
+from typing import AsyncGenerator
+
+"""
+This file contains logic to convert the stream of tokens or partial responses
+from LangChain into a Vercel AI Data Stream Protocol format.
+
+We'll define a AsyncGenerator function that yields lines in the correct format.
+For a reference on the protocol, see:
+https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
+"""
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+async def stream_vercel_format(
+    stream: AsyncGenerator[str, None],
+) -> AsyncGenerator[str, None]:
+    """
+    stream: yields partial text chunks from the LLM in the Vercel AI Data Stream Protocol format
+    """
+
+    draft_tool_calls = {}
+    pending_tool_calls = set()
+
+    try:
+        async for chunk in stream:
+
+            if isinstance(chunk, dict) and chunk.get("stop"):
+                yield 'e:{{"finishReason":"{reason}","usage":{{"promptTokens":{prompt},"completionTokens":{completion}}}}}\n'.format(
+                    reason="tool-calls",
+                    prompt=0,
+                    completion=0,
+                )
+
+            # Handle tool call chunks
+            if hasattr(chunk, "tool_call_chunks") and chunk.tool_call_chunks:
+                for tool_chunk in chunk.tool_call_chunks:
+                    index = tool_chunk.get("index")
+                    # extra debugging
+                    # print("DEBUG: Tool chunk details:", tool_chunk)
+                    if index is not None:
+                        # Initialize new tool call if needed
+                        if index not in draft_tool_calls and tool_chunk.get("id"):
+                            draft_tool_calls[index] = {
+                                "id": tool_chunk["id"],
+                                "name": tool_chunk["name"],
+                                "arguments": "",
+                            }
+                            pending_tool_calls.add(tool_chunk["id"])
+
+                        # Append arguments if they exist
+                        if tool_chunk.get("args") and index in draft_tool_calls:
+                            draft_tool_calls[index]["arguments"] += tool_chunk["args"]
+
+                            # If we have a complete tool call (has id, name and arguments), emit it
+                            tool_call = draft_tool_calls[index]
+                            if (
+                                tool_call["id"]
+                                and tool_call["name"]
+                                and tool_call["arguments"]
+                            ):
+                                try:
+                                    # Validate it's valid JSON before emitting
+                                    json.loads(tool_call["arguments"])
+
+                                    yield '9:{{"toolCallId":"{id}","toolName":"{name}","args":{args}}}\n'.format(
+                                        id=tool_call["id"],
+                                        name=tool_call["name"],
+                                        args=tool_call["arguments"],
+                                    )
+                                except json.JSONDecodeError:
+                                    # Arguments not complete yet, continue gathering
+                                    print(
+                                        "DEBUG: Arguments not complete yet, continuing"
+                                    )
+
+            # Handle full tool calls
+            elif hasattr(chunk, "tool_calls") and chunk.tool_calls:
+                if hasattr(chunk, "content"):
+                    if isinstance(chunk.content, list):
+                        for item in chunk.content:
+                            if item.get("type") == "text":
+                                yield f"0:{json.dumps(item['text'])}\n"
+                    else:
+                        yield f"0:{json.dumps(chunk.content)}\n"
+                for tool_call in chunk.tool_calls:
+                    logger.info(f"Emitting tool call: {tool_call.get('id')}")
+                    pending_tool_calls.add(tool_call.get("id"))
+                    yield f'9:{{"toolCallId":"{tool_call.get("id")}","toolName":"{tool_call.get("name")}","args":{json.dumps(tool_call.get("args"))}}}\n'
+
+            # Handle tool call results (that are not tool_call_chunks)
+            elif hasattr(chunk, "tool_call_id") and chunk.tool_call_id:
+                logger.info(f"Found tool_call_id: {chunk.tool_call_id}")
+                logger.info(f"Emitting tool result for: {chunk.tool_call_id}")
+                # Only try to remove if it exists in the set
+                if chunk.tool_call_id in pending_tool_calls:
+                    pending_tool_calls.remove(chunk.tool_call_id)
+                yield f'a:{{"toolCallId":"{chunk.tool_call_id}","result":{json.dumps(chunk.content)}}}\n'
+
+                # Check if this is the last tool result by looking at stop_reason
+                if len(pending_tool_calls) == 0:
+                    draft_tool_calls = {}
+                    logger.info(f"Emitting finish reason after final tool result")
+                    yield 'e:{{"finishReason":"{reason}","usage":{{"promptTokens":{prompt},"completionTokens":{completion}}}}}\n'.format(
+                        reason="tool-calls",
+                        prompt=0,
+                        completion=0,
+                    )
+
+            # Handle regular text content
+            elif hasattr(chunk, "content") and chunk.content:
+                # print("DEBUG: Found text content:", chunk.content)
+                if isinstance(chunk.content, list):
+                    for item in chunk.content:
+                        if item.get("type") == "text":
+                            yield f"0:{json.dumps(item['text'])}\n"
+                else:
+                    yield f"0:{json.dumps(chunk.content)}\n"
+    except Exception as e:
+        yield f"3:{json.dumps(e.__str__())}\n"
+    finally:
+        finish_reason = "stop"
+        # Yield the final finish part
+        usage_obj = {
+            "promptTokens": 0,
+            "completionTokens": 0,
+        }
+        yield f"e:{json.dumps({'finishReason': finish_reason, 'usage': usage_obj, 'isContinued': False})}\n"
+
+
+
+================================================================
+End of Codebase
+================================================================

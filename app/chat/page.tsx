@@ -760,29 +760,87 @@ export default function ChatPage() {
                         <div className="flex w-full max-w-full flex-col gap-4 break-words text-base text-[--gray-12]">
                           {/* Check if this is a special message */}
                           {(() => {
-                            const isSpecialMessage =
-                              (message.content &&
-                                (message.content.includes("*Memory*:") ||
-                                  message.content.includes("*Next Goal*:") ||
-                                  message.content.includes("*Previous Goal*:"))) ||
-                              (message.toolInvocations && message.toolInvocations.length > 0);
                             const hasToolInvocations =
                               message.toolInvocations && message.toolInvocations.length > 0;
-                            const isSpecial = isSpecialMessage || hasToolInvocations;
 
-                            // Find consecutive special messages
+                            // Check for memory or goal messages first
+                            const isMemoryOrGoalMessage =
+                              message.content &&
+                              (message.content.includes("*Memory*:") ||
+                                message.content.includes("*Next Goal*:") ||
+                                message.content.includes("*Previous Goal*:"));
+
+                            // Regular tool invocations (but not pause tools)
+                            const isRegularToolMessage =
+                              hasToolInvocations &&
+                              !message.toolInvocations?.some(
+                                tool => tool.toolName === "pause_execution"
+                              );
+
+                            // Check for special message (either memory/goal or regular tool, but not pause)
+                            const isSpecial = isMemoryOrGoalMessage || isRegularToolMessage;
+
+                            // Check for pause message specifically
+                            const pauseToolCall = message.toolInvocations?.find(
+                              tool => tool.toolName === "pause_execution"
+                            );
+                            const isPauseMessage =
+                              hasToolInvocations &&
+                              message.toolInvocations?.length === 1 &&
+                              !!pauseToolCall;
+
+                            if (isPauseMessage && pauseToolCall) {
+                              return (
+                                <div className="flex w-full max-w-full flex-col gap-4">
+                                  <div className="flex flex-col gap-4">
+                                    <div className="font-normal text-[--gray-12]">
+                                      <MarkdownText content={pauseToolCall.args?.reason || ""} />
+                                    </div>
+                                    <div className="flex gap-3">
+                                      <Button
+                                        onClick={handleResume}
+                                        className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-12] hover:text-white"
+                                      >
+                                        Take Control
+                                      </Button>
+                                      <Button
+                                        onClick={handleResume}
+                                        variant="outline"
+                                        className="rounded-full bg-[--gray-3] px-6 py-3 text-base font-medium text-[--gray-11] transition-colors hover:bg-[--gray-4]"
+                                      >
+                                        Keep Going
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            // Find consecutive special messages (memory/goal or regular tool)
                             let specialMessagesGroup = [];
                             if (isSpecial) {
                               let i = index;
                               while (i < messages.length) {
                                 const nextMessage = messages[i];
-                                const isNextSpecial =
-                                  (nextMessage.content &&
-                                    (nextMessage.content.includes("*Memory*:") ||
-                                      nextMessage.content.includes("*Next Goal*:") ||
-                                      nextMessage.content.includes("*Previous Goal*:"))) ||
-                                  (nextMessage.toolInvocations &&
-                                    nextMessage.toolInvocations.length > 0);
+                                // Check if next message is a memory/goal message
+                                const isNextMemoryOrGoal =
+                                  nextMessage.content &&
+                                  (nextMessage.content.includes("*Memory*:") ||
+                                    nextMessage.content.includes("*Next Goal*:") ||
+                                    nextMessage.content.includes("*Previous Goal*:"));
+
+                                // Check if next message is a regular tool message
+                                const hasNextToolInvocations =
+                                  nextMessage.toolInvocations &&
+                                  nextMessage.toolInvocations.length > 0;
+                                const isNextRegularTool =
+                                  hasNextToolInvocations &&
+                                  !nextMessage.toolInvocations?.some(
+                                    tool => tool.toolName === "pause_execution"
+                                  );
+
+                                // Group both types
+                                const isNextSpecial = isNextMemoryOrGoal || isNextRegularTool;
 
                                 if (!isNextSpecial) break;
                                 specialMessagesGroup.push(nextMessage);
@@ -793,79 +851,67 @@ export default function ChatPage() {
                             // Skip if this message is part of a group but not the first one
                             if (isSpecial && index > 0) {
                               const prevMessage = messages[index - 1];
-                              const isPrevSpecial =
-                                (prevMessage.content &&
-                                  (prevMessage.content.includes("*Memory*:") ||
-                                    prevMessage.content.includes("*Next Goal*:") ||
-                                    prevMessage.content.includes("*Previous Goal*:"))) ||
-                                (prevMessage.toolInvocations &&
-                                  prevMessage.toolInvocations.length > 0);
+
+                              // Check if previous message is a memory/goal message
+                              const isPrevMemoryOrGoal =
+                                prevMessage.content &&
+                                (prevMessage.content.includes("*Memory*:") ||
+                                  prevMessage.content.includes("*Next Goal*:") ||
+                                  prevMessage.content.includes("*Previous Goal*:"));
+
+                              // Check if previous message is a regular tool message
+                              const hasPrevToolInvocations =
+                                prevMessage.toolInvocations &&
+                                prevMessage.toolInvocations.length > 0;
+                              const isPrevRegularTool =
+                                hasPrevToolInvocations &&
+                                !prevMessage.toolInvocations?.some(
+                                  tool => tool.toolName === "pause_execution"
+                                );
+
+                              // Both types can be part of a group
+                              const isPrevSpecial = isPrevMemoryOrGoal || isPrevRegularTool;
+
                               if (isPrevSpecial) return null;
                             }
 
-                            return isSpecial ? (
-                              <div className="flex w-full max-w-full flex-col gap-2 rounded-[1.25rem] border border-[--gray-3] bg-[--gray-1] p-2">
-                                <div className="flex flex-col gap-2">
-                                  {specialMessagesGroup.map((groupMessage, groupIndex) => (
-                                    <React.Fragment key={groupMessage.id}>
-                                      {groupMessage.content && (
-                                        <div className="w-full">
-                                          <MarkdownText content={groupMessage.content} />
-                                        </div>
-                                      )}
-                                      {groupMessage.toolInvocations &&
-                                        groupMessage.toolInvocations.length > 0 && (
-                                          <div className="flex w-full flex-col gap-2">
-                                            {groupMessage.toolInvocations.map((tool, toolIndex) => (
-                                              <React.Fragment key={toolIndex}>
-                                                {tool.toolName === "pause_execution" ? (
-                                                  <div className="flex w-full max-w-full flex-col gap-3 rounded-xl border border-[--gray-3] bg-[--gray-2] p-4">
-                                                    <div className="flex flex-col gap-1">
-                                                      <h3 className="font-geist text-sm font-medium text-[--gray-12]">
-                                                        {isPaused
-                                                          ? "Take control"
-                                                          : "Control released"}
-                                                      </h3>
-                                                      <p className="font-geist text-sm text-[--gray-11]">
-                                                        {isPaused
-                                                          ? pauseReason
-                                                          : "Execution resumed"}
-                                                      </p>
-                                                    </div>
-                                                    <Button
-                                                      variant="outline"
-                                                      size="sm"
-                                                      className={`h-8 w-fit rounded-full ${
-                                                        isPaused
-                                                          ? "border-[--green-6] bg-[--green-3] text-[--green-11] hover:bg-[--green-4]"
-                                                          : "border-[--gray-3] bg-[--gray-2] text-[--gray-8]"
-                                                      }`}
-                                                      onClick={handleResume}
-                                                      disabled={!isPaused}
-                                                    >
-                                                      <PlayIcon className="size-4" />
-                                                      <span className="px-1 font-geist">
-                                                        Resume
-                                                      </span>
-                                                    </Button>
-                                                  </div>
-                                                ) : (
-                                                  <div className="flex w-full items-center justify-between rounded-2xl border border-[--gray-3] bg-[--gray-2] p-3">
+                            if (isSpecial) {
+                              return (
+                                <div className="flex w-full max-w-full flex-col gap-2 rounded-[1.25rem] border border-[--gray-3] bg-[--gray-1] p-4">
+                                  <div className="flex flex-col gap-2">
+                                    {specialMessagesGroup.map((groupMessage, groupIndex) => (
+                                      <React.Fragment key={groupMessage.id}>
+                                        {groupMessage.content && (
+                                          <div className="w-full">
+                                            <MarkdownText content={groupMessage.content} />
+                                          </div>
+                                        )}
+                                        {groupMessage.toolInvocations &&
+                                          groupMessage.toolInvocations.length > 0 && (
+                                            <div className="flex w-full flex-col gap-2">
+                                              {groupMessage.toolInvocations.map(
+                                                (tool, toolIndex) => (
+                                                  <div
+                                                    key={toolIndex}
+                                                    className="flex w-full items-center justify-between rounded-2xl bg-[--gray-2] p-3"
+                                                  >
                                                     <ToolInvocations
                                                       toolInvocations={[tool]}
                                                       onImageClick={handleImageClick}
                                                     />
                                                   </div>
-                                                )}
-                                              </React.Fragment>
-                                            ))}
-                                          </div>
-                                        )}
-                                    </React.Fragment>
-                                  ))}
+                                                )
+                                              )}
+                                            </div>
+                                          )}
+                                      </React.Fragment>
+                                    ))}
+                                  </div>
                                 </div>
-                              </div>
-                            ) : message.content ? (
+                              );
+                            }
+
+                            return message.content ? (
                               <div className="w-full max-w-full whitespace-pre-wrap break-words">
                                 <MarkdownText content={message.content} />
                               </div>

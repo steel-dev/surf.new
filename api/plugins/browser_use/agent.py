@@ -65,15 +65,20 @@ async def pause_execution(reason: str) -> str:
     controller.agent.pause()
     return "Agent paused"
 
+# Add a global to track resume state
+_agent_resumed = False
+
 class ResumeRequest(BaseModel):
     session_id: str
 
 async def resume_execution(request: ResumeRequest) -> dict:
     """API endpoint to resume agent execution."""
+    global _agent_resumed
     if not controller.agent:
         return {"status": "error", "message": "No agent found"}
     
     controller.agent.resume()
+    _agent_resumed = True
     return {"status": "success", "message": "Agent resumed"}
 
 async def browser_use_agent(
@@ -183,52 +188,67 @@ async def browser_use_agent(
     # Create initial safety pause using the same pattern as in yield_data
     tool_calls = []
     tool_outputs = []
+    safety_check_complete = False
 
-    # Add print_call
-    print_id = f"tool_call_{uuid.uuid4()}"
-    tool_calls.append({
-        "name": "print_call",
-        "args": {"message": "⚠️ BROWSER SAFETY: This agent requires verification before proceeding"},
-        "id": print_id
-    })
-    tool_outputs.append(ToolMessage(content="", tool_call_id=print_id))
-
-    # Add pause_execution
+    # Add pause_execution first
     pause_id = f"tool_call_{uuid.uuid4()}"
-    tool_calls.append({
+    pause_tool_call = {
         "name": "pause_execution",
         "args": {"reason": "⏸️ Click 'Resume' to allow the agent to start browsing"},
         "id": pause_id
-    })
-    tool_outputs.append(ToolMessage(content="", tool_call_id=pause_id))
+    }
 
-    # Send the message with tool calls
+    # Send the pause message first
     asyncio.get_event_loop().call_soon_threadsafe(
         queue.put_nowait,
-        AIMessage(content="", tool_calls=tool_calls)
+        AIMessage(content="", tool_calls=[pause_tool_call])
     )
-
-    # Send tool outputs
-    for tool_output in tool_outputs:
-        asyncio.get_event_loop().call_soon_threadsafe(
-            queue.put_nowait,
-            tool_output
-        )
-
+    asyncio.get_event_loop().call_soon_threadsafe(
+        queue.put_nowait,
+        ToolMessage(content="", tool_call_id=pause_id)
+    )
     asyncio.get_event_loop().call_soon_threadsafe(
         queue.put_nowait,
         {"stop": True}
     )
 
-    # Execute the actual tools
-    print_call("⚠️ BROWSER SAFETY: This agent requires verification before proceeding")
+    # Add print_call second
+    print_id = f"tool_call_{uuid.uuid4()}"
+    print_tool_call = {
+        "name": "print_call",
+        "args": {"message": "⚠️ BROWSER SAFETY: This agent requires verification before proceeding"},
+        "id": print_id
+    }
+    tool_calls.append(print_tool_call)
+    tool_outputs.append(ToolMessage(content="", tool_call_id=print_id))
+
+    # Send the print message second
+    asyncio.get_event_loop().call_soon_threadsafe(
+        queue.put_nowait,
+        AIMessage(content="", tool_calls=[print_tool_call])
+    )
+    asyncio.get_event_loop().call_soon_threadsafe(
+        queue.put_nowait,
+        tool_outputs[0]
+    )
+    asyncio.get_event_loop().call_soon_threadsafe(
+        queue.put_nowait,
+        {"stop": True}
+    )
+
+    # Execute the actual tools in the same order
     await pause_execution("⏸️ Click 'Resume' to allow the agent to start browsing")
+    print_call("⚠️ BROWSER SAFETY: This agent requires verification before proceeding")
+    safety_check_complete = True
 
     steps = agent_settings.steps or 25
 
     agent_task = asyncio.create_task(agent.run(steps))
     logger.info("▶️ Started agent task with %d steps", steps)
 
+    # Store special messages until agent is resumed
+    pending_special_messages = []
+    
     try:
         while True:
             if cancel_event and cancel_event.is_set():
@@ -237,11 +257,35 @@ async def browser_use_agent(
                 break
             if agent._too_many_failures():
                 break
+                
             # Wait for data from the queue
             data = await queue.get()
             if data == "END":  # You'll need to send this when done
                 break
-            yield data
+            
+            # Check if agent was resumed - if so, release any pending special messages
+            global _agent_resumed
+            if _agent_resumed and pending_special_messages:
+                # First yield all pending special messages
+                for msg in pending_special_messages:
+                    yield msg
+                pending_special_messages = []  # Clear the pending messages
+            
+            # If this is a special message (Memory, Next Goal, etc)
+            if isinstance(data, AIMessage) and data.content and (
+                "*Memory*:" in data.content or 
+                "*Next Goal*:" in data.content or 
+                "*Previous Goal*:" in data.content
+            ):
+                if _agent_resumed:
+                    # If agent is resumed, send the message immediately
+                    yield data
+                else:
+                    # Otherwise, store it for later
+                    pending_special_messages.append(data)
+            else:
+                # Always yield non-special messages
+                yield data
     finally:
         # if browser:
         #     print("Closing browser...")
