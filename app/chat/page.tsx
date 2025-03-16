@@ -750,9 +750,11 @@ export default function ChatPage() {
                             hasShownConnection &&
                             !isCreatingSession &&
                             currentSession?.id && (
-                              <div className="mx-auto mt-2 flex w-[85%] items-center gap-2 rounded-md border border-[--green-3] bg-[--green-2] px-4 py-2 font-geist text-sm text-[--green-11]">
-                                <CheckIcon className="size-4" />
-                                Steel Browser Session connected
+                              <div className="mt-2 flex w-full max-w-full flex-col gap-2 rounded-[1.25rem] border border-[--gray-3] bg-[--gray-1] p-2">
+                                <div className="flex items-center gap-2 rounded-2xl border border-[--green-3] bg-[--green-2] p-3 font-geist text-sm text-[--green-11]">
+                                  <CheckIcon className="size-4" />
+                                  Steel Browser Session connected
+                                </div>
                               </div>
                             )}
                         </>
@@ -877,7 +879,7 @@ export default function ChatPage() {
 
                             if (isSpecial) {
                               return (
-                                <div className="flex w-full max-w-full flex-col gap-2 rounded-[1.25rem] border border-[--gray-3] bg-[--gray-1] p-4">
+                                <div className="flex w-full max-w-full flex-col gap-2 rounded-[1.25rem] border border-[--gray-3] bg-[--gray-1] p-2">
                                   <div className="flex flex-col gap-2">
                                     {specialMessagesGroup.map((groupMessage, groupIndex) => (
                                       <React.Fragment key={groupMessage.id}>
