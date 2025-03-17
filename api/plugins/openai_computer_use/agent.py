@@ -1,114 +1,38 @@
+"""
+OpenAI Computer Use Agent - Main Module
+
+This module contains the main agent function that orchestrates the interaction 
+between the OpenAI computer-use-preview model and the Steel browser automation.
+"""
+
 import asyncio
-import base64
 import json
-import os
-import requests
 import logging
-import datetime
-import aiohttp
-import time
+import os
+import signal
+from typing import AsyncIterator, Any, Dict, List, Mapping, Optional, Set
 
-from typing import AsyncIterator, Any, Dict, List, Mapping, Optional
-from steel import Steel
-from playwright.async_api import async_playwright, Page
 from fastapi import HTTPException
-
+from playwright.async_api import async_playwright
+from langchain_core.messages import BaseMessage
 from api.models import ModelConfig
 from api.utils.types import AgentSettings
-from langchain_core.messages import BaseMessage
 from api.utils.prompt import chat_dict_to_base_messages
-from dotenv import load_dotenv
-from langchain_core.messages import ToolMessage
-from langchain.schema import AIMessage
 
-# Import from our new modules
-from .tools import _execute_computer_action, _create_tools, _make_cua_content_for_role
+# Import from our own modules
+from .config import (
+    STEEL_API_KEY, STEEL_API_URL, STEEL_CONNECT_URL, OPENAI_RESPONSES_URL,
+    VALID_OPENAI_CUA_MODELS, DEFAULT_MAX_STEPS, DEFAULT_WAIT_TIME_BETWEEN_STEPS,
+    DEFAULT_NUM_IMAGES_TO_KEEP
+)
 from .prompts import SYSTEM_PROMPT
+from .tools import _create_tools
 from .cursor_overlay import inject_cursor_overlay
+from .steel_computer import SteelComputer
+from .conversation_manager import ConversationManager
+from .message_handler import MessageHandler
 
-load_dotenv(".env.local")
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("openai_computer_use")
-
-OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
-
-# Default settings that can be overridden by agent_settings
-DEFAULT_MAX_STEPS = 30
-DEFAULT_WAIT_TIME_BETWEEN_STEPS = 1
-DEFAULT_NUM_IMAGES_TO_KEEP = 10
-
-
-def _create_tool_message(content: Any, tool_call_id: str, is_call: bool = True) -> ToolMessage:
-    """
-    Helper function to create consistently formatted tool messages.
-    Args:
-        content: The content of the tool message
-        tool_call_id: The ID of the tool call
-        is_call: True if this is a tool call, False if it's a tool result
-    """
-    logger.info(f"Creating tool message with tool_call_id: {tool_call_id}, is_call: {is_call}")
-    logger.debug(f"Tool message content: {json.dumps(content) if isinstance(content, dict) else str(content)[:100]}")
-    
-    # Ensure tool_call_id is a valid string
-    if not tool_call_id or not isinstance(tool_call_id, str):
-        error_msg = f"Invalid tool_call_id: {repr(tool_call_id)}, type: {type(tool_call_id)}"
-        logger.error(error_msg)
-        # Provide a fallback ID if missing
-        tool_call_id = tool_call_id or f"fallback_id_{int(time.time())}"
-        logger.info(f"Using fallback tool_call_id: {tool_call_id}")
-    
-    try:
-        if is_call:
-            # For tool calls, create a message with tool_calls property AND tool_call_id
-            logger.info(f"Creating tool call message with function name: {content['name']}")
-            return ToolMessage(
-                content="",  # Empty content for tool calls
-                tool_calls=[{
-                    "id": tool_call_id,
-                    "type": "function",
-                    "function": {
-                        "name": content["name"],
-                        "arguments": json.dumps(content["args"])
-                    }
-                }],
-                tool_call_id=tool_call_id,
-                type="tool"
-            )
-        else:
-            # For tool results, create a message with tool_call_id
-            logger.info(f"Creating tool result message with content type: {type(content)}")
-            return ToolMessage(
-                content=content,
-                tool_call_id=tool_call_id,
-                type="tool"
-            )
-    except Exception as e:
-        logger.error(f"Error creating tool message: {e}")
-        logger.exception("Full traceback for tool message creation error:")
-        # Return a fallback message that won't crash
-        if is_call:
-            return ToolMessage(
-                content="",
-                tool_calls=[{
-                    "id": tool_call_id,
-                    "type": "function",
-                    "function": {
-                        "name": content.get("name", "unknown_function"),
-                        "arguments": "{}"
-                    }
-                }],
-                tool_call_id=tool_call_id,
-                type="tool"
-            )
-        else:
-            return ToolMessage(
-                content="Error creating tool result message",
-                tool_call_id=tool_call_id,
-                type="tool"
-            )
-
 
 async def openai_computer_use_agent(
     model_config: ModelConfig,
@@ -118,651 +42,329 @@ async def openai_computer_use_agent(
     cancel_event: Optional[asyncio.Event] = None,
 ) -> AsyncIterator[Any]:
     """
-    OpenAI's computer-use-preview model integration.
-    
-    Args:
-        model_config: Configuration for the model including:
-            - model_name: The model to use (e.g. "computer-use-preview")
-            - temperature: Model temperature
-            - api_key: OpenAI API key
-            - max_tokens: Maximum tokens to generate
-        agent_settings: Agent-specific settings including:
-            - system_prompt: Custom system prompt to use
-            - max_steps: Maximum number of steps (default: 30)
-            - wait_time_between_steps: Seconds to wait between actions (default: 1)
-            - num_images_to_keep: Number of images to keep in context (default: 10)
-        history: Chat history
-        session_id: Steel session ID
-        cancel_event: Optional event to cancel execution
-    """
-    logger.info(
-        f"Starting OpenAI Computer Use agent with session_id: {session_id}")
-    logger.info(f"Using model: {model_config.model_name}")
+    OpenAI's computer-use-preview model integration, refactored for clarity.
 
-    # Extract settings from agent_settings with defaults
+    Steps:
+      1. Validate model, create session & connect to browser
+      2. Initialize ConversationManager + MessageHandler
+      3. Main loop that:
+         - Prepares conversation => calls /v1/responses => processes items
+         - Yields messages or tool calls => executes tool calls => yields results
+         - Repeats until we get a final "assistant" item or exceed max steps
+    """
+    # Keep track of background tasks we create
+    pending_tasks: Set[asyncio.Task] = set()
+    
+    # Helper to track and clean up tasks
+    def track_task(task: asyncio.Task) -> None:
+        pending_tasks.add(task)
+        task.add_done_callback(lambda t: pending_tasks.discard(t))
+
+    logger.info(f"Starting openai_computer_use_agent with session_id: {session_id}")
+    openai_api_key = model_config.api_key or os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
+        raise HTTPException(status_code=400, detail="No OPENAI_API_KEY configured")
+
+    # Validate model name
+    model_name = model_config.model_name or "computer-use-preview-2025-02-04"
+    if model_name not in VALID_OPENAI_CUA_MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid model name: {model_name}. Must be one of: {VALID_OPENAI_CUA_MODELS}",
+        )
+
+    # Extract settings with defaults
     max_steps = getattr(agent_settings, "max_steps", DEFAULT_MAX_STEPS)
     wait_time = getattr(agent_settings, "wait_time_between_steps", DEFAULT_WAIT_TIME_BETWEEN_STEPS)
     num_images = getattr(agent_settings, "num_images_to_keep", DEFAULT_NUM_IMAGES_TO_KEEP)
 
-    # 1) Retrieve the Steel session
-    STEEL_API_KEY = os.getenv("STEEL_API_KEY")
-    STEEL_API_URL = os.getenv("STEEL_API_URL")
-    STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
-
-    logger.info("Connecting to Steel session...")
+    # Create a Steel session
+    from steel import Steel
     client = Steel(steel_api_key=STEEL_API_KEY, base_url=STEEL_API_URL)
     try:
         session = client.sessions.retrieve(session_id)
         logger.info(f"Successfully connected to Steel session: {session.id}")
         logger.info(f"Session viewer URL: {session.session_viewer_url}")
-    except Exception as e:
-        logger.error(f"Failed to retrieve Steel session: {e}")
-        raise HTTPException(
-            status_code=400, detail=f"Failed to retrieve session: {e}")
+        yield "[OPENAI-CUA] Session loaded. Connecting to remote browser..."
+    except Exception as exc:
+        logger.error(f"Failed to retrieve Steel session: {exc}")
+        raise HTTPException(400, f"Failed to retrieve Steel session: {exc}")
 
-    yield "[OPENAI-CUA] Session loaded. Connecting to remote browser..."
+    # Set up a handler for SIGINT (keyboard interrupt) to allow cleanup
+    original_sigint_handler = None
+    if hasattr(signal, "SIGINT"):
+        original_sigint_handler = signal.getsignal(signal.SIGINT)
+        def sigint_handler(sig, frame):
+            logger.info("SIGINT received, preparing for shutdown")
+            if cancel_event:
+                cancel_event.set()
+            # Don't call the default handler yet - let cleanup run first
+        signal.signal(signal.SIGINT, sigint_handler)
 
-    # 2) Connect Playwright over cdp
-    logger.info("Connecting Playwright to Steel session...")
-    async with async_playwright() as p:
+    # Connect to browser
+    steel_computer = None
+    playwright_instance = None
+    try:
+        # Create a shared cancel event if one wasn't provided
+        local_cancel_event = False
+        if cancel_event is None:
+            cancel_event = asyncio.Event()
+            local_cancel_event = True
+            
+        # Launch playwright
+        playwright_instance = await async_playwright().start()
         try:
-            # Attempt the CDP connection
-            browser = await p.chromium.connect_over_cdp(
+            browser = await playwright_instance.chromium.connect_over_cdp(
                 f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session.id}"
             )
             yield "[OPENAI-CUA] Playwright connected!"
-        except Exception as cdp_error:
-            logger.error(f"Failed to connect Playwright over CDP: {cdp_error}")
-            yield f"Error: could not connect to browser session (CDP) - {cdp_error}"
+        except Exception as e:
+            logger.error(f"Failed to connect Playwright over CDP: {e}")
+            yield f"Error: could not connect to browser session (CDP) - {e}"
             return
 
-        # If we got here, we have a browser handle
-        contexts = browser.contexts
-        if not contexts:
-            logger.error("No contexts found in the Steel session browser")
-            yield "Error: No contexts found in the remote browser"
-            return
-
-        # Get or create a page
-        page_list = contexts[0].pages
-        if not page_list:
-            # If no pages exist, create one
-            page = await contexts[0].new_page()
-        else:
-            page = page_list[0]
-
-        active_page = page
-
-        # Handler for when a new page is created (e.g. from target="_blank" links)
-        async def handle_new_page(new_page: Page):
-            nonlocal active_page
-            logger.info(f"New page created: {new_page.url}")
-            
-            active_page = new_page
-            
-            await new_page.wait_for_load_state("domcontentloaded")
-            new_page.on("close", lambda: handle_page_close(new_page))
-            
-            await inject_cursor_overlay(new_page)
-            await apply_same_tab_script(new_page)
-            
-            logger.info(f"New page ready: {new_page.url}")
-
-        # Handler for when a page is closed
-        def handle_page_close(closed_page: Page):
-            nonlocal active_page
-            logger.info(f"Page closed: {closed_page.url}")
-            
-            # If the closed page was the active page, set active page to another open page
-            if active_page == closed_page:
-                remaining_pages = contexts[0].pages
-                if remaining_pages:
-                    active_page = remaining_pages[0]
-                    logger.info(f"Active page switched to: {active_page.url}")
-                else:
-                    logger.warning("No remaining pages open")
-                    # If no pages are left, consider creating a new one
-                    async def create_new_page():
-                        nonlocal active_page
-                        new_page = await contexts[0].new_page()
-                        active_page = new_page
-                        await new_page.goto("https://www.google.com")
-                        logger.info("Created new page after all were closed")
-                    
-                    asyncio.create_task(create_new_page())
-
-        # Set up page event handlers on the browser context
-        contexts[0].on("page", handle_new_page)
-
-        # Helper function to apply same-tab navigation script to a page
-        async def apply_same_tab_script(target_page: Page):
-            await target_page.add_init_script("""
-                window.addEventListener('load', () => {
-                    // Initial cleanup
-                    document.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
-                    
-                    // Watch for dynamic changes
-                    const observer = new MutationObserver((mutations) => {
-                        mutations.forEach((mutation) => {
-                            if (mutation.addedNodes) {
-                                mutation.addedNodes.forEach((node) => {
-                                    if (node.nodeType === 1) { // ELEMENT_NODE
-                                        // Check the added element itself
-                                        if (node.tagName === 'A' && node.target === '_blank') {
-                                            node.target = '_self';
-                                        }
-                                        // Check any anchor children
-                                        node.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
-                                    }
-                                });
-                            }
-                        });
-                    });
-                    
-                    observer.observe(document.body, {
-                        childList: true,
-                        subtree: true
-                    });
-                });
-            """)
-
-        logger.info("Successfully connected Playwright to Steel session")
-
-        # Get the window size
-        viewport_size = await page.evaluate("""() => ({
-            width: window.innerWidth,
-            height: window.innerHeight
-        })""")
-        logger.info(f"Got viewport size: {viewport_size}")
-
-        # Set viewport using the window size
-        await page.set_viewport_size(viewport_size)
-        logger.info(f"Set viewport size to {viewport_size['width']}x{viewport_size['height']}")
-
-        # Add cursor overlay to make mouse movements visible
-        logger.info("Injecting cursor overlay script...")
-        await inject_cursor_overlay(page)
-        logger.info("Cursor overlay injected successfully")
-
-        logger.info("Injecting same-tab navigation script...")
-        await apply_same_tab_script(page)
-        logger.info("Same-tab navigation script injected successfully")
-
-        await page.goto("https://www.google.com")
-
-        # Convert user history to base messages
-        logger.info("Converting user history to base messages...")
-        base_msgs: List[BaseMessage] = chat_dict_to_base_messages(history)
-        logger.info(f"Converted {len(base_msgs)} messages from history")
-
-        # Initialize conversation items array
-        conversation_items: List[Dict[str, Any]] = []
-
-        # Add system prompt as 'system' (-> input_text)
-        logger.info("Adding system prompt to conversation")
-        system_text = (
-            SYSTEM_PROMPT
-            + f"\nCurrent date/time: {datetime.datetime.now():%Y-%m-%d %H:%M:%S}"
-        )
-        conversation_items.append({
-            "role": "system",
-            "content": _make_cua_content_for_role("system", system_text)
-        })
-
-        # Process history messages
-        logger.info("Processing history messages...")
-        for m in base_msgs:
-            # If it's a tool response, we treat it like 'computer_call_output'
-            if hasattr(m, "tool_call_id"):
-                logger.info(f"Processing tool response with call_id: {m.tool_call_id}")
-                logger.debug(f"Tool response content: {str(m.content)[:100]}")
-                logger.debug(f"Tool response type: {type(m)}, dir: {dir(m)}")
-                conversation_items.append({
-                    "type": "computer_call_output",
-                    "call_id": m.tool_call_id,
-                    "output": {
-                        "type": "input_image",
-                        "image_url": (
-                            m.content if isinstance(m.content, str)
-                            else json.dumps(m.content)
-                        )
-                    }
-                })
-                logger.info(f"Added computer_call_output for tool response with call_id: {m.tool_call_id}")
-            elif m.type == "ai":
-                # Assistant message => output_text
-                logger.info("Processing AI message")
-                logger.debug(f"AI message content: {str(m.content)[:100]}")
-                text_content = (
-                    m.content if isinstance(m.content, str)
-                    else json.dumps(m.content)
-                )
-                conversation_items.append({
-                    "role": "assistant",
-                    "content": _make_cua_content_for_role("assistant", text_content)
-                })
-                logger.info("Added assistant role item")
-            else:
-                # user or system => input_text
-                logger.info(f"Processing {m.type} message")
-                logger.debug(f"{m.type} message content: {str(m.content)[:100]}")
-                user_text = (
-                    m.content if isinstance(m.content, str)
-                    else json.dumps(m.content)
-                )
-                conversation_items.append({
-                    "role": "user" if m.type == "human" else m.type,
-                    "content": _make_cua_content_for_role("user" if m.type == "human" else m.type, user_text)
-                })
-                logger.info(f"Added {m.type} role item")
-        logger.info(
-            f"Processed {len(conversation_items)} total conversation items")
-
-        # Create tools using the function imported from tools.py
-        tools = _create_tools()
+        # Initialize SteelComputer - this handles all browser management
+        steel_computer = await SteelComputer.create(browser)
         
-        # Update the display dimensions in the computer-preview tool
-        for tool in tools:
-            if tool.get("type") == "computer-preview":
-                tool["display_width"] = viewport_size["width"]
-                tool["display_height"] = viewport_size["height"]
-                break
+        # Initialize MessageHandler and ConversationManager
+        msg_handler = MessageHandler(steel_computer)
+        conversation = ConversationManager(num_images_to_keep=num_images)
 
-        # Main loop with configurable max steps
-        steps = 0
-        while True:
-            if cancel_event and cancel_event.is_set():
-                logger.info("Cancel event detected, exiting agent loop")
-                yield "[OPENAI-CUA] Cancel event detected, stopping..."
-                break
-            if steps > max_steps:
-                logger.info(
-                    f"Reached maximum steps ({max_steps}), exiting agent loop")
-                yield f"[OPENAI-CUA] Reached max steps ({max_steps}), stopping..."
-                break
+        # Load history + system prompt
+        system_prompt = agent_settings.system_prompt or SYSTEM_PROMPT
+        base_msgs = chat_dict_to_base_messages(history)
+        conversation.initialize_from_history(base_msgs, system_prompt=system_prompt)
 
-            steps += 1
-            logger.info(f"Starting step {steps}/{max_steps}")
+        # Get viewport size for computer-preview tool
+        viewport_size = await steel_computer.get_viewport_size()
 
-            # 3) Call OpenAI /v1/responses endpoint
-            logger.info("Preparing OpenAI API request...")
-            openai_api_key = os.getenv(
-                "OPENAI_API_KEY") or model_config.api_key
-            if not openai_api_key:
-                logger.error("No OpenAI API key configured")
-                raise HTTPException(400, "No OPENAI_API_KEY configured")
+        # Setup model request parameters
+        headers = {
+            "Authorization": f"Bearer {openai_api_key}",
+            "Content-Type": "application/json",
+            # OpenAI "Beta" header for /v1/responses
+            "OpenAI-Beta": "responses=v1",
+            "Openai-Beta": "responses=v1",
+        }
 
-            # Validate model name
-            model_name = model_config.model_name or "computer-use-preview-2025-02-04"
-            valid_models = ["computer-use-preview",
-                            "computer-use-preview-2025-02-04"]
-            if model_name not in valid_models:
-                logger.error(
-                    f"Invalid model name: {model_name}. Must be one of: {valid_models}")
-                raise HTTPException(400, f"Invalid model name: {model_name}")
+        step_count = 0
+        request_task = None
 
-            headers = {
-                "Authorization": f"Bearer {openai_api_key}",
-                "Content-Type": "application/json",
-                # Both header keys to ensure coverage
-                "OpenAI-Beta": "responses=v1",
-                "Openai-Beta": "responses=v1"
-            }
-            request_body = {
-                "model": model_name,
-                "input": conversation_items,
-                "tools": tools,  # include both the environment + goto function
-                "truncation": "auto",
-                "reasoning": {
-                    "generate_summary": "concise"
-                }
-            }
-
-            try:
-                logger.info("Sending request to OpenAI /v1/responses endpoint...")
-                logger.debug(f"Request headers: {headers}")
-                logger.debug(
-                    f"Request body: {json.dumps(request_body, indent=2)}")
-
-                # Create a task for the request with a timeout
-                async def make_request():
-                    async with aiohttp.ClientSession() as session:
-                        async with session.post(
-                            OPENAI_RESPONSES_URL,
-                            json=request_body,
-                            headers=headers,
-                            timeout=aiohttp.ClientTimeout(total=120)
-                        ) as resp:
-                            if not resp.ok:
-                                error_detail = ""
-                                try:
-                                    error_json = await resp.json()
-                                    error_detail = json.dumps(error_json, indent=2)
-                                except:
-                                    error_detail = await resp.text()
-
-                                logger.error(
-                                    f"OpenAI API error response ({resp.status}):")
-                                logger.error(f"Response headers: {dict(resp.headers)}")
-                                logger.error(f"Response body: {error_detail}")
-                                resp.raise_for_status()
-
-                            return await resp.json()
-
-                # Create the request task
-                request_task = asyncio.create_task(make_request())
-
-                # Wait for either the request to complete or cancellation
-                done, _ = await asyncio.wait(
-                    [request_task],
-                    return_when=asyncio.FIRST_COMPLETED
-                )
-
-                # Check if we were cancelled
+        # Main loop
+        try:
+            while True:
                 if cancel_event and cancel_event.is_set():
-                    request_task.cancel()
-                    logger.info("Request cancelled due to cancel event")
-                    yield "[OPENAI-CUA] Request cancelled..."
+                    logger.info("Cancel event detected, exiting agent loop")
+                    yield "[OPENAI-CUA] Cancel event detected, stopping..."
+                    break
+                    
+                if step_count >= max_steps:
+                    logger.info(f"Reached maximum steps ({max_steps}), exiting agent loop")
+                    yield f"[OPENAI-CUA] Reached max steps ({max_steps}), stopping..."
                     break
 
-                # Get the result
-                data = request_task.result()
+                step_count += 1
+                logger.info(f"Starting step {step_count}/{max_steps}")
 
-            except asyncio.CancelledError:
-                logger.info("Request was cancelled")
-                yield "[OPENAI-CUA] Request cancelled..."
-                break
+                # Prepare the conversation for /v1/responses
+                items_for_model = conversation.prepare_for_model()
+                tools_for_model = _create_tools()
+                
+                # Update the display dimensions in the computer-preview tool
+                for tool in tools_for_model:
+                    if tool.get("type") == "computer-preview":
+                        tool["display_width"] = viewport_size["width"]
+                        tool["display_height"] = viewport_size["height"]
+                        break
 
-            if "output" not in data:
-                logger.error(f"No 'output' in response: {data}")
-                yield f"No 'output' in /v1/responses result: {data}"
-                break
+                request_body = {
+                    "model": model_name,
+                    "input": items_for_model,
+                    "tools": tools_for_model,
+                    "truncation": "auto",
+                    "reasoning": {"generate_summary": "concise"},
+                }
 
-            # 4) Process output items
-            new_items = data["output"]
-            logger.info(f"Received {len(new_items)} new items from OpenAI")
-            conversation_items.extend(new_items)
-
-            # Flag to track if we've received a final assistant message in this batch
-            received_assistant = False
-
-            for item in new_items:
-                item_type = item.get("type")
-                logger.debug(f"Processing item of type: {item_type}")
-
-                if item_type == "message":
-                    # It's a chunk of user or assistant text
-                    text_segments = item["content"]
-                    # The model uses "input_text" or "output_text"
-                    # We'll combine them all just to display
-                    full_text = "".join(seg["text"] for seg in text_segments if seg["type"] in [
-                                        "input_text", "output_text"])
-                    if full_text.strip():
-                        logger.info(
-                            f"Yielding message text: {full_text[:100]}...")
-                        # If this is an output_text message, treat it as an assistant message
-                        if any(seg["type"] == "output_text" for seg in text_segments):
-                            received_assistant = True
-                            yield AIMessage(content=full_text)
-                        else:
-                            yield full_text
-
-                elif item_type == "computer_call":
-                    # The model wants us to do something (e.g. click, type, etc.)
-                    call_id = item["call_id"]
-                    action = item["action"]
-                    ack_checks = item.get("pending_safety_checks", [])
-
-                    # First yield the tool call with explicit type
-                    tool_call_msg = {
-                        "name": action["type"],
-                        "args": action,
-                        "id": call_id
-                    }
-
-                    logger.info(
-                        f"[TOOL_CALL] Yielding computer action call: {action['type']} (id: {call_id})")
-
-                    yield AIMessage(content="", tool_calls=[tool_call_msg])
-
-                    # Log complete action details
-                    action_details = json.dumps(action, indent=2)
-                    logger.info(
-                        f"Executing computer action (call_id: {call_id}):\n{action_details}")
-                    if ack_checks:
-                        logger.info(
-                            f"Safety checks to acknowledge: {json.dumps(ack_checks, indent=2)}")
-
-                    # Use the active page for executing actions
-                    await _execute_computer_action(active_page, action)
-                    logger.info(f"Executed computer action successfully")
-
-                    # Use configured wait time between steps
-                    if wait_time > 0:
-                        logger.debug(f"Waiting {wait_time}s between steps")
-                        await asyncio.sleep(wait_time)
-
-                    # Take screenshot after waiting
-                    screenshot_b64 = await active_page.screenshot(full_page=False)
-                    screenshot_b64 = base64.b64encode(screenshot_b64).decode("utf-8")
-
-                    # Add the computer_call_output to conversation items
-                    current_url = active_page.url if not active_page.is_closed() else "about:blank"
-                    cc_output = {
-                        "type": "computer_call_output",
-                        "call_id": call_id,
-                        "acknowledged_safety_checks": ack_checks,
-                        "output": {
-                            "type": "input_image",
-                            "image_url": f"data:image/png;base64,{screenshot_b64}",
-                            "current_url": current_url
-                        }
-                    }
-                    conversation_items.append(cc_output)
-
-                    logger.info(f"Added computer_call_output for {action['type']}")
-                    # Then yield the result with explicit type
-                    tool_result_msg = ToolMessage(
-                        content=[{
-                            "type": "image",
-                            "source": {
-                                "media_type": "image/png",
-                                "data": screenshot_b64
-                            },
-                            "current_url": current_url,
-                            "tool_name": action["type"],
-                            "tool_args": action
-                        }],
-                        tool_call_id=call_id,
-                        type="tool",  # Required by ToolMessage
-                        # Add name to make it clear this is a result
-                        name=action["type"],
-                        args=action,  # Add args to make it clear this is a result
-                        # Explicitly mark as result
-                        metadata={"message_type": "tool_result"}
-                    )
-                    logger.info(f"[TOOL_RESULT] Yielding result for {action['type']} (id: {call_id})")
-                    yield tool_result_msg
-
-                elif item_type == "reasoning":
-                    # Yield reasoning tokens as thoughts
-                    logger.info("Processing reasoning item")
-                    logger.debug(f"Full reasoning item: {json.dumps(item, indent=2)}")
+                # Make the request
+                try:
+                    logger.info("Sending request to OpenAI /v1/responses endpoint...")
                     
-                    reasoning_text = None
-                    
-                    # Check for tokens first
-                    if "tokens" in item:
-                        reasoning_text = item["tokens"]
-                        logger.info(f"Found reasoning tokens: {reasoning_text}")
-                    # Then check for summary
-                    elif "summary" in item:
-                        summary_text = [s.get("text", "") for s in item["summary"] if s.get("type") == "summary_text"]
-                        if summary_text:
-                            reasoning_text = "\n".join(summary_text)
-                            logger.info(f"Found reasoning summary: {reasoning_text}")
-                    
-                    if reasoning_text:
-                        logger.info("Yielding reasoning as AIMessage with thoughts format")
-                        formatted_message = AIMessage(content=f"*Thoughts*:\n{reasoning_text}")
-                        logger.info(f"Formatted message: {formatted_message}")
-                        yield formatted_message
-                        logger.info("Yielding stop marker for visual break")
-                        yield {"stop": True}  # Add a stop to create a visual break
+                    # Create a task for the request with a timeout
+                    async def make_request():
+                        import aiohttp
+                        async with aiohttp.ClientSession() as session:
+                            async with session.post(
+                                OPENAI_RESPONSES_URL,
+                                json=request_body,
+                                headers=headers,
+                                timeout=aiohttp.ClientTimeout(total=120)
+                            ) as resp:
+                                if not resp.ok:
+                                    error_detail = ""
+                                    try:
+                                        error_json = await resp.json()
+                                        error_detail = json.dumps(error_json, indent=2)
+                                    except:
+                                        error_detail = await resp.text()
+
+                                    logger.error(f"OpenAI API error response ({resp.status}):")
+                                    logger.error(f"Response headers: {dict(resp.headers)}")
+                                    logger.error(f"Response body: {error_detail}")
+                                    resp.raise_for_status()
+
+                                return await resp.json()
+
+                    # Create and track the request task
+                    request_task = asyncio.create_task(make_request())
+                    track_task(request_task)
+
+                    # Wait for either the request to complete or cancellation
+                    # Create a task that waits for cancellation
+                    if cancel_event:
+                        cancellation_task = asyncio.create_task(cancel_event.wait())
+                        track_task(cancellation_task)
+                        
+                        # Wait for either request to complete or cancellation
+                        done, pending = await asyncio.wait(
+                            [request_task, cancellation_task],
+                            return_when=asyncio.FIRST_COMPLETED
+                        )
+                        
+                        # If cancellation happened first
+                        if cancellation_task in done:
+                            # Cancel the request_task
+                            if not request_task.done():
+                                request_task.cancel()
+                                logger.info("Request cancelled due to cancel event")
+                            yield "[OPENAI-CUA] Request cancelled..."
+                            break
+                        
+                        # Otherwise, cancel the cancellation_task (no longer needed)
+                        if not cancellation_task.done():
+                            cancellation_task.cancel()
                     else:
-                        logger.warning("No tokens or summary found in reasoning item")
-                        logger.debug(f"Reasoning item content: {json.dumps(item, indent=2)}")
+                        # Just wait for the request if no cancellation event
+                        await request_task
 
-                elif item_type == "function_call":
-                    # The model is calling one of our functions: goto, back, forward, change_url
-                    call_id = item["call_id"]
-                    fn_name = item["name"]
-                    logger.info(f"Processing function_call item: {fn_name} with call_id: {call_id}")
-                    logger.debug(f"Full function_call item: {json.dumps(item, indent=2)}")
+                    # Check if cancelled while we were waiting
+                    if cancel_event and cancel_event.is_set():
+                        logger.info("Cancel event detected after request")
+                        if not request_task.done():
+                            request_task.cancel()
+                        yield "[OPENAI-CUA] Request cancelled..."
+                        break
+
+                    # Get the result (will raise if cancelled)
+                    data = request_task.result()
+
+                except asyncio.CancelledError:
+                    logger.info("Request was cancelled")
+                    yield "[OPENAI-CUA] Request cancelled..."
+                    break
+                except Exception as ex:
+                    logger.error(f"Error making request to OpenAI: {ex}")
+                    yield f"[OPENAI-CUA] Error from OpenAI: {str(ex)}"
+                    break
+
+                if "output" not in data:
+                    logger.error(f"No 'output' in response: {data}")
+                    yield f"No 'output' in /v1/responses result: {data}"
+                    break
+
+                new_items = data["output"]
+                logger.info(f"Received {len(new_items)} new items from OpenAI")
+
+                got_final_assistant = False
+                for item in new_items:
+                    # Check for cancellation inside loop
+                    if cancel_event and cancel_event.is_set():
+                        logger.info("Cancel event detected while processing items")
+                        break
+                        
+                    # Add this item to conversation first
+                    conversation.add_item(item)
+
+                    # Process the item
+                    immediate_msg, action_needed = await msg_handler.process_item(item)
+
+                    # 1. If there's an immediate message (e.g. partial AI chunk), yield it
+                    if immediate_msg:
+                        yield immediate_msg
+                        # Check if it's a "reasoning" item, yield a stop marker for visual break
+                        if item.get("type") == "reasoning":
+                            yield {"stop": True}
+                        # If it's an assistant item, mark as final
+                        if item.get("type") == "assistant":
+                            got_final_assistant = True
+
+                    # 2. If an action is required (tool call), do it
+                    if action_needed:
+                        # Wait the configured time between steps if needed
+                        if wait_time > 0:
+                            logger.debug(f"Waiting {wait_time}s between steps")
+                            await asyncio.sleep(wait_time)
+
+                        # Execute the action and get results
+                        result_item, result_tool_msg = await msg_handler.execute_action(action_needed)
+                        
+                        # Add the result to conversation
+                        conversation.add_item(result_item)
+                        
+                        # Yield the tool result message
+                        yield result_tool_msg
+
+                # Check again for cancellation
+                if cancel_event and cancel_event.is_set():
+                    break
                     
-                    try:
-                        fn_args = json.loads(item["arguments"])
-                        logger.info(f"Successfully parsed arguments for {fn_name}: {json.dumps(fn_args)}")
-                    except Exception as arg_err:
-                        logger.error(f"Failed to parse arguments for {fn_name}: {arg_err}")
-                        logger.error(f"Raw arguments: {item.get('arguments', 'NONE')}")
-                        fn_args = {}
+                # If we got a final assistant message, end the conversation
+                if got_final_assistant:
+                    logger.info("Received final assistant message, ending conversation")
+                    break
+        finally:
+            # Clean up any pending tasks we created
+            logger.info(f"Cleaning up {len(pending_tasks)} pending tasks")
+            for task in pending_tasks:
+                if not task.done():
+                    task.cancel()
+                
+            # Wait briefly for tasks to clean up
+            if pending_tasks:
+                try:
+                    await asyncio.wait(pending_tasks, timeout=0.5)
+                except asyncio.CancelledError:
+                    pass
 
-                    # Let the front-end know about this function call
-                    logger.info(f"Creating tool_call_msg for function {fn_name}")
-                    tool_call_msg = _create_tool_message(
-                        content={"name": fn_name, "args": fn_args},
-                        tool_call_id=call_id,
-                        is_call=True
-                    )
-                    logger.info(f"Yielding tool_call_msg for function {fn_name}")
-                    yield tool_call_msg
+            # Clean up browser resources
+            if steel_computer:
+                logger.info("Cleaning up SteelComputer resources")
+                await steel_computer.cleanup()
 
-                    # Actually perform the function
-                    logger.info(f"Handling function call: {fn_name} with call_id: {call_id}")
-
-                    try:
-                        screenshot_b64 = None
-                        if fn_name == "goto":
-                            url = fn_args.get("url", "about:blank")
-                            logger.info(f"Executing goto function with URL: {url}")
-                            await active_page.goto(url, wait_until="networkidle")
-                            logger.info(f"Page navigation to {url} complete")
-                            screenshot_b64 = base64.b64encode(
-                                await active_page.screenshot(full_page=False)
-                            ).decode("utf-8")
-                            logger.info(f"Screenshot captured ({len(screenshot_b64) // 1024}KB)")
-
-                        elif fn_name == "back":
-                            logger.info("Executing back function")
-                            await active_page.go_back()
-                            logger.info("Back navigation complete")
-                            screenshot_b64 = base64.b64encode(
-                                await active_page.screenshot(full_page=False)
-                            ).decode("utf-8")
-                            logger.info(f"Screenshot captured ({len(screenshot_b64) // 1024}KB)")
-
-                        elif fn_name == "forward":
-                            logger.info("Executing forward function")
-                            await active_page.go_forward()
-                            logger.info("Forward navigation complete")
-                            screenshot_b64 = base64.b64encode(
-                                await active_page.screenshot(full_page=False)
-                            ).decode("utf-8")
-                            logger.info(f"Screenshot captured ({len(screenshot_b64) // 1024}KB)")
-
-                        else:
-                            logger.error(f"Unknown function name: {fn_name}")
-                            raise ValueError(f"Unknown function name: {fn_name}")
-
-                        # Build success output
-                        current_url = active_page.url if not active_page.is_closed() else "about:blank"
-                        logger.info(f"Current URL after function execution: {current_url}")
-                        
-                        function_output = {
-                            "type": "computer_call_output",
-                            "call_id": call_id,
-                            "output": {
-                                "type": "input_image",
-                                "image_url": f"data:image/png;base64,{screenshot_b64}",
-                                "current_url": current_url,
-                                "toolName": fn_name,
-                                "args": fn_args
-                            }
-                        }
-                        logger.info(f"Adding function output to conversation items with call_id: {call_id}")
-                        conversation_items.append(function_output)
-
-                        # Then yield the final "tool result" as a message
-                        logger.info(f"Creating tool_result_msg for function {fn_name} with call_id: {call_id}")
-                        tool_result_msg = _create_tool_message(
-                            content=[{
-                                "type": "image",
-                                "source": {"media_type": "image/png", "data": screenshot_b64},
-                                "current_url": current_url,
-                                "toolName": fn_name,
-                                "args": fn_args
-                            }],
-                            tool_call_id=call_id,
-                            is_call=False
-                        )
-                        logger.info(f"Yielding tool_result_msg for function {fn_name}")
-                        yield tool_result_msg
-
-                    except Exception as nav_err:
-                        logger.error(f"Error in function '{fn_name}': {nav_err}")
-                        logger.exception("Full traceback for function execution error:")
-                        
-                        error_output = {
-                            "type": "computer_call_output",
-                            "call_id": call_id,
-                            "output": {
-                                "type": "error",
-                                "error": str(nav_err),
-                                "tool_name": fn_name,
-                                "tool_args": fn_args,
-                            }
-                        }
-                        logger.info(f"Adding error output to conversation items with call_id: {call_id}")
-                        conversation_items.append(error_output)
-
-                        logger.info(f"Creating error tool_result_msg for function {fn_name} with call_id: {call_id}")
-                        tool_result_msg = _create_tool_message(
-                            content=[{
-                                "type": "error",
-                                "error": str(nav_err),
-                                "tool_name": fn_name,
-                                "tool_args": fn_args
-                            }],
-                            tool_call_id=call_id,
-                            is_call=False
-                        )
-                        logger.info(f"Yielding error tool_result_msg for function {fn_name}")
-                        yield tool_result_msg
-
-                elif item_type == "assistant":
-                    # A final assistant message
-                    received_assistant = True
-                    logger.info("Received final assistant message")
-                    content_array = item["content"]
-                    if content_array:
-                        final_text = "".join(
-                            part["text"] for part in content_array if part["type"] == "output_text")
-                        if final_text.strip():
-                            logger.info(
-                                f"Yielding final assistant msg: {final_text[:100]}...")
-                            yield AIMessage(content=final_text)
-                else:
-                    # Unknown item type - log it but continue
-                    logger.warning(f"Unknown item type: {item_type}")
-                    logger.debug(f"Item content: {json.dumps(item, indent=2)}")
-
-            # Check if we got an assistant message
-            if received_assistant:
-                logger.info("Received assistant message, ending conversation")
-                break  # End the main loop
-
-            logger.debug("No assistant message in this batch, continuing loop")
-
+        # End of main loop
         logger.info("Exited main loop, finishing agent execution")
         yield "[OPENAI-CUA] Agent ended."
+    except Exception as e:
+        logger.error(f"Unexpected error in agent: {e}", exc_info=True)
+        # Attempt cleanup even on error
+        if steel_computer:
+            try:
+                await steel_computer.cleanup()
+            except Exception as cleanup_err:
+                logger.error(f"Error during emergency cleanup: {cleanup_err}")
+        yield f"[OPENAI-CUA] Error: {str(e)}"
+    finally:
+        # Close the playwright instance
+        if playwright_instance:
+            try:
+                await playwright_instance.stop()
+                logger.info("Closed Playwright instance")
+            except Exception as e:
+                logger.error(f"Error closing Playwright instance: {e}")
+        
+        # Restore original SIGINT handler
+        if original_sigint_handler and hasattr(signal, "SIGINT"):
+            signal.signal(signal.SIGINT, original_sigint_handler)
+            
+        # Clean up our local cancel event if we created one
+        if local_cancel_event and cancel_event and not cancel_event.is_set():
+            cancel_event.set()
