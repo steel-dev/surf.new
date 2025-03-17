@@ -6,6 +6,7 @@ import requests
 import logging
 import datetime
 import aiohttp
+import time
 
 from typing import AsyncIterator, Any, Dict, List, Mapping, Optional
 from steel import Steel
@@ -47,27 +48,66 @@ def _create_tool_message(content: Any, tool_call_id: str, is_call: bool = True) 
         tool_call_id: The ID of the tool call
         is_call: True if this is a tool call, False if it's a tool result
     """
-    if is_call:
-        # For tool calls, create a message with tool_calls property
-        return ToolMessage(
-            content="",  # Empty content for tool calls
-            tool_calls=[{
-                "id": tool_call_id,
-                "type": "function",
-                "function": {
-                    "name": content["name"],
-                    "arguments": json.dumps(content["args"])
-                }
-            }],
-            type="tool"
-        )
-    else:
-        # For tool results, create a message with tool_call_id
-        return ToolMessage(
-            content=content,
-            tool_call_id=tool_call_id,
-            type="tool"
-        )
+    logger.info(f"Creating tool message with tool_call_id: {tool_call_id}, is_call: {is_call}")
+    logger.debug(f"Tool message content: {json.dumps(content) if isinstance(content, dict) else str(content)[:100]}")
+    
+    # Ensure tool_call_id is a valid string
+    if not tool_call_id or not isinstance(tool_call_id, str):
+        error_msg = f"Invalid tool_call_id: {repr(tool_call_id)}, type: {type(tool_call_id)}"
+        logger.error(error_msg)
+        # Provide a fallback ID if missing
+        tool_call_id = tool_call_id or f"fallback_id_{int(time.time())}"
+        logger.info(f"Using fallback tool_call_id: {tool_call_id}")
+    
+    try:
+        if is_call:
+            # For tool calls, create a message with tool_calls property AND tool_call_id
+            logger.info(f"Creating tool call message with function name: {content['name']}")
+            return ToolMessage(
+                content="",  # Empty content for tool calls
+                tool_calls=[{
+                    "id": tool_call_id,
+                    "type": "function",
+                    "function": {
+                        "name": content["name"],
+                        "arguments": json.dumps(content["args"])
+                    }
+                }],
+                tool_call_id=tool_call_id,
+                type="tool"
+            )
+        else:
+            # For tool results, create a message with tool_call_id
+            logger.info(f"Creating tool result message with content type: {type(content)}")
+            return ToolMessage(
+                content=content,
+                tool_call_id=tool_call_id,
+                type="tool"
+            )
+    except Exception as e:
+        logger.error(f"Error creating tool message: {e}")
+        logger.exception("Full traceback for tool message creation error:")
+        # Return a fallback message that won't crash
+        if is_call:
+            return ToolMessage(
+                content="",
+                tool_calls=[{
+                    "id": tool_call_id,
+                    "type": "function",
+                    "function": {
+                        "name": content.get("name", "unknown_function"),
+                        "arguments": "{}"
+                    }
+                }],
+                tool_call_id=tool_call_id,
+                type="tool"
+            )
+        else:
+            return ToolMessage(
+                content="Error creating tool result message",
+                tool_call_id=tool_call_id,
+                type="tool"
+            )
 
 
 async def openai_computer_use_agent(
@@ -226,8 +266,9 @@ async def openai_computer_use_agent(
         for m in base_msgs:
             # If it's a tool response, we treat it like 'computer_call_output'
             if hasattr(m, "tool_call_id"):
-                logger.debug(
-                    f"Processing tool response with call_id: {m.tool_call_id}")
+                logger.info(f"Processing tool response with call_id: {m.tool_call_id}")
+                logger.debug(f"Tool response content: {str(m.content)[:100]}")
+                logger.debug(f"Tool response type: {type(m)}, dir: {dir(m)}")
                 conversation_items.append({
                     "type": "computer_call_output",
                     "call_id": m.tool_call_id,
@@ -239,8 +280,11 @@ async def openai_computer_use_agent(
                         )
                     }
                 })
+                logger.info(f"Added computer_call_output for tool response with call_id: {m.tool_call_id}")
             elif m.type == "ai":
                 # Assistant message => output_text
+                logger.info("Processing AI message")
+                logger.debug(f"AI message content: {str(m.content)[:100]}")
                 text_content = (
                     m.content if isinstance(m.content, str)
                     else json.dumps(m.content)
@@ -249,78 +293,32 @@ async def openai_computer_use_agent(
                     "role": "assistant",
                     "content": _make_cua_content_for_role("assistant", text_content)
                 })
+                logger.info("Added assistant role item")
             else:
                 # user or system => input_text
+                logger.info(f"Processing {m.type} message")
+                logger.debug(f"{m.type} message content: {str(m.content)[:100]}")
                 user_text = (
                     m.content if isinstance(m.content, str)
                     else json.dumps(m.content)
                 )
                 conversation_items.append({
-                    "role": "user",
-                    "content": _make_cua_content_for_role("user", user_text)
+                    "role": "user" if m.type == "human" else m.type,
+                    "content": _make_cua_content_for_role("user" if m.type == "human" else m.type, user_text)
                 })
+                logger.info(f"Added {m.type} role item")
         logger.info(
             f"Processed {len(conversation_items)} total conversation items")
 
-        # Create an extended tools array with new function calls
-        tools = [
-            {
-                "type": "computer-preview",
-                "display_width": viewport_size["width"],
-                "display_height": viewport_size["height"],
-                "environment": "browser",
-            },
-            {
-                "type": "function",
-                "name": "goto",
-                "description": "Navigate to a specified URL.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "Destination URL to navigate to."
-                        }
-                    },
-                    "required": ["url"]
-                },
-            },
-            {
-                "type": "function",
-                "name": "back",
-                "description": "Go back in browser history.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                },
-            },
-            {
-                "type": "function",
-                "name": "forward",
-                "description": "Go forward in browser history.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                },
-            },
-            {
-                "type": "function",
-                "name": "change_url",
-                "description": "Change the current URL to a new one.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "New URL to navigate to."
-                        }
-                    },
-                    "required": ["url"]
-                },
-            }
-        ]
+        # Create tools using the function imported from tools.py
+        tools = _create_tools()
+        
+        # Update the display dimensions in the computer-preview tool
+        for tool in tools:
+            if tool.get("type") == "computer-preview":
+                tool["display_width"] = viewport_size["width"]
+                tool["display_height"] = viewport_size["height"]
+                break
 
         # Main loop with configurable max steps
         steps = 0
@@ -571,17 +569,25 @@ async def openai_computer_use_agent(
                     # The model is calling one of our functions: goto, back, forward, change_url
                     call_id = item["call_id"]
                     fn_name = item["name"]
+                    logger.info(f"Processing function_call item: {fn_name} with call_id: {call_id}")
+                    logger.debug(f"Full function_call item: {json.dumps(item, indent=2)}")
+                    
                     try:
                         fn_args = json.loads(item["arguments"])
-                    except:
+                        logger.info(f"Successfully parsed arguments for {fn_name}: {json.dumps(fn_args)}")
+                    except Exception as arg_err:
+                        logger.error(f"Failed to parse arguments for {fn_name}: {arg_err}")
+                        logger.error(f"Raw arguments: {item.get('arguments', 'NONE')}")
                         fn_args = {}
 
                     # Let the front-end know about this function call
+                    logger.info(f"Creating tool_call_msg for function {fn_name}")
                     tool_call_msg = _create_tool_message(
                         content={"name": fn_name, "args": fn_args},
                         tool_call_id=call_id,
                         is_call=True
                     )
+                    logger.info(f"Yielding tool_call_msg for function {fn_name}")
                     yield tool_call_msg
 
                     # Actually perform the function
@@ -589,30 +595,42 @@ async def openai_computer_use_agent(
 
                     try:
                         screenshot_b64 = None
-                        if fn_name == "goto" or fn_name == "change_url":
+                        if fn_name == "goto":
                             url = fn_args.get("url", "about:blank")
-                            await page.goto(url)
+                            logger.info(f"Executing goto function with URL: {url}")
+                            await page.goto(url, wait_until="networkidle")
+                            logger.info(f"Page navigation to {url} complete")
                             screenshot_b64 = base64.b64encode(
                                 await page.screenshot(full_page=False)
                             ).decode("utf-8")
+                            logger.info(f"Screenshot captured ({len(screenshot_b64) // 1024}KB)")
 
                         elif fn_name == "back":
+                            logger.info("Executing back function")
                             await page.go_back()
+                            logger.info("Back navigation complete")
                             screenshot_b64 = base64.b64encode(
                                 await page.screenshot(full_page=False)
                             ).decode("utf-8")
+                            logger.info(f"Screenshot captured ({len(screenshot_b64) // 1024}KB)")
 
                         elif fn_name == "forward":
+                            logger.info("Executing forward function")
                             await page.go_forward()
+                            logger.info("Forward navigation complete")
                             screenshot_b64 = base64.b64encode(
                                 await page.screenshot(full_page=False)
                             ).decode("utf-8")
+                            logger.info(f"Screenshot captured ({len(screenshot_b64) // 1024}KB)")
 
                         else:
+                            logger.error(f"Unknown function name: {fn_name}")
                             raise ValueError(f"Unknown function name: {fn_name}")
 
                         # Build success output
                         current_url = page.url if not page.is_closed() else "about:blank"
+                        logger.info(f"Current URL after function execution: {current_url}")
+                        
                         function_output = {
                             "type": "computer_call_output",
                             "call_id": call_id,
@@ -620,28 +638,33 @@ async def openai_computer_use_agent(
                                 "type": "input_image",
                                 "image_url": f"data:image/png;base64,{screenshot_b64}",
                                 "current_url": current_url,
-                                "tool_name": fn_name,
-                                "tool_args": fn_args
+                                "toolName": fn_name,
+                                "args": fn_args
                             }
                         }
+                        logger.info(f"Adding function output to conversation items with call_id: {call_id}")
                         conversation_items.append(function_output)
 
                         # Then yield the final "tool result" as a message
+                        logger.info(f"Creating tool_result_msg for function {fn_name} with call_id: {call_id}")
                         tool_result_msg = _create_tool_message(
                             content=[{
                                 "type": "image",
                                 "source": {"media_type": "image/png", "data": screenshot_b64},
                                 "current_url": current_url,
-                                "tool_name": fn_name,
-                                "tool_args": fn_args
+                                "toolName": fn_name,
+                                "args": fn_args
                             }],
                             tool_call_id=call_id,
                             is_call=False
                         )
+                        logger.info(f"Yielding tool_result_msg for function {fn_name}")
                         yield tool_result_msg
 
                     except Exception as nav_err:
                         logger.error(f"Error in function '{fn_name}': {nav_err}")
+                        logger.exception("Full traceback for function execution error:")
+                        
                         error_output = {
                             "type": "computer_call_output",
                             "call_id": call_id,
@@ -652,8 +675,10 @@ async def openai_computer_use_agent(
                                 "tool_args": fn_args,
                             }
                         }
+                        logger.info(f"Adding error output to conversation items with call_id: {call_id}")
                         conversation_items.append(error_output)
 
+                        logger.info(f"Creating error tool_result_msg for function {fn_name} with call_id: {call_id}")
                         tool_result_msg = _create_tool_message(
                             content=[{
                                 "type": "error",
@@ -664,6 +689,7 @@ async def openai_computer_use_agent(
                             tool_call_id=call_id,
                             is_call=False
                         )
+                        logger.info(f"Yielding error tool_result_msg for function {fn_name}")
                         yield tool_result_msg
 
                 elif item_type == "assistant":
