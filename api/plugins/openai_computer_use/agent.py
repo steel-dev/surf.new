@@ -183,12 +183,88 @@ async def openai_computer_use_agent(
             yield "Error: No contexts found in the remote browser"
             return
 
+        # Get or create a page
         page_list = contexts[0].pages
         if not page_list:
             # If no pages exist, create one
-            page = contexts[0].new_page()
+            page = await contexts[0].new_page()
         else:
             page = page_list[0]
+
+        active_page = page
+
+        # Handler for when a new page is created (e.g. from target="_blank" links)
+        async def handle_new_page(new_page: Page):
+            nonlocal active_page
+            logger.info(f"New page created: {new_page.url}")
+            
+            active_page = new_page
+            
+            await new_page.wait_for_load_state("domcontentloaded")
+            new_page.on("close", lambda: handle_page_close(new_page))
+            
+            await inject_cursor_overlay(new_page)
+            await apply_same_tab_script(new_page)
+            
+            logger.info(f"New page ready: {new_page.url}")
+
+        # Handler for when a page is closed
+        def handle_page_close(closed_page: Page):
+            nonlocal active_page
+            logger.info(f"Page closed: {closed_page.url}")
+            
+            # If the closed page was the active page, set active page to another open page
+            if active_page == closed_page:
+                remaining_pages = contexts[0].pages
+                if remaining_pages:
+                    active_page = remaining_pages[0]
+                    logger.info(f"Active page switched to: {active_page.url}")
+                else:
+                    logger.warning("No remaining pages open")
+                    # If no pages are left, consider creating a new one
+                    async def create_new_page():
+                        nonlocal active_page
+                        new_page = await contexts[0].new_page()
+                        active_page = new_page
+                        await new_page.goto("https://www.google.com")
+                        logger.info("Created new page after all were closed")
+                    
+                    asyncio.create_task(create_new_page())
+
+        # Set up page event handlers on the browser context
+        contexts[0].on("page", handle_new_page)
+
+        # Helper function to apply same-tab navigation script to a page
+        async def apply_same_tab_script(target_page: Page):
+            await target_page.add_init_script("""
+                window.addEventListener('load', () => {
+                    // Initial cleanup
+                    document.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
+                    
+                    // Watch for dynamic changes
+                    const observer = new MutationObserver((mutations) => {
+                        mutations.forEach((mutation) => {
+                            if (mutation.addedNodes) {
+                                mutation.addedNodes.forEach((node) => {
+                                    if (node.nodeType === 1) { // ELEMENT_NODE
+                                        // Check the added element itself
+                                        if (node.tagName === 'A' && node.target === '_blank') {
+                                            node.target = '_self';
+                                        }
+                                        // Check any anchor children
+                                        node.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
+                                    }
+                                });
+                            }
+                        });
+                    });
+                    
+                    observer.observe(document.body, {
+                        childList: true,
+                        subtree: true
+                    });
+                });
+            """)
 
         logger.info("Successfully connected Playwright to Steel session")
 
@@ -209,35 +285,7 @@ async def openai_computer_use_agent(
         logger.info("Cursor overlay injected successfully")
 
         logger.info("Injecting same-tab navigation script...")
-        await page.add_init_script("""
-            window.addEventListener('load', () => {
-                // Initial cleanup
-                document.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
-                
-                // Watch for dynamic changes
-                const observer = new MutationObserver((mutations) => {
-                    mutations.forEach((mutation) => {
-                        if (mutation.addedNodes) {
-                            mutation.addedNodes.forEach((node) => {
-                                if (node.nodeType === 1) { // ELEMENT_NODE
-                                    // Check the added element itself
-                                    if (node.tagName === 'A' && node.target === '_blank') {
-                                        node.target = '_self';
-                                    }
-                                    // Check any anchor children
-                                    node.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
-                                }
-                            });
-                        }
-                    });
-                });
-                
-                observer.observe(document.body, {
-                    childList: true,
-                    subtree: true
-                });
-            });
-        """)
+        await apply_same_tab_script(page)
         logger.info("Same-tab navigation script injected successfully")
 
         await page.goto("https://www.google.com")
@@ -485,8 +533,8 @@ async def openai_computer_use_agent(
                         logger.info(
                             f"Safety checks to acknowledge: {json.dumps(ack_checks, indent=2)}")
 
-                    # Actually do the action and get screenshot
-                    await _execute_computer_action(page, action)
+                    # Use the active page for executing actions
+                    await _execute_computer_action(active_page, action)
                     logger.info(f"Executed computer action successfully")
 
                     # Use configured wait time between steps
@@ -495,11 +543,11 @@ async def openai_computer_use_agent(
                         await asyncio.sleep(wait_time)
 
                     # Take screenshot after waiting
-                    screenshot_b64 = await page.screenshot(full_page=False)
+                    screenshot_b64 = await active_page.screenshot(full_page=False)
                     screenshot_b64 = base64.b64encode(screenshot_b64).decode("utf-8")
 
                     # Add the computer_call_output to conversation items
-                    current_url = page.url if not page.is_closed() else "about:blank"
+                    current_url = active_page.url if not active_page.is_closed() else "about:blank"
                     cc_output = {
                         "type": "computer_call_output",
                         "call_id": call_id,
@@ -598,28 +646,28 @@ async def openai_computer_use_agent(
                         if fn_name == "goto":
                             url = fn_args.get("url", "about:blank")
                             logger.info(f"Executing goto function with URL: {url}")
-                            await page.goto(url, wait_until="networkidle")
+                            await active_page.goto(url, wait_until="networkidle")
                             logger.info(f"Page navigation to {url} complete")
                             screenshot_b64 = base64.b64encode(
-                                await page.screenshot(full_page=False)
+                                await active_page.screenshot(full_page=False)
                             ).decode("utf-8")
                             logger.info(f"Screenshot captured ({len(screenshot_b64) // 1024}KB)")
 
                         elif fn_name == "back":
                             logger.info("Executing back function")
-                            await page.go_back()
+                            await active_page.go_back()
                             logger.info("Back navigation complete")
                             screenshot_b64 = base64.b64encode(
-                                await page.screenshot(full_page=False)
+                                await active_page.screenshot(full_page=False)
                             ).decode("utf-8")
                             logger.info(f"Screenshot captured ({len(screenshot_b64) // 1024}KB)")
 
                         elif fn_name == "forward":
                             logger.info("Executing forward function")
-                            await page.go_forward()
+                            await active_page.go_forward()
                             logger.info("Forward navigation complete")
                             screenshot_b64 = base64.b64encode(
-                                await page.screenshot(full_page=False)
+                                await active_page.screenshot(full_page=False)
                             ).decode("utf-8")
                             logger.info(f"Screenshot captured ({len(screenshot_b64) // 1024}KB)")
 
@@ -628,7 +676,7 @@ async def openai_computer_use_agent(
                             raise ValueError(f"Unknown function name: {fn_name}")
 
                         # Build success output
-                        current_url = page.url if not page.is_closed() else "about:blank"
+                        current_url = active_page.url if not active_page.is_closed() else "about:blank"
                         logger.info(f"Current URL after function execution: {current_url}")
                         
                         function_output = {
