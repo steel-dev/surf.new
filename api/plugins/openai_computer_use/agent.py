@@ -1,7 +1,7 @@
 """
 OpenAI Computer Use Agent - Main Module
 
-This module contains the main agent function that orchestrates the interaction 
+This module contains the main agent function that orchestrates the interaction
 between the OpenAI computer-use-preview model and the Steel browser automation.
 """
 
@@ -21,9 +21,14 @@ from api.utils.prompt import chat_dict_to_base_messages
 
 # Import from our own modules
 from .config import (
-    STEEL_API_KEY, STEEL_API_URL, STEEL_CONNECT_URL, OPENAI_RESPONSES_URL,
-    VALID_OPENAI_CUA_MODELS, DEFAULT_MAX_STEPS, DEFAULT_WAIT_TIME_BETWEEN_STEPS,
-    DEFAULT_NUM_IMAGES_TO_KEEP
+    STEEL_API_KEY,
+    STEEL_API_URL,
+    STEEL_CONNECT_URL,
+    OPENAI_RESPONSES_URL,
+    VALID_OPENAI_CUA_MODELS,
+    DEFAULT_MAX_STEPS,
+    DEFAULT_WAIT_TIME_BETWEEN_STEPS,
+    DEFAULT_NUM_IMAGES_TO_KEEP,
 )
 from .prompts import SYSTEM_PROMPT
 from .tools import _create_tools
@@ -33,6 +38,7 @@ from .conversation_manager import ConversationManager
 from .message_handler import MessageHandler
 
 logger = logging.getLogger("openai_computer_use")
+
 
 async def openai_computer_use_agent(
     model_config: ModelConfig,
@@ -54,7 +60,7 @@ async def openai_computer_use_agent(
     """
     # Keep track of background tasks we create
     pending_tasks: Set[asyncio.Task] = set()
-    
+
     # Helper to track and clean up tasks
     def track_task(task: asyncio.Task) -> None:
         pending_tasks.add(task)
@@ -75,11 +81,16 @@ async def openai_computer_use_agent(
 
     # Extract settings with defaults
     max_steps = getattr(agent_settings, "max_steps", DEFAULT_MAX_STEPS)
-    wait_time = getattr(agent_settings, "wait_time_between_steps", DEFAULT_WAIT_TIME_BETWEEN_STEPS)
-    num_images = getattr(agent_settings, "num_images_to_keep", DEFAULT_NUM_IMAGES_TO_KEEP)
+    wait_time = getattr(
+        agent_settings, "wait_time_between_steps", DEFAULT_WAIT_TIME_BETWEEN_STEPS
+    )
+    num_images = getattr(
+        agent_settings, "num_images_to_keep", DEFAULT_NUM_IMAGES_TO_KEEP
+    )
 
     # Create a Steel session
     from steel import Steel
+
     client = Steel(steel_api_key=STEEL_API_KEY, base_url=STEEL_API_URL)
     try:
         session = client.sessions.retrieve(session_id)
@@ -94,11 +105,13 @@ async def openai_computer_use_agent(
     original_sigint_handler = None
     if hasattr(signal, "SIGINT"):
         original_sigint_handler = signal.getsignal(signal.SIGINT)
+
         def sigint_handler(sig, frame):
             logger.info("SIGINT received, preparing for shutdown")
             if cancel_event:
                 cancel_event.set()
             # Don't call the default handler yet - let cleanup run first
+
         signal.signal(signal.SIGINT, sigint_handler)
 
     # Connect to browser
@@ -110,7 +123,7 @@ async def openai_computer_use_agent(
         if cancel_event is None:
             cancel_event = asyncio.Event()
             local_cancel_event = True
-            
+
         # Launch playwright
         playwright_instance = await async_playwright().start()
         try:
@@ -125,7 +138,7 @@ async def openai_computer_use_agent(
 
         # Initialize SteelComputer - this handles all browser management
         steel_computer = await SteelComputer.create(browser)
-        
+
         # Initialize MessageHandler and ConversationManager
         msg_handler = MessageHandler(steel_computer)
         conversation = ConversationManager(num_images_to_keep=num_images)
@@ -157,9 +170,11 @@ async def openai_computer_use_agent(
                     logger.info("Cancel event detected, exiting agent loop")
                     yield "[OPENAI-CUA] Cancel event detected, stopping..."
                     break
-                    
+
                 if step_count >= max_steps:
-                    logger.info(f"Reached maximum steps ({max_steps}), exiting agent loop")
+                    logger.info(
+                        f"Reached maximum steps ({max_steps}), exiting agent loop"
+                    )
                     yield f"[OPENAI-CUA] Reached max steps ({max_steps}), stopping..."
                     break
 
@@ -169,7 +184,7 @@ async def openai_computer_use_agent(
                 # Prepare the conversation for /v1/responses
                 items_for_model = conversation.prepare_for_model()
                 tools_for_model = _create_tools()
-                
+
                 # Update the display dimensions in the computer-preview tool
                 for tool in tools_for_model:
                     if tool.get("type") == "computer-preview":
@@ -188,16 +203,17 @@ async def openai_computer_use_agent(
                 # Make the request
                 try:
                     logger.info("Sending request to OpenAI /v1/responses endpoint...")
-                    
+
                     # Create a task for the request with a timeout
                     async def make_request():
                         import aiohttp
+
                         async with aiohttp.ClientSession() as session:
                             async with session.post(
                                 OPENAI_RESPONSES_URL,
                                 json=request_body,
                                 headers=headers,
-                                timeout=aiohttp.ClientTimeout(total=120)
+                                timeout=aiohttp.ClientTimeout(total=120),
                             ) as resp:
                                 if not resp.ok:
                                     error_detail = ""
@@ -207,8 +223,12 @@ async def openai_computer_use_agent(
                                     except:
                                         error_detail = await resp.text()
 
-                                    logger.error(f"OpenAI API error response ({resp.status}):")
-                                    logger.error(f"Response headers: {dict(resp.headers)}")
+                                    logger.error(
+                                        f"OpenAI API error response ({resp.status}):"
+                                    )
+                                    logger.error(
+                                        f"Response headers: {dict(resp.headers)}"
+                                    )
                                     logger.error(f"Response body: {error_detail}")
                                     resp.raise_for_status()
 
@@ -223,13 +243,13 @@ async def openai_computer_use_agent(
                     if cancel_event:
                         cancellation_task = asyncio.create_task(cancel_event.wait())
                         track_task(cancellation_task)
-                        
+
                         # Wait for either request to complete or cancellation
                         done, pending = await asyncio.wait(
                             [request_task, cancellation_task],
-                            return_when=asyncio.FIRST_COMPLETED
+                            return_when=asyncio.FIRST_COMPLETED,
                         )
-                        
+
                         # If cancellation happened first
                         if cancellation_task in done:
                             # Cancel the request_task
@@ -238,7 +258,7 @@ async def openai_computer_use_agent(
                                 logger.info("Request cancelled due to cancel event")
                             yield "[OPENAI-CUA] Request cancelled..."
                             break
-                        
+
                         # Otherwise, cancel the cancellation_task (no longer needed)
                         if not cancellation_task.done():
                             cancellation_task.cancel()
@@ -280,7 +300,7 @@ async def openai_computer_use_agent(
                     if cancel_event and cancel_event.is_set():
                         logger.info("Cancel event detected while processing items")
                         break
-                        
+
                     # Add this item to conversation first
                     conversation.add_item(item)
 
@@ -305,18 +325,20 @@ async def openai_computer_use_agent(
                             await asyncio.sleep(wait_time)
 
                         # Execute the action and get results
-                        result_item, result_tool_msg = await msg_handler.execute_action(action_needed)
-                        
+                        result_item, result_tool_msg = await msg_handler.execute_action(
+                            action_needed
+                        )
+
                         # Add the result to conversation
                         conversation.add_item(result_item)
-                        
+
                         # Yield the tool result message
                         yield result_tool_msg
 
                 # Check again for cancellation
                 if cancel_event and cancel_event.is_set():
                     break
-                    
+
                 # If we got a final assistant message, end the conversation
                 if got_final_assistant:
                     logger.info("Received final assistant message, ending conversation")
@@ -327,7 +349,7 @@ async def openai_computer_use_agent(
             for task in pending_tasks:
                 if not task.done():
                     task.cancel()
-                
+
             # Wait briefly for tasks to clean up
             if pending_tasks:
                 try:
@@ -360,11 +382,11 @@ async def openai_computer_use_agent(
                 logger.info("Closed Playwright instance")
             except Exception as e:
                 logger.error(f"Error closing Playwright instance: {e}")
-        
+
         # Restore original SIGINT handler
         if original_sigint_handler and hasattr(signal, "SIGINT"):
             signal.signal(signal.SIGINT, original_sigint_handler)
-            
+
         # Clean up our local cancel event if we created one
         if local_cancel_event and cancel_event and not cancel_event.is_set():
             cancel_event.set()
