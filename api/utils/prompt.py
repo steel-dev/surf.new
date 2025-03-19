@@ -44,7 +44,7 @@ def convert_to_chat_messages(messages: List[ClientMessage]):
                     "type": "function",
                     "function": {
                         "name": tool_invocation.toolName,
-                        "arguments": json.dumps(tool_invocation.args),
+                        "arguments": tool_invocation.args,
                     },
                 }
                 for tool_invocation in message.toolInvocations
@@ -55,7 +55,7 @@ def convert_to_chat_messages(messages: List[ClientMessage]):
             tool_results = [
                 {
                     "role": "tool",
-                    "content": json.dumps(tool_invocation.result),
+                    "content": tool_invocation.result,
                     "tool_call_id": tool_invocation.toolCallId,
                 }
                 for tool_invocation in message.toolInvocations
@@ -95,7 +95,7 @@ def chat_dict_to_base_messages(messages: List[Mapping[str, Any]]) -> List[BaseMe
         (
             ToolMessage(
                 tool_call_id=message["tool_call_id"],
-                content=json.loads(message["content"]),
+                content=message["content"],
             )
             if message["role"] == "tool"
             else (
@@ -106,7 +106,7 @@ def chat_dict_to_base_messages(messages: List[Mapping[str, Any]]) -> List[BaseMe
                             id=tool["id"],
                             type=tool["type"],
                             name=tool["function"]["name"],
-                            args=json.loads(tool["function"]["arguments"]),
+                            args=tool["function"]["arguments"],
                         )
                         for tool in message["tool_calls"]
                     ],

@@ -12,15 +12,15 @@ import { SteelProvider } from "../app/contexts/SteelContext";
 export function LayoutContent({ children }: { children: React.ReactNode }) {
   return (
     <PostHogProvider>
-      <ChatProvider>
-        <SettingsProvider>
+      <SettingsProvider>
+        <ChatProvider>
           <SteelProvider>
             <NavBar />
             <div className="bg-[--gray-1] pt-14">{children}</div>
             <Toaster />
           </SteelProvider>
-        </SettingsProvider>
-      </ChatProvider>
+        </ChatProvider>
+      </SettingsProvider>
     </PostHogProvider>
   );
 }

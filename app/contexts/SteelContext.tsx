@@ -10,8 +10,6 @@ interface SteelContextType {
   createSession: () => Promise<Steel.Session | null>;
   isCreatingSession: boolean;
   resetSession: () => Promise<void>;
-  sessionTimeElapsed: number;
-  isExpired: boolean;
   maxSessionDuration: number;
 }
 
@@ -23,38 +21,7 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
   console.info("🔄 Initializing SteelProvider");
   const [currentSession, setCurrentSession] = useState<Steel.Session | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
-  const [sessionTimeElapsed, setSessionTimeElapsed] = useState(0);
-  const [isExpired, setIsExpired] = useState(false);
   const { currentSettings } = useSettings();
-
-  // Timer effect
-  useEffect(() => {
-    console.info("⏱️ Timer effect triggered", { currentSession, isExpired });
-    let intervalId: NodeJS.Timeout;
-
-    if (currentSession && !isExpired) {
-      console.info("⏰ Starting session timer");
-      intervalId = setInterval(() => {
-        setSessionTimeElapsed(prev => {
-          const newTime = prev + 1;
-          if (newTime >= MAX_SESSION_DURATION) {
-            console.warn("⚠️ Session expired after reaching MAX_SESSION_DURATION");
-            setIsExpired(true);
-            clearInterval(intervalId);
-            return MAX_SESSION_DURATION;
-          }
-          return newTime;
-        });
-      }, 1000);
-    }
-
-    return () => {
-      if (intervalId) {
-        console.info("🛑 Clearing session timer");
-        clearInterval(intervalId);
-      }
-    };
-  }, [currentSession, isExpired]);
 
   // Helper function to release a session
   const releaseSession = async (sessionId: string) => {
@@ -114,8 +81,6 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
         const session = await response.json();
         console.info("✅ Session created successfully:", session);
         setCurrentSession(session);
-        setSessionTimeElapsed(0);
-        setIsExpired(false);
         return session;
       }
     } catch (err) {
@@ -135,8 +100,6 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
 
     setCurrentSession(null);
     setIsCreatingSession(false);
-    setSessionTimeElapsed(0);
-    setIsExpired(false);
     console.info("✅ Session reset complete");
   };
 
@@ -147,8 +110,6 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
         createSession,
         isCreatingSession,
         resetSession,
-        sessionTimeElapsed,
-        isExpired,
         maxSessionDuration: MAX_SESSION_DURATION,
       }}
     >

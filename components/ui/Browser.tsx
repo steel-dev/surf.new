@@ -4,34 +4,24 @@ import { useEffect, useRef, useState } from "react";
 import { GlobeIcon } from "lucide-react";
 import Image from "next/image";
 
-import { cn } from "@/lib/utils";
-
 import { useSteelContext } from "@/app/contexts/SteelContext";
+
+import Timer from "./Timer";
 
 export function Browser() {
   // WebSocket and canvas state
   const parentRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [canvasSize, setCanvasSize] = useState<{
+  const [canvasSize] = useState<{
     width: number;
     height: number;
   } | null>(null);
-  const [latestImage, setLatestImage] = useState<HTMLImageElement | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const [latestImage] = useState<HTMLImageElement | null>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [favicon, setFavicon] = useState<string | null>(null);
-  const { currentSession, sessionTimeElapsed, isExpired, maxSessionDuration } = useSteelContext();
+  const { currentSession } = useSteelContext();
 
   const debugUrl = currentSession?.debugUrl;
-
-  // Format time as MM:SS
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
 
   // Canvas rendering
   useEffect(() => {
@@ -123,27 +113,7 @@ export function Browser() {
       {/* Status Bar */}
       <div className="flex h-[40px] items-center border-t border-[--gray-3] bg-[--gray-1] p-1 px-3">
         <div className="flex w-full justify-between font-ibm-plex-mono text-sm text-[--gray-11]">
-          <div className="flex gap-2 font-sans">
-            <span className="flex items-center gap-2">
-              <div
-                className={cn(
-                  "size-2 rounded-full",
-                  currentSession ? (isExpired ? "bg-[--red-9]" : "bg-[--green-9]") : "bg-[--gray-8]"
-                )}
-              />
-              {currentSession
-                ? isExpired
-                  ? "Session Expired"
-                  : "Session Connected"
-                : "No Session"}
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="text-[--gray-12]">
-                {currentSession ? formatTime(sessionTimeElapsed) : "--:--"}
-              </span>{" "}
-              /<span className="text-[--gray-11]">{formatTime(maxSessionDuration)}</span>
-            </span>
-          </div>
+          <Timer />
 
           <span className="mt-1 flex items-center gap-2 font-sans text-sm md:mt-0">
             Browser Powered by{" "}

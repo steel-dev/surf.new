@@ -18,6 +18,8 @@ import { ToolInvocations } from "@/components/ui/tool";
 
 import { useToast } from "@/hooks/use-toast";
 
+import { isLocalhost } from "@/lib/utils";
+
 import { useChatContext } from "@/app/contexts/ChatContext";
 import { useSettings } from "@/app/contexts/SettingsContext";
 import { useSteelContext } from "@/app/contexts/SteelContext";
@@ -172,7 +174,7 @@ function MarkdownText({ content }: { content: string }) {
         )}
         <div className="rounded-2xl border border-[--gray-3] bg-[--gray-2] p-4">
           <div className="pr-8">
-            <div className="mb-1 font-medium text-[--gray-12] text-sm">{title}</div>
+            <div className="mb-1 text-sm font-medium text-[--gray-12]">{title}</div>
             {strippedContent ? (
               <div className="text-sm text-[--gray-10]">{parseContent(strippedContent)}</div>
             ) : (
@@ -262,17 +264,16 @@ export default function ChatPage() {
   const pendingMessageRef = useRef<string>("");
 
   const checkApiKey = () => {
-    // // For Ollama, we don't need an API key as it connects to a local instance
-    // if (currentSettings?.selectedProvider === 'ollama') {
-    //   return true;
-    // }
+    // For Ollama, we don't need an API key as it connects to a local instance
+    if (currentSettings?.selectedProvider === "ollama" && isLocalhost()) {
+      return true;
+    }
 
-    // // For other providers, check if API key exists
-    // const provider = currentSettings?.selectedProvider;
-    // if (!provider) return false;
-    // const hasKey = !!currentSettings?.providerApiKeys?.[provider];
-    // return hasKey;
-    return true;
+    // For other providers, check if API key exists
+    const provider = currentSettings?.selectedProvider;
+    if (!provider) return false;
+    const hasKey = !!currentSettings?.providerApiKeys?.[provider];
+    return hasKey;
   };
 
   const handleApiKeySubmit = (key: string) => {
@@ -336,6 +337,9 @@ export default function ChatPage() {
       },
       onFinish: message => {
         console.info("✅ Chat finished:", message);
+      },
+      onResponse: response => {
+        console.info("🔄 Chat response:", response);
       },
       onError: error => {
         console.error("❌ Chat error:", error);
