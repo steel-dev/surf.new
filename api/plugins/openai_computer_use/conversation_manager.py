@@ -161,5 +161,6 @@ class ConversationManager:
         Return a copy of self.items with all transformations needed
         for the /v1/responses request body.
         """
+
         self.trim_images()
         return self.items.copy()

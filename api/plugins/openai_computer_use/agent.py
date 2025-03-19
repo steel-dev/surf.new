@@ -32,7 +32,6 @@ from .config import (
 )
 from .prompts import SYSTEM_PROMPT
 from .tools import _create_tools
-from .cursor_overlay import inject_cursor_overlay
 from .steel_computer import SteelComputer
 from .conversation_manager import ConversationManager
 from .message_handler import MessageHandler
@@ -208,31 +207,71 @@ async def openai_computer_use_agent(
                     async def make_request():
                         import aiohttp
 
-                        async with aiohttp.ClientSession() as session:
-                            async with session.post(
-                                OPENAI_RESPONSES_URL,
-                                json=request_body,
-                                headers=headers,
-                                timeout=aiohttp.ClientTimeout(total=120),
-                            ) as resp:
-                                if not resp.ok:
-                                    error_detail = ""
-                                    try:
-                                        error_json = await resp.json()
-                                        error_detail = json.dumps(error_json, indent=2)
-                                    except:
-                                        error_detail = await resp.text()
+                        max_retries = 3
+                        retry_count = 0
+                        retry_delay = 1  # Start with 1 second delay
 
-                                    logger.error(
-                                        f"OpenAI API error response ({resp.status}):"
-                                    )
-                                    logger.error(
-                                        f"Response headers: {dict(resp.headers)}"
-                                    )
-                                    logger.error(f"Response body: {error_detail}")
-                                    resp.raise_for_status()
+                        while retry_count <= max_retries:
+                            try:
+                                async with aiohttp.ClientSession() as session:
+                                    async with session.post(
+                                        OPENAI_RESPONSES_URL,
+                                        json=request_body,
+                                        headers=headers,
+                                        timeout=aiohttp.ClientTimeout(total=120),
+                                    ) as resp:
+                                        if not resp.ok:
+                                            error_detail = ""
+                                            try:
+                                                error_json = await resp.json()
+                                                error_detail = json.dumps(
+                                                    error_json, indent=2
+                                                )
+                                            except:
+                                                error_detail = await resp.text()
 
-                                return await resp.json()
+                                            logger.error(
+                                                f"OpenAI API error response ({resp.status}):"
+                                            )
+                                            logger.error(
+                                                f"Response headers: {dict(resp.headers)}"
+                                            )
+                                            logger.error(
+                                                f"Response body: {error_detail}"
+                                            )
+
+                                            # Retry only on 5xx (server) errors
+                                            if (
+                                                500 <= resp.status < 600
+                                                and retry_count < max_retries
+                                            ):
+                                                retry_count += 1
+                                                logger.info(
+                                                    f"Retrying request (attempt {retry_count}/{max_retries}) after 5xx error"
+                                                )
+                                                await asyncio.sleep(retry_delay)
+                                                # Exponential backoff
+                                                retry_delay *= 2
+                                                continue
+
+                                            # For other errors or if we've exhausted retries, raise the exception
+                                            resp.raise_for_status()
+
+                                        return await resp.json()
+                            except aiohttp.ClientConnectionError as e:
+                                # Also retry on connection errors
+                                if retry_count < max_retries:
+                                    retry_count += 1
+                                    logger.info(
+                                        f"Connection error, retrying ({retry_count}/{max_retries}): {e}"
+                                    )
+                                    await asyncio.sleep(retry_delay)
+                                    retry_delay *= 2
+                                    continue
+                                raise  # Re-raise if we've exhausted retries
+
+                        # This should never be reached if properly handled above
+                        raise RuntimeError("Unexpected exit from retry loop")
 
                     # Create and track the request task
                     request_task = asyncio.create_task(make_request())
@@ -314,7 +353,7 @@ async def openai_computer_use_agent(
                         if item.get("type") == "reasoning":
                             yield {"stop": True}
                         # If it's an assistant item, mark as final
-                        if item.get("type") == "assistant":
+                        if item.get("role") == "assistant":
                             got_final_assistant = True
 
                     # 2. If an action is required (tool call), do it
@@ -328,7 +367,6 @@ async def openai_computer_use_agent(
                         result_item, result_tool_msg = await msg_handler.execute_action(
                             action_needed
                         )
-
                         # Add the result to conversation
                         conversation.add_item(result_item)
 

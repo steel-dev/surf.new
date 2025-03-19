@@ -63,47 +63,45 @@ class MessageHandler:
             call_id = item["call_id"]
             action = item["action"]
             ack_checks = item.get("pending_safety_checks", [])
-            
-            self.logger.info(f"[TOOL_CALL] Processing computer action call: {action['type']} (id: {call_id})")
-            
+
+            self.logger.info(
+                f"[TOOL_CALL] Processing computer action call: {action['type']} (id: {call_id})"
+            )
+
             # We'll yield a minimal AIMessage with a tool call
             # Then return the action to be executed
             tool_call_msg = AIMessage(
                 content="",
-                tool_calls=[{
-                    "name": action["type"],
-                    "args": action,
-                    "id": call_id
-                }]
+                tool_calls=[{"name": action["type"], "args": action, "id": call_id}],
             )
             return tool_call_msg, {
                 "call_id": call_id,
                 "action": action,
                 "action_type": "computer_call",
-                "ack_checks": ack_checks
+                "ack_checks": ack_checks,
             }
 
         # 3) function_call -> a request to call "goto", "back", "forward"
         if item_type == "function_call":
             call_id = item["call_id"]
             fn_name = item["name"]
-            self.logger.info(f"Processing function_call: {fn_name} with call_id: {call_id}")
-            
+            self.logger.info(
+                f"Processing function_call: {fn_name} with call_id: {call_id}"
+            )
+
             try:
                 fn_args = json.loads(item["arguments"])
-                self.logger.info(f"Successfully parsed arguments for {fn_name}: {json.dumps(fn_args)}")
+                self.logger.info(
+                    f"Successfully parsed arguments for {fn_name}: {json.dumps(fn_args)}"
+                )
             except Exception as arg_err:
                 self.logger.error(f"Failed to parse arguments for {fn_name}: {arg_err}")
                 fn_args = {}
-            
+
             # yield a minimal AIMessage with the function call
             tool_call_msg = AIMessage(
                 content="",
-                tool_calls=[{
-                    "name": fn_name,
-                    "args": fn_args,
-                    "id": call_id
-                }]
+                tool_calls=[{"name": fn_name, "args": fn_args, "id": call_id}],
             )
             return tool_call_msg, {
                 "call_id": call_id,
@@ -115,20 +113,24 @@ class MessageHandler:
         if item_type == "reasoning":
             # We can yield it as a "thoughts" message
             self.logger.info("Processing reasoning item")
-            
+
             reasoning_text = None
-            
+
             # Check for tokens first
             if "tokens" in item:
                 reasoning_text = item["tokens"]
                 self.logger.info(f"Found reasoning tokens: {reasoning_text}")
             # Then check for summary
             elif "summary" in item:
-                summary_text = [s.get("text", "") for s in item["summary"] if s.get("type") == "summary_text"]
+                summary_text = [
+                    s.get("text", "")
+                    for s in item["summary"]
+                    if s.get("type") == "summary_text"
+                ]
                 if summary_text:
                     reasoning_text = "\n".join(summary_text)
                     self.logger.info(f"Found reasoning summary: {reasoning_text}")
-            
+
             if reasoning_text and reasoning_text.strip():
                 # We'll yield it as an AI message with "Thoughts"
                 self.logger.info("Yielding reasoning as AIMessage with thoughts format")
@@ -190,33 +192,44 @@ class MessageHandler:
                     "type": "error",
                     "error": result["error"],
                     "tool_name": result.get("tool_name", action_type),
-                    "tool_args": result.get("tool_args", final_action)
-                }
+                    "tool_args": result.get("tool_args", final_action),
+                },
             }
         else:
-            item_to_add = {
-                "type": "computer_call_output",
-                "call_id": call_id,
-                "acknowledged_safety_checks": ack_checks,
-                "output": {
-                    "type": "input_image",
-                    "image_url": f"data:image/png;base64,{result.get('source', {}).get('data', '')}",
-                    "current_url": result.get("current_url", "about:blank"),
-                    "toolName": result.get("tool_name", action_type),
-                    "args": result.get("tool_args", final_action),
+            if action_type in ("goto", "back", "forward") or result.get(
+                "tool_name"
+            ) in ("goto", "back", "forward"):
+                item_to_add = {
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": "success",
                 }
-            }
+            else:
+                item_to_add = {
+                    "type": "computer_call_output",
+                    "call_id": call_id,
+                    "acknowledged_safety_checks": ack_checks,
+                    "output": {
+                        "type": "input_image",
+                        "image_url": f"data:image/png;base64,{result.get('source', {}).get('data', '')}",
+                        "current_url": result.get("current_url", "about:blank"),
+                        "toolName": result.get("tool_name", action_type),
+                        "args": result.get("tool_args", final_action),
+                    },
+                }
 
         # Build the tool result message to yield
         content_for_tool_msg = []
         if result.get("type") == "error":
             # Return an error structure
-            content_for_tool_msg.append({
-                "type": "error",
-                "error": result["error"],
-                "tool_name": result.get("tool_name", action_type),
-                "tool_args": result.get("tool_args", final_action)
-            })
+            content_for_tool_msg.append(
+                {
+                    "type": "error",
+                    "error": result["error"],
+                    "tool_name": result.get("tool_name", action_type),
+                    "tool_args": result.get("tool_args", final_action),
+                }
+            )
         else:
             # Return an image structure
             content_for_tool_msg.append(result)
@@ -227,7 +240,7 @@ class MessageHandler:
             type="tool",
             name=action_type,
             args=final_action,
-            metadata={"message_type": "tool_result"}
+            metadata={"message_type": "tool_result"},
         )
 
         return item_to_add, tool_result_msg
@@ -239,4 +252,4 @@ class MessageHandler:
                 await context.close()
             await self.computer.browser.close()
         except Exception as e:
-            self.logger.warning(f"Error during browser cleanup: {e}") 
+            self.logger.warning(f"Error during browser cleanup: {e}")
