@@ -14,6 +14,8 @@ import os
 import asyncio
 import subprocess
 import re
+import time
+import json
 
 # 1) Import the Steel client
 try:
@@ -25,7 +27,7 @@ except ImportError:
 load_dotenv(".env.local")
 
 app = FastAPI()
-app.add_middleware(ProfilingMiddleware) # Uncomment this when profiling is not needed
+app.add_middleware(ProfilingMiddleware)  # Uncomment this when profiling is not needed
 STEEL_API_KEY = os.getenv("STEEL_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 STEEL_API_URL = os.getenv("STEEL_API_URL")
@@ -176,8 +178,7 @@ async def handle_chat(request: ChatRequest):
         )
 
         # Use background=on_disconnect to catch client-aborted requests
-        response = StreamingResponse(
-            streaming_response, background=on_disconnect)
+        response = StreamingResponse(streaming_response, background=on_disconnect)
         response.headers["x-vercel-ai-data-stream"] = "v1"
         # response.headers["model_used"] = request.model_name
         return response
@@ -190,8 +191,7 @@ async def handle_chat(request: ChatRequest):
                 "code": getattr(e, "code", 500),
             }
         }
-        raise HTTPException(status_code=getattr(
-            e, "code", 500), detail=error_response)
+        raise HTTPException(status_code=getattr(e, "code", 500), detail=error_response)
 
 
 @app.get("/api/agents", tags=["Agents"])
@@ -215,17 +215,19 @@ class OllamaModel(BaseModel):
     tag: str
     base_name: str
 
+
 class OllamaModelsResponse(BaseModel):
     models: List[OllamaModel]
+
 
 @app.get("/api/ollama/models", response_model=OllamaModelsResponse, tags=["Ollama"])
 async def get_ollama_models():
     """
     Fetches available models from a local Ollama instance using the 'ollama list' command.
-    
+
     Returns:
         A list of model objects with full tags and base names that can be used with Ollama.
-        
+
     Example response:
         {
             "models": [
@@ -242,37 +244,29 @@ async def get_ollama_models():
     """
     try:
         result = subprocess.run(
-            ["ollama", "list"], 
-            capture_output=True, 
-            text=True, 
-            check=True
+            ["ollama", "list"], capture_output=True, text=True, check=True
         )
-        
+
         models = []
-        lines = result.stdout.strip().split('\n')
-        
+        lines = result.stdout.strip().split("\n")
+
         if lines and "NAME" in lines[0] and "ID" in lines[0]:
             lines = lines[1:]
-        
+
         for line in lines:
             if line.strip():
-                parts = re.split(r'\s{2,}', line.strip())
+                parts = re.split(r"\s{2,}", line.strip())
                 if parts and parts[0]:
                     full_tag = parts[0]
-                    base_name = full_tag.split(':')[0] if ':' in full_tag else full_tag
-                    models.append({
-                        "tag": full_tag,
-                        "base_name": base_name
-                    })
-        
+                    base_name = full_tag.split(":")[0] if ":" in full_tag else full_tag
+                    models.append({"tag": full_tag, "base_name": base_name})
+
         return {"models": models}
     except subprocess.CalledProcessError as e:
         raise HTTPException(
-            status_code=500, 
-            detail=f"Failed to fetch Ollama models: {e.stderr}"
+            status_code=500, detail=f"Failed to fetch Ollama models: {e.stderr}"
         )
     except Exception as e:
         raise HTTPException(
-            status_code=500, 
-            detail=f"Error fetching Ollama models: {str(e)}"
+            status_code=500, detail=f"Error fetching Ollama models: {str(e)}"
         )

@@ -8,36 +8,27 @@ import { Button } from "@/components/ui/button";
 
 import { useToast } from "@/hooks/use-toast";
 
-import { cn } from "@/lib/utils";
-
 import { useSteelContext } from "@/app/contexts/SteelContext";
+
+import Timer from "./Timer";
 
 export function Browser({ isPaused }: { isPaused?: boolean }) {
   // WebSocket and canvas state
   const parentRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [canvasSize, setCanvasSize] = useState<{
+  const [canvasSize] = useState<{
     width: number;
     height: number;
   } | null>(null);
-  const [latestImage, setLatestImage] = useState<HTMLImageElement | null>(null);
+  const [latestImage] = useState<HTMLImageElement | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
   const [favicon, setFavicon] = useState<string | null>(null);
   const [isHovering, setIsHovering] = useState(false);
-  const { currentSession, sessionTimeElapsed, isExpired, maxSessionDuration } = useSteelContext();
   const { toast } = useToast();
+  const { currentSession } = useSteelContext();
 
   const debugUrl = currentSession?.debugUrl;
-
-  // Format time as MM:SS
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
 
   // Canvas rendering
   useEffect(() => {
@@ -210,7 +201,7 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
                   <span className="font-geist font-normal text-white">Awaiting your input...</span>
                 </div>
               )}
-              {!isPaused && currentSession && !isExpired && (
+              {!isPaused && currentSession && (
                 <div
                   className="absolute inset-0 flex items-center justify-center transition-opacity duration-300"
                   style={{
@@ -247,33 +238,7 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
         {/* Status Bar */}
         <div className="flex h-[40px] items-center border-t border-[--gray-3] bg-[--gray-1] p-1 px-3">
           <div className="flex w-full justify-between font-ibm-plex-mono text-sm text-[--gray-11]">
-            <div className="flex gap-2 font-sans">
-              <span className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    "size-2 rounded-full",
-                    currentSession
-                      ? isExpired
-                        ? "bg-[--red-9]"
-                        : "bg-[--green-9]"
-                      : "bg-[--gray-8]"
-                  )}
-                />
-                {currentSession
-                  ? isExpired
-                    ? "Session Expired"
-                    : isPaused
-                      ? "Interactive Mode"
-                      : "Session Connected"
-                  : "No Session"}
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="text-[--gray-12]">
-                  {currentSession ? formatTime(sessionTimeElapsed) : "--:--"}
-                </span>{" "}
-                /<span className="text-[--gray-11]">{formatTime(maxSessionDuration)}</span>
-              </span>
-            </div>
+            <Timer />
 
             <span className="mt-1 flex items-center gap-2 font-sans text-sm md:mt-0">
               Browser Powered by{" "}
@@ -290,7 +255,7 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
         </div>
       </div>
 
-      {isPaused && currentSession && !isExpired && (
+      {isPaused && currentSession && (
         <div className="mt-2 flex justify-center">
           <div className="flex max-w-[90%] items-center justify-between gap-4 rounded-lg border border-[--gray-3] bg-[--gray-2] p-3 shadow-md">
             <div className="flex flex-col gap-1">
@@ -301,7 +266,7 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
               onClick={handleResume}
               variant="secondary"
               disabled={isLoading}
-              className={`rounded-full bg-white px-5 py-2 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1] ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+              className={`rounded-full bg-white px-5 py-2 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1] ${isLoading ? "cursor-not-allowed opacity-50" : ""}`}
             >
               {isLoading ? (
                 <>
