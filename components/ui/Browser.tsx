@@ -104,11 +104,12 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
   };
 
   return (
-    <div
-      className="
+    <>
+      <div
+        className="
         relative 
         flex 
-        aspect-[896/555] 
+        aspect-[16/8.5] 
         w-full 
         max-w-full 
         flex-col
@@ -119,123 +120,130 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
         bg-[--gray-1] 
         shadow-[0px_8px_16px_0px_rgba(0,0,0,0.08)]
       "
-    >
-      {/* Top Bar */}
-      <div className="relative flex h-[60px] items-center justify-center border-b border-[--gray-3] bg-[--gray-1] p-2.5">
-        <div className="flex h-10 w-[360px] items-center justify-center rounded-[0.5rem] border border-[--gray-3] bg-[--gray-1] px-4 py-3">
-          <div className="flex items-center justify-center">
-            {favicon ? (
-              <Image
-                src={favicon.startsWith("/") && url ? new URL(new URL(url), favicon).href : favicon}
-                alt="Favicon"
-                width={24}
-                height={24}
-                className="mr-2 object-contain"
-              />
-            ) : (
-              <GlobeIcon className="mr-2 size-4" />
-            )}
-            <span className="truncate font-geist text-base font-normal leading-normal text-[--gray-12]">
-              {url ? url : "Session not connected"}
-            </span>
+      >
+        {/* Top Bar */}
+        <div className="relative flex h-[60px] items-center justify-center border-b border-[--gray-3] bg-[--gray-1] p-2.5">
+          <div className="flex h-10 w-[360px] items-center justify-center rounded-[0.5rem] border border-[--gray-3] bg-[--gray-1] px-4 py-3">
+            <div className="flex items-center justify-center">
+              {favicon ? (
+                <Image
+                  src={
+                    favicon.startsWith("/") && url ? new URL(new URL(url), favicon).href : favicon
+                  }
+                  alt="Favicon"
+                  width={24}
+                  height={24}
+                  className="mr-2 object-contain"
+                />
+              ) : (
+                <GlobeIcon className="mr-2 size-4" />
+              )}
+              <span className="truncate font-geist text-base font-normal leading-normal text-[--gray-12]">
+                {url ? url : "Session not connected"}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div
-        ref={parentRef}
-        className="relative flex-1"
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => setIsHovering(false)}
-      >
-        {debugUrl ? (
-          <>
-            <iframe
-              src={`${debugUrl}?showControls=false&interactive=${isPaused}`}
-              sandbox="allow-same-origin allow-scripts"
-              className="size-full border border-[--gray-3]"
-            />
-            {isPaused && (
-              <div
-                className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 hover:opacity-0"
-                style={{
-                  background:
-                    "linear-gradient(0deg, rgba(23, 23, 23, 0.80) 0%, rgba(23, 23, 23, 0.80) 100%)",
-                }}
-              >
-                <span className="font-geist font-normal text-white">Awaiting your input...</span>
-              </div>
-            )}
-            {!isPaused && currentSession && !isExpired && (
-              <div
-                className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${
-                  isHovering ? "opacity-100" : "opacity-0"
-                }`}
-                style={{
-                  background:
-                    "linear-gradient(0deg, rgba(23, 23, 23, 0.70) 0%, rgba(23, 23, 23, 0.70) 100%)",
-                  pointerEvents: isHovering ? "auto" : "none",
-                }}
-              >
-                <Button
-                  onClick={handleTakeControl}
-                  className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
-                >
-                  Take Control
-                </Button>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="size-full" />
-        )}
-      </div>
-
-      {/* Status Bar */}
-      <div className="flex h-[40px] items-center border-t border-[--gray-3] bg-[--gray-1] p-1 px-3">
-        <div className="flex w-full justify-between font-ibm-plex-mono text-sm text-[--gray-11]">
-          <div className="flex gap-2 font-sans">
-            <span className="flex items-center gap-2">
-              <div
-                className={cn(
-                  "size-2 rounded-full",
-                  currentSession ? (isExpired ? "bg-[--red-9]" : "bg-[--green-9]") : "bg-[--gray-8]"
-                )}
+        {/* Main Content */}
+        <div
+          ref={parentRef}
+          className="relative flex-1"
+          onMouseEnter={() => setIsHovering(true)}
+          onMouseLeave={() => setIsHovering(false)}
+        >
+          {debugUrl ? (
+            <>
+              <iframe
+                src={`${debugUrl}?showControls=false&interactive=${isPaused}`}
+                sandbox="allow-same-origin allow-scripts"
+                className="size-full border border-[--gray-3]"
               />
-              {currentSession
-                ? isExpired
-                  ? "Session Expired"
-                  : isPaused
-                    ? "Interactive Mode"
-                    : "Session Connected"
-                : "No Session"}
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="text-[--gray-12]">
-                {currentSession ? formatTime(sessionTimeElapsed) : "--:--"}
-              </span>{" "}
-              /<span className="text-[--gray-11]">{formatTime(maxSessionDuration)}</span>
+              {isPaused && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 hover:opacity-0"
+                  style={{
+                    background:
+                      "linear-gradient(0deg, rgba(23, 23, 23, 0.80) 0%, rgba(23, 23, 23, 0.80) 100%)",
+                  }}
+                >
+                  <span className="font-geist font-normal text-white">Awaiting your input...</span>
+                </div>
+              )}
+              {!isPaused && currentSession && !isExpired && (
+                <div
+                  className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${
+                    isHovering ? "opacity-100" : "opacity-0"
+                  }`}
+                  style={{
+                    background:
+                      "linear-gradient(0deg, rgba(23, 23, 23, 0.70) 0%, rgba(23, 23, 23, 0.70) 100%)",
+                    pointerEvents: isHovering ? "auto" : "none",
+                  }}
+                >
+                  <Button
+                    onClick={handleTakeControl}
+                    className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
+                  >
+                    Take Control
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="size-full" />
+          )}
+        </div>
+
+        {/* Status Bar */}
+        <div className="flex h-[40px] items-center border-t border-[--gray-3] bg-[--gray-1] p-1 px-3">
+          <div className="flex w-full justify-between font-ibm-plex-mono text-sm text-[--gray-11]">
+            <div className="flex gap-2 font-sans">
+              <span className="flex items-center gap-2">
+                <div
+                  className={cn(
+                    "size-2 rounded-full",
+                    currentSession
+                      ? isExpired
+                        ? "bg-[--red-9]"
+                        : "bg-[--green-9]"
+                      : "bg-[--gray-8]"
+                  )}
+                />
+                {currentSession
+                  ? isExpired
+                    ? "Session Expired"
+                    : isPaused
+                      ? "Interactive Mode"
+                      : "Session Connected"
+                  : "No Session"}
+              </span>
+              <span className="flex items-center gap-2">
+                <span className="text-[--gray-12]">
+                  {currentSession ? formatTime(sessionTimeElapsed) : "--:--"}
+                </span>{" "}
+                /<span className="text-[--gray-11]">{formatTime(maxSessionDuration)}</span>
+              </span>
+            </div>
+
+            <span className="mt-1 flex items-center gap-2 font-sans text-sm md:mt-0">
+              Browser Powered by{" "}
+              <a
+                href="https://steel.dev"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-[--gray-12] underline transition-colors duration-200 hover:text-[--gray-11]"
+              >
+                Steel.dev
+              </a>
             </span>
           </div>
-
-          <span className="mt-1 flex items-center gap-2 font-sans text-sm md:mt-0">
-            Browser Powered by{" "}
-            <a
-              href="https://steel.dev"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-[--gray-12] underline transition-colors duration-200 hover:text-[--gray-11]"
-            >
-              Steel.dev
-            </a>
-          </span>
         </div>
       </div>
 
       {isPaused && currentSession && !isExpired && (
-        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
-          <div className="flex min-w-[23rem] items-center justify-between gap-4 rounded-lg border border-[--gray-3] bg-[--gray-2] p-4">
+        <div className="mt-2 flex justify-center">
+          <div className="flex max-w-[90%] items-center justify-between gap-4 rounded-lg border border-[--gray-3] bg-[--gray-2] p-3 shadow-md">
             <div className="flex flex-col gap-1">
               <p className="text-sm font-medium text-[--gray-12]">You are in control</p>
               <p className="text-xs text-[--gray-11]">No screenshots are being taken</p>
@@ -243,13 +251,13 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
             <Button
               onClick={handleResume}
               variant="secondary"
-              className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
+              className="rounded-full bg-white px-5 py-2 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
             >
               Resume
             </Button>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
