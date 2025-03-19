@@ -571,6 +571,19 @@ export default function ChatPage() {
     }
 
     setIsSubmitting(true);
+
+    // If we already have a session, use it regardless of message count
+    if (currentSession?.id) {
+      console.info("📤 Submitting message to existing chat session:", {
+        messageText,
+        sessionId: currentSession?.id,
+        existingMessages: messages.length,
+      });
+      handleSubmit(e);
+      return;
+    }
+
+    // No existing session - this is a new conversation
     if (messages.length === 0) {
       console.info("📝 Setting initial message with context:", {
         messageText,
@@ -580,21 +593,21 @@ export default function ChatPage() {
       });
       setInitialMessage(messageText);
       handleInputChange({ target: { value: "" } } as any);
+
+      // Create a new session if needed
+      if (!currentSession?.id) {
+        console.info("🔄 Creating new session for initial message");
+        await createSession();
+        console.info("✅ New session created");
+      }
     } else {
-      console.info("📤 Submitting message to existing chat:", {
+      // This case shouldn't normally happen (messages exist but no session)
+      // but we'll handle it just in case
+      console.info("📤 Submitting message to chat with no active session:", {
         messageText,
-        sessionId: currentSession?.id,
         existingMessages: messages.length,
       });
       handleSubmit(e);
-      return;
-    }
-
-    let session = currentSession;
-    if (!session?.id) {
-      console.info("🔄 Creating new session for message");
-      session = await createSession();
-      console.info("✅ New session created:", session);
     }
   }
 

@@ -1,6 +1,6 @@
 import logging
 from browser_use import Agent, Browser, BrowserConfig, Controller
-from typing import Any, List, Mapping, AsyncIterator, Optional
+from typing import Any, List, Mapping, AsyncIterator, Optional, Dict
 from ...providers import create_llm
 from ...models import ModelConfig
 from langchain.schema import AIMessage
@@ -33,6 +33,10 @@ os.environ["ANONYMIZED_TELEMETRY"] = "false"
 
 STEEL_API_KEY = os.getenv("STEEL_API_KEY")
 STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
+
+# Dictionary to store active browser instances by session_id
+active_browsers: Dict[str, Browser] = {}
+active_browser_contexts: Dict[str, BrowserContext] = {}
 
 # Initialize the controller
 class SessionAwareController(Controller):
@@ -99,16 +103,28 @@ async def browser_use_agent(
     controller.set_session_id(session_id)
 
     browser = None
+    browser_context = None
     queue = asyncio.Queue()
 
-    # Use our custom browser class
-    browser = Browser(
-        BrowserConfig(
-            cdp_url=f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session_id}"
+    # Check if we already have a browser for this session
+    if session_id in active_browsers:
+        logger.info("🔄 Reusing existing browser for session: %s", session_id)
+        browser = active_browsers[session_id]
+        browser_context = active_browser_contexts[session_id]
+    else:
+        # Create a new browser instance
+        logger.info("🌐 Creating new browser for session: %s", session_id)
+        browser = Browser(
+            BrowserConfig(
+                cdp_url=f"{STEEL_CONNECT_URL}?apiKey={STEEL_API_KEY}&sessionId={session_id}"
+            )
         )
-    )
-    # Use our custom browser context instead of the default one.
-    browser_context = BrowserContext(browser=browser)
+        # Use our custom browser context instead of the default one.
+        browser_context = BrowserContext(browser=browser)
+        
+        # Store for future use
+        active_browsers[session_id] = browser
+        active_browser_contexts[session_id] = browser_context
 
     def yield_data(
         browser_state: "BrowserState", agent_output: "AgentOutput", step_number: int
@@ -184,62 +200,6 @@ async def browser_use_agent(
 
     # Set the agent in the controller
     controller.set_agent(agent)
-
-    # Create initial safety pause using the same pattern as in yield_data
-    tool_calls = []
-    tool_outputs = []
-    safety_check_complete = False
-
-    # Add pause_execution first
-    pause_id = f"tool_call_{uuid.uuid4()}"
-    pause_tool_call = {
-        "name": "pause_execution",
-        "args": {"reason": "⏸️ Click 'Resume' to allow the agent to start browsing"},
-        "id": pause_id
-    }
-
-    # Send the pause message first
-    asyncio.get_event_loop().call_soon_threadsafe(
-        queue.put_nowait,
-        AIMessage(content="", tool_calls=[pause_tool_call])
-    )
-    asyncio.get_event_loop().call_soon_threadsafe(
-        queue.put_nowait,
-        ToolMessage(content="", tool_call_id=pause_id)
-    )
-    asyncio.get_event_loop().call_soon_threadsafe(
-        queue.put_nowait,
-        {"stop": True}
-    )
-
-    # Add print_call second
-    print_id = f"tool_call_{uuid.uuid4()}"
-    print_tool_call = {
-        "name": "print_call",
-        "args": {"message": "⚠️ BROWSER SAFETY: This agent requires verification before proceeding"},
-        "id": print_id
-    }
-    tool_calls.append(print_tool_call)
-    tool_outputs.append(ToolMessage(content="", tool_call_id=print_id))
-
-    # Send the print message second
-    asyncio.get_event_loop().call_soon_threadsafe(
-        queue.put_nowait,
-        AIMessage(content="", tool_calls=[print_tool_call])
-    )
-    asyncio.get_event_loop().call_soon_threadsafe(
-        queue.put_nowait,
-        tool_outputs[0]
-    )
-    asyncio.get_event_loop().call_soon_threadsafe(
-        queue.put_nowait,
-        {"stop": True}
-    )
-
-    # Execute the actual tools in the same order
-    await pause_execution("⏸️ Click 'Resume' to allow the agent to start browsing")
-    print_call("⚠️ BROWSER SAFETY: This agent requires verification before proceeding")
-    safety_check_complete = True
 
     steps = agent_settings.steps or 25
 
