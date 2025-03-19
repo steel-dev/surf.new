@@ -96,8 +96,6 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
       if (!response.ok) {
         throw new Error("Failed to resume control");
       }
-
-      window.location.reload();
     } catch (error) {
       console.error("Error resuming AI control:", error);
     }
