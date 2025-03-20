@@ -4,25 +4,20 @@ from typing import Any, List, Mapping, AsyncIterator, Optional, Dict
 from ...providers import create_llm
 from ...models import ModelConfig
 from langchain.schema import AIMessage
-from langchain_core.messages import ToolCall, ToolMessage, BaseMessage
+from langchain_core.messages import ToolMessage
 import os
 from dotenv import load_dotenv
 from ...utils.types import AgentSettings
 from browser_use.browser.views import BrowserState
-from browser_use.browser.context import BrowserContext, BrowserSession
+from browser_use.browser.context import BrowserContext
 from browser_use.agent.views import (
-    ActionResult,
-    AgentError,
-    AgentHistory,
     AgentHistoryList,
     AgentOutput,
-    AgentStepInfo,
 )
 import asyncio
-from pydantic import ValidationError, BaseModel
+from pydantic import BaseModel
 import uuid
-from ...plugins.base.tools import get_available_tools
-from .system_prompt import LoggingSystemPrompt
+from .system_prompt import ExtendedSystemPrompt
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -194,7 +189,7 @@ async def browser_use_agent(
         use_vision=use_vision,
         register_new_step_callback=yield_data,
         register_done_callback=yield_done,
-        system_prompt_class=LoggingSystemPrompt,  # Pass the class, not an instance
+        system_prompt_class=ExtendedSystemPrompt,
     )
     logger.info("🌐 Created Agent with browser instance (use_vision=%s)", use_vision)
 
