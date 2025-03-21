@@ -1179,7 +1179,6 @@ export default function ChatPage() {
                               </div>
                             ) : null;
                           })()}
-                          })()}
                         </div>
                       )}
                     </div>
