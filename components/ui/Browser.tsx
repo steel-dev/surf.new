@@ -119,15 +119,25 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
     if (!currentSession?.id) return;
 
     try {
-      const response = await fetch(`/api/sessions/${currentSession.id}/resume`, {
-        method: "POST",
-      });
+      setIsLoading(true);
 
-      if (!response.ok) {
-        throw new Error("Failed to resume control");
-      }
+      // Trigger the event first, so page.tsx can handle state updates
+      window.dispatchEvent(
+        new CustomEvent("browser-resumed", {
+          detail: { sessionId: currentSession.id },
+        })
+      );
+
+      // The actual API call will be handled by page.tsx when it receives the browser-resumed event
+      // This avoids making the API call twice
     } catch (error) {
       console.error("Error resuming AI control:", error);
+      setIsLoading(false);
+      toast({
+        title: "Error",
+        description: "Failed to resume AI control. Please try again.",
+        className: "border border-[--red-6] bg-[--red-3] text-[--red-11]",
+      });
     }
   };
 
@@ -290,9 +300,17 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
             <Button
               onClick={handleResume}
               variant="secondary"
-              className="rounded-full bg-white px-5 py-2 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
+              disabled={isLoading}
+              className={`rounded-full bg-white px-5 py-2 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1] ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
             >
-              Resume
+              {isLoading ? (
+                <>
+                  <div className="mr-2 size-4 animate-spin rounded-full border-2 border-gray-800 border-t-transparent"></div>
+                  Resuming...
+                </>
+              ) : (
+                "Resume"
+              )}
             </Button>
           </div>
         </div>

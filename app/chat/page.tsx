@@ -300,6 +300,7 @@ export default function ChatPage() {
 
   const [isPaused, setIsPaused] = useState(false);
   const [pauseReason, setPauseReason] = useState<string>("");
+  const [resumeLoading, setResumeLoading] = useState(false);
 
   const handleResume = async () => {
     if (!currentSession?.id) {
@@ -608,17 +609,42 @@ export default function ChatPage() {
         {
           id: `manual-pause-${Date.now()}`,
           role: "assistant",
-          content:
-            "⏸️ You have taken control of the browser. Type a message when you're ready to continue.",
+          content: "⏸️ You have taken control of the browser.",
         },
       ]);
     };
 
-    // Add event listener for browser pause events
+    const handleBrowserResumed = (event: CustomEvent) => {
+      console.info("▶️ Browser AI control was resumed by user:", event.detail);
+      setIsPaused(false);
+      setPauseReason("");
+
+      // Add a message to the chat to indicate resume
+      setMessages(messages => [
+        ...messages,
+        {
+          id: `manual-resume-${Date.now()}`,
+          role: "assistant",
+          content: "▶️ AI control has been resumed.",
+        },
+      ]);
+
+      // Show loading state and trigger agent to continue
+      // This simulates the same experience as sending a message
+      setResumeLoading(true);
+
+      // Call handleResume which makes the API call to resume the agent
+      // The loading indicator will naturally disappear when the agent responds
+      handleResume();
+    };
+
+    // Add event listeners for browser events
     window.addEventListener("browser-paused", handleBrowserPaused as EventListener);
+    window.addEventListener("browser-resumed", handleBrowserResumed as EventListener);
 
     return () => {
       window.removeEventListener("browser-paused", handleBrowserPaused as EventListener);
+      window.removeEventListener("browser-resumed", handleBrowserResumed as EventListener);
     };
   }, [isLoading]);
 
@@ -647,7 +673,6 @@ export default function ChatPage() {
     }
 
     setIsSubmitting(true);
-
     // If we're paused, we need to resume first
     if (isPaused) {
       console.info("⏸️ Message sent while paused, resuming first");
@@ -925,67 +950,124 @@ export default function ChatPage() {
                               messageId: message.id,
                             });
 
-                            // This is a critical check - if it's a pause message, we need to render it
-                            if (isPauseMessage) {
-                              // If we've already rendered a different pause message with the same reason, skip this one
-                              const previousPauseWithSameReason = messages
-                                .slice(0, index)
-                                .some(m => {
-                                  // Check for tool call with same reason
-                                  const prevToolCall = m.toolInvocations?.find(
+                            // Check if this pause message already appeared
+                            // For each pause message, check if the same content was shown before or after
+                            // the last user message in the conversation
+                            const shouldShowPauseMessage = () => {
+                              if (!isPauseMessage) return false;
+
+                              // We still want to filter out exact duplicates
+                              // Check if we've already seen a pause message with IDENTICAL content
+                              const exactMatchExists = messages.some((m, i) => {
+                                if (i === index) return false; // Don't compare with self
+
+                                // Check if we've seen exactly this pause message before
+                                // For tool calls, check the exact tool call and reason
+                                if (isPauseToolCall && pauseToolCall && m.toolInvocations) {
+                                  const otherToolCall = m.toolInvocations.find(
                                     t => t.toolName === "pause_execution"
                                   );
-                                  if (prevToolCall && prevToolCall.args?.reason === pauseReason) {
+
+                                  if (
+                                    otherToolCall &&
+                                    otherToolCall.args?.reason === pauseToolCall.args?.reason
+                                  ) {
+                                    console.info(
+                                      `⏸️ Found exact duplicate pause tool message: ${message.id} vs ${m.id}`
+                                    );
                                     return true;
                                   }
+                                }
 
-                                  // Check for content message with same reason
-                                  if (m.content?.includes(`⏸️ Pausing execution: ${pauseReason}`)) {
+                                // For content messages, check the exact content
+                                if (isPauseContentMessage && message.content && m.content) {
+                                  if (m.content === message.content) {
+                                    console.info(
+                                      `⏸️ Found exact duplicate pause content message: ${message.id} vs ${m.id}`
+                                    );
                                     return true;
                                   }
+                                }
 
-                                  return false;
-                                });
+                                return false;
+                              });
 
-                              if (previousPauseWithSameReason) {
+                              if (exactMatchExists) {
                                 console.info(
-                                  `⏸️ Skipping duplicate pause message for ${message.id}`
+                                  `⏸️ Skipping exact duplicate pause message: ${message.id}`
                                 );
-                                return null;
+                                return false;
                               }
+
+                              return true;
+                            };
+
+                            // This is a critical check - if it's a pause message, we need to render it
+                            if (isPauseMessage && shouldShowPauseMessage()) {
+                              // Check if this is the most recent pause message
+                              const isLatestPauseMessage = !messages.some((m, i) => {
+                                if (i <= index) return false; // Only check messages after this one
+
+                                // Check if there's a newer pause message
+                                return (
+                                  m.content?.includes("⏸️ Pausing execution") ||
+                                  m.toolInvocations?.some(t => t.toolName === "pause_execution")
+                                );
+                              });
+
+                              // Check if the user has sent a message after this pause
+                              const userSentMessageAfterPause = messages.some((m, i) => {
+                                return i > index && m.role === "user";
+                              });
+
+                              // Only show buttons if this is the latest pause and no user message after it
+                              const showButtons =
+                                isLatestPauseMessage && !userSentMessageAfterPause;
 
                               console.info(`⏸️ Rendering pause message UI for ${message.id}`, {
                                 reason: pauseReason,
                                 isPaused: isPaused,
+                                isLatestPauseMessage,
+                                userSentMessageAfterPause,
+                                showButtons,
                               });
 
                               return (
-                                <div className="flex w-full max-w-full flex-col gap-4">
+                                <div
+                                  className={`flex w-full max-w-full flex-col gap-4 ${!showButtons ? "opacity-80" : ""}`}
+                                >
                                   <div className="flex flex-col gap-4">
                                     <div className="font-normal text-[--gray-12]">
                                       <MarkdownText content={pauseReason} />
+                                      {!showButtons && (
+                                        <div className="mt-2 text-sm text-[--gray-10] italic">
+                                          (Confirmation no longer needed)
+                                        </div>
+                                      )}
                                     </div>
-                                    <div className="flex gap-3">
-                                      <Button
-                                        onClick={() => {
-                                          console.info("🖱️ Take Control button clicked");
-                                          handleResume();
-                                        }}
-                                        className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
-                                      >
-                                        Take Control
-                                      </Button>
-                                      <Button
-                                        onClick={() => {
-                                          console.info("🖱️ Keep Going button clicked");
-                                          handleResume();
-                                        }}
-                                        variant="outline"
-                                        className="rounded-full bg-[--gray-3] px-6 py-3 text-base font-medium text-[--gray-11] transition-colors hover:bg-[--gray-4]"
-                                      >
-                                        Keep Going
-                                      </Button>
-                                    </div>
+                                    {showButtons && (
+                                      <div className="flex gap-3">
+                                        <Button
+                                          onClick={() => {
+                                            console.info("🖱️ Take Control button clicked");
+                                            handleResume();
+                                          }}
+                                          className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
+                                        >
+                                          Take Control
+                                        </Button>
+                                        <Button
+                                          onClick={() => {
+                                            console.info("🖱️ Keep Going button clicked");
+                                            handleResume();
+                                          }}
+                                          variant="outline"
+                                          className="rounded-full bg-[--gray-3] px-6 py-3 text-base font-medium text-[--gray-11] transition-colors hover:bg-[--gray-4]"
+                                        >
+                                          Keep Going
+                                        </Button>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               );
@@ -1118,7 +1200,7 @@ export default function ChatPage() {
                   </div>
                 );
               })}
-              {isLoading && (
+              {(isLoading || resumeLoading) && (
                 <div className="size-4 animate-spin rounded-full border-2 border-[--gray-12] border-t-transparent" />
               )}
 
@@ -1157,8 +1239,8 @@ export default function ChatPage() {
                       value={input}
                       onChange={(value: string) => handleInputChange({ target: { value } } as any)}
                       onSubmit={handleSend}
-                      disabled={isLoading}
-                      isLoading={isLoading}
+                      disabled={isLoading || resumeLoading}
+                      isLoading={isLoading || resumeLoading}
                       onStop={handleStop}
                     />
                   </div>
