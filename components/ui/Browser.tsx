@@ -153,16 +153,18 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
           {debugUrl ? (
             <>
               <iframe
-                src={`${debugUrl}?showControls=false&interactive=${isPaused}`}
-                sandbox="allow-same-origin allow-scripts"
+                src={`${debugUrl}?showControls=false&interactive=true&initialInteractive=true`}
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
                 className="size-full border border-[--gray-3]"
               />
               {isPaused && (
                 <div
-                  className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 hover:opacity-0"
+                  className="absolute inset-0 flex items-center justify-center transition-opacity duration-300"
                   style={{
                     background:
                       "linear-gradient(0deg, rgba(23, 23, 23, 0.80) 0%, rgba(23, 23, 23, 0.80) 100%)",
+                    opacity: isHovering ? 0 : 1,
+                    pointerEvents: "none" /* Always allow clicks to pass through to iframe */,
                   }}
                 >
                   <span className="font-geist font-normal text-white">Awaiting your input...</span>
@@ -170,13 +172,14 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
               )}
               {!isPaused && currentSession && !isExpired && (
                 <div
-                  className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${
-                    isHovering ? "opacity-100" : "opacity-0"
-                  }`}
+                  className="absolute inset-0 flex items-center justify-center transition-opacity duration-300"
                   style={{
                     background:
                       "linear-gradient(0deg, rgba(23, 23, 23, 0.70) 0%, rgba(23, 23, 23, 0.70) 100%)",
-                    pointerEvents: isHovering ? "auto" : "none",
+                    opacity: isHovering ? 1 : 0,
+                    pointerEvents: isHovering
+                      ? "auto"
+                      : "none" /* Only capture clicks when visible */,
                   }}
                 >
                   <Button
