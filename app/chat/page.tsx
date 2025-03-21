@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { CheckIcon, Crosshair2Icon, PlayIcon, ReaderIcon } from "@radix-ui/react-icons";
+import { CheckIcon, Crosshair2Icon, ReaderIcon } from "@radix-ui/react-icons";
 import { useChat } from "ai/react";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -301,21 +301,31 @@ export default function ChatPage() {
   const [isPaused, setIsPaused] = useState(false);
   const [pauseReason, setPauseReason] = useState<string>("");
 
-  // Add function to handle resume
   const handleResume = async () => {
-    if (!currentSession?.id) return;
+    if (!currentSession?.id) {
+      return;
+    }
 
     try {
+      setIsPaused(false);
+      setPauseReason("");
+
       const response = await fetch(`/api/sessions/${currentSession.id}/resume`, {
         method: "POST",
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Resume API call failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorText,
+        });
+
+        setIsPaused(true);
+        setPauseReason("Failed to resume. Try again.");
         throw new Error("Failed to resume execution");
       }
-
-      setIsPaused(false);
-      setPauseReason("");
 
       toast({
         title: "Resumed",
@@ -323,7 +333,7 @@ export default function ChatPage() {
         className: "border border-[--green-6] bg-[--green-3] text-[--green-11]",
       });
     } catch (error) {
-      console.error("Error resuming execution:", error);
+      console.error("❌ Error resuming execution:", error);
       toast({
         title: "Error",
         description: "Failed to resume execution",
@@ -397,46 +407,69 @@ export default function ChatPage() {
         currentReason: pauseReason,
       });
 
+      // Log all tool calls for debugging
+      if (lastMessage.toolInvocations?.length) {
+        console.info(
+          "🛠️ All tool calls in last message:",
+          lastMessage.toolInvocations.map(tool => ({
+            toolName: tool.toolName,
+            args: tool.args,
+            state: tool.state,
+          }))
+        );
+      }
+
       // Check if this is a pause message
       if (lastMessage.role === "assistant") {
         // Check for pause tool call
+        let foundPause = false;
+        let pauseReasonText = "";
+
         if (lastMessage.toolInvocations?.length) {
           const pauseToolCall = lastMessage.toolInvocations.find(
             tool => tool.toolName === "pause_execution"
           );
 
           if (pauseToolCall) {
-            const reason = pauseToolCall.args.reason;
+            foundPause = true;
+            pauseReasonText = pauseToolCall.args.reason || "Unknown reason";
             console.info("⏸️ Found pause tool call:", {
               toolCall: pauseToolCall,
-              extractedReason: reason,
-              currentStates: {
-                isPaused,
-                pauseReason,
-              },
+              extractedReason: pauseReasonText,
             });
-            setIsPaused(true);
-            setPauseReason(reason || "Unknown reason");
           }
         }
         // Also check for pause message in content
-        else if (lastMessage.content) {
-          const isPauseMessage = lastMessage.content.includes("⏸️ Pausing execution");
-          if (isPauseMessage) {
-            const parts = lastMessage.content.split("⏸️ Pausing execution: ");
-            const reason = parts[1]?.trim();
-            console.info("⏸️ Found pause message:", {
-              originalContent: lastMessage.content,
-              parts,
-              extractedReason: reason,
-              currentStates: {
-                isPaused,
-                pauseReason,
-              },
-            });
-            setIsPaused(true);
-            setPauseReason(reason || "Unknown reason");
+        else if (lastMessage.content && lastMessage.content.includes("⏸️ Pausing execution")) {
+          foundPause = true;
+          const parts = lastMessage.content.split("⏸️ Pausing execution: ");
+          pauseReasonText = parts[1]?.trim() || "Unknown reason";
+          console.info("⏸️ Found pause message in content:", {
+            extractedReason: pauseReasonText,
+          });
+        }
+
+        if (foundPause) {
+          setIsPaused(true);
+          setPauseReason(pauseReasonText);
+
+          // Stop loading state when paused
+          if (isLoading) {
+            stop();
+            removeIncompleteToolCalls();
           }
+
+          console.info(
+            "🔍 Current pause messages:",
+            messages.filter(
+              m =>
+                m.content?.includes("⏸️ Pausing execution") ||
+                m.toolInvocations?.some(tool => tool.toolName === "pause_execution")
+            ).length
+          );
+
+          // Don't add an extra message - use the existing tool call message instead
+          console.info("⏸️ Using existing pause message from tool call");
         }
       }
     }
@@ -547,6 +580,15 @@ export default function ChatPage() {
     });
   }, [isPaused, pauseReason, isExpired, isLoading, input, messages.length]);
 
+  // Add a dedicated effect to track isPaused state changes
+  useEffect(() => {
+    console.info("🔄 isPaused state changed in ChatPage:", {
+      isPaused,
+      pauseReason,
+      messagesCount: messages.length,
+    });
+  }, [isPaused, pauseReason, messages.length]);
+
   // Enhanced handleSend with more logging
   async function handleSend(e: React.FormEvent, messageText: string, attachments: File[]) {
     console.info("📤 Handling message send:", {
@@ -558,6 +600,7 @@ export default function ChatPage() {
         isFirstMessage: messages.length === 0,
         isSubmitting,
         hasApiKey: checkApiKey(),
+        isPaused,
       },
     });
 
@@ -572,12 +615,21 @@ export default function ChatPage() {
 
     setIsSubmitting(true);
 
+    // If we're paused, we need to resume first
+    if (isPaused) {
+      console.info("⏸️ Message sent while paused, resuming first");
+      await handleResume();
+      // Small delay to ensure the resume has taken effect
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
     // If we already have a session, use it regardless of message count
     if (currentSession?.id) {
       console.info("📤 Submitting message to existing chat session:", {
         messageText,
         sessionId: currentSession?.id,
         existingMessages: messages.length,
+        wasPaused: isPaused,
       });
       handleSubmit(e);
       return;
@@ -778,6 +830,16 @@ export default function ChatPage() {
                             const hasToolInvocations =
                               message.toolInvocations && message.toolInvocations.length > 0;
 
+                            // Add detailed logging for each message rendering
+                            console.info(`📱 Rendering assistant message ${message.id}:`, {
+                              hasContent: !!message.content,
+                              contentLength: message.content?.length || 0,
+                              hasToolInvocations,
+                              toolCount: message.toolInvocations?.length || 0,
+                              toolNames: message.toolInvocations?.map(t => t.toolName) || [],
+                              messageIndex: index,
+                            });
+
                             // Check for memory or goal messages first
                             const isMemoryOrGoalMessage =
                               message.content &&
@@ -799,27 +861,92 @@ export default function ChatPage() {
                             const pauseToolCall = message.toolInvocations?.find(
                               tool => tool.toolName === "pause_execution"
                             );
-                            const isPauseMessage =
-                              hasToolInvocations &&
-                              message.toolInvocations?.length === 1 &&
-                              !!pauseToolCall;
 
-                            if (isPauseMessage && pauseToolCall) {
+                            // Check for pause message in content or tool calls
+                            const isPauseToolCall = hasToolInvocations && !!pauseToolCall;
+                            const isPauseContentMessage =
+                              message.content?.includes("⏸️ Pausing execution");
+                            const isPauseMessage = isPauseToolCall || isPauseContentMessage;
+
+                            // Get the pause reason from either source
+                            let pauseReason = "";
+
+                            if (isPauseToolCall && pauseToolCall) {
+                              // Clean up the reason - sometimes it includes the "⏸️" prefix which causes duplication
+                              const rawReason = pauseToolCall.args?.reason || "Unknown reason";
+                              pauseReason = rawReason.replace(/^⏸️\s*/, "");
+                            } else if (isPauseContentMessage && message.content) {
+                              const parts = message.content.split("⏸️ Pausing execution: ");
+                              pauseReason = parts[1]?.trim() || "Unknown reason";
+                            }
+
+                            // Log the message classification for debugging
+                            console.info(`🏷️ Message ${message.id} classification:`, {
+                              isMemoryOrGoalMessage,
+                              isRegularToolMessage,
+                              isSpecial,
+                              isPauseMessage,
+                              isPauseToolCall,
+                              isPauseContentMessage,
+                              pauseReason,
+                              messageId: message.id,
+                            });
+
+                            // This is a critical check - if it's a pause message, we need to render it
+                            if (isPauseMessage) {
+                              // If we've already rendered a different pause message with the same reason, skip this one
+                              const previousPauseWithSameReason = messages
+                                .slice(0, index)
+                                .some(m => {
+                                  // Check for tool call with same reason
+                                  const prevToolCall = m.toolInvocations?.find(
+                                    t => t.toolName === "pause_execution"
+                                  );
+                                  if (prevToolCall && prevToolCall.args?.reason === pauseReason) {
+                                    return true;
+                                  }
+
+                                  // Check for content message with same reason
+                                  if (m.content?.includes(`⏸️ Pausing execution: ${pauseReason}`)) {
+                                    return true;
+                                  }
+
+                                  return false;
+                                });
+
+                              if (previousPauseWithSameReason) {
+                                console.info(
+                                  `⏸️ Skipping duplicate pause message for ${message.id}`
+                                );
+                                return null;
+                              }
+
+                              console.info(`⏸️ Rendering pause message UI for ${message.id}`, {
+                                reason: pauseReason,
+                                isPaused: isPaused,
+                              });
+
                               return (
                                 <div className="flex w-full max-w-full flex-col gap-4">
                                   <div className="flex flex-col gap-4">
                                     <div className="font-normal text-[--gray-12]">
-                                      <MarkdownText content={pauseToolCall.args?.reason || ""} />
+                                      <MarkdownText content={pauseReason} />
                                     </div>
                                     <div className="flex gap-3">
                                       <Button
-                                        onClick={handleResume}
+                                        onClick={() => {
+                                          console.info("🖱️ Take Control button clicked");
+                                          handleResume();
+                                        }}
                                         className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
                                       >
                                         Take Control
                                       </Button>
                                       <Button
-                                        onClick={handleResume}
+                                        onClick={() => {
+                                          console.info("🖱️ Keep Going button clicked");
+                                          handleResume();
+                                        }}
                                         variant="outline"
                                         className="rounded-full bg-[--gray-3] px-6 py-3 text-base font-medium text-[--gray-11] transition-colors hover:bg-[--gray-4]"
                                       >
@@ -993,11 +1120,16 @@ export default function ChatPage() {
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
+                    {isPaused && (
+                      <div className="mb-2 rounded-md bg-[--yellow-3] px-3 py-1 text-xs text-[--yellow-11]">
+                        AI paused. You can type a message to continue.
+                      </div>
+                    )}
                     <ChatInput
                       value={input}
                       onChange={(value: string) => handleInputChange({ target: { value } } as any)}
                       onSubmit={handleSend}
-                      disabled={isLoading || isPaused}
+                      disabled={isLoading}
                       isLoading={isLoading}
                       onStop={handleStop}
                     />
@@ -1017,6 +1149,11 @@ export default function ChatPage() {
             md:border-b-0
           "
         >
+          {/* Use IIFE pattern to safely log without affecting rendering */}
+          {(() => {
+            console.info("👀 Rendering Browser component with isPaused:", isPaused);
+            return null;
+          })()}
           <Browser isPaused={isPaused} />
         </div>
       </div>

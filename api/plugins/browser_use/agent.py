@@ -33,6 +33,9 @@ STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
 active_browsers: Dict[str, Browser] = {}
 active_browser_contexts: Dict[str, BrowserContext] = {}
 
+# Global variable to track resume state
+_agent_resumed = False
+
 # Initialize the controller
 class SessionAwareController(Controller):
     def __init__(self, *args, **kwargs):
@@ -61,11 +64,28 @@ async def pause_execution(reason: str) -> str:
         raise ValueError("No agent set in controller")
         
     print(f"⏸️ Pausing execution: {reason}")
+    
+    # Store current browser state before pausing (to prevent about:blank issue)
+    browser_context = None
+    browser = None
+    if controller.session_id in active_browser_contexts:
+        browser_context = active_browser_contexts[controller.session_id]
+    if controller.session_id in active_browsers:
+        browser = active_browsers[controller.session_id]
+    
+    # Log the current state for debugging
+    if browser:
+        print(f"📊 Current browser state before pause - session_id: {controller.session_id}")
+        
+    # Pause the agent but ensure browser state is preserved
     controller.agent.pause()
+    
+    # Make sure browser and context remain active and are not reset
+    if controller.session_id:
+        active_browser_contexts[controller.session_id] = browser_context
+        active_browsers[controller.session_id] = browser
+    
     return "Agent paused"
-
-# Add a global to track resume state
-_agent_resumed = False
 
 class ResumeRequest(BaseModel):
     session_id: str
@@ -76,8 +96,26 @@ async def resume_execution(request: ResumeRequest) -> dict:
     if not controller.agent:
         return {"status": "error", "message": "No agent found"}
     
+    # Ensure browser state is preserved
+    session_id = request.session_id
+    if session_id in active_browsers and session_id in active_browser_contexts:
+        logger.info(f"📊 Preserving browser state for session on resume: {session_id}")
+        browser = active_browsers[session_id]
+        browser_context = active_browser_contexts[session_id]
+        
+        # Make sure we're still using the same browser instances
+        if controller.agent.browser != browser:
+            logger.info(f"🔄 Restoring browser instance for session: {session_id}")
+            controller.agent.browser = browser
+            
+        if controller.agent.browser_context != browser_context:
+            logger.info(f"🔄 Restoring browser context for session: {session_id}")
+            controller.agent.browser_context = browser_context
+    
+    # Resume the agent
     controller.agent.resume()
     _agent_resumed = True
+    
     return {"status": "success", "message": "Agent resumed"}
 
 async def browser_use_agent(
@@ -87,6 +125,8 @@ async def browser_use_agent(
     session_id: str,
     cancel_event: Optional[asyncio.Event] = None,
 ) -> AsyncIterator[str]:
+    global _agent_resumed
+    
     logger.info("🚀 Starting browser_use_agent with session_id: %s", session_id)
     logger.info("🔧 Model config: %s", model_config)
     logger.info("⚙️ Agent settings: %s", agent_settings)
@@ -96,6 +136,9 @@ async def browser_use_agent(
 
     # Set the session_id in the controller
     controller.set_session_id(session_id)
+    
+    # Reset the resumed flag at the start of a new session
+    _agent_resumed = False
 
     browser = None
     browser_context = None
@@ -219,7 +262,6 @@ async def browser_use_agent(
                 break
             
             # Check if agent was resumed - if so, release any pending special messages
-            global _agent_resumed
             if _agent_resumed and pending_special_messages:
                 # First yield all pending special messages
                 for msg in pending_special_messages:
