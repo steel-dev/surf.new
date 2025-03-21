@@ -118,6 +118,41 @@ async def resume_execution(request: ResumeRequest) -> dict:
     
     return {"status": "success", "message": "Agent resumed"}
 
+class PauseRequest(BaseModel):
+    session_id: str
+
+async def pause_execution_manually(request: PauseRequest) -> dict:
+    """API endpoint to manually pause agent execution."""
+    logger.info(f"🖐️ Manual pause requested for session: {request.session_id}")
+    
+    if not controller.agent:
+        return {"status": "error", "message": "No agent found"}
+    
+    if controller.session_id != request.session_id:
+        return {"status": "error", "message": "Session ID mismatch"}
+    
+    # Store current browser state before pausing
+    browser_context = None
+    browser = None
+    if controller.session_id in active_browser_contexts:
+        browser_context = active_browser_contexts[controller.session_id]
+    if controller.session_id in active_browsers:
+        browser = active_browsers[controller.session_id]
+    
+    # Log the current state for debugging
+    if browser:
+        logger.info(f"📊 Preserving browser state on manual pause - session_id: {controller.session_id}")
+    
+    # Pause the agent but ensure browser state is preserved
+    controller.agent.pause()
+    
+    # Make sure browser and context remain active and are not reset
+    if controller.session_id:
+        active_browser_contexts[controller.session_id] = browser_context
+        active_browsers[controller.session_id] = browser
+    
+    return {"status": "success", "message": "Agent manually paused for user control"}
+
 async def browser_use_agent(
     model_config: ModelConfig,
     agent_settings: AgentSettings,

@@ -589,6 +589,39 @@ export default function ChatPage() {
     });
   }, [isPaused, pauseReason, messages.length]);
 
+  // Add effect to handle browser control events
+  useEffect(() => {
+    const handleBrowserPaused = (event: CustomEvent) => {
+      console.info("🖐️ Browser was manually paused by user:", event.detail);
+      setIsPaused(true);
+      setPauseReason("You have taken control of the browser");
+
+      // Make sure loading state is cleared if active
+      if (isLoading) {
+        stop();
+        removeIncompleteToolCalls();
+      }
+
+      // Add a message to the chat to indicate manual pause
+      setMessages(messages => [
+        ...messages,
+        {
+          id: `manual-pause-${Date.now()}`,
+          role: "assistant",
+          content:
+            "⏸️ You have taken control of the browser. Type a message when you're ready to continue.",
+        },
+      ]);
+    };
+
+    // Add event listener for browser pause events
+    window.addEventListener("browser-paused", handleBrowserPaused as EventListener);
+
+    return () => {
+      window.removeEventListener("browser-paused", handleBrowserPaused as EventListener);
+    };
+  }, [isLoading]);
+
   // Enhanced handleSend with more logging
   async function handleSend(e: React.FormEvent, messageText: string, attachments: File[]) {
     console.info("📤 Handling message send:", {

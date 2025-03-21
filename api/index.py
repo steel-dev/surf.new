@@ -95,6 +95,20 @@ async def resume_session(session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/sessions/{session_id}/pause", tags=["Sessions"])
+async def pause_session(session_id: str):
+    """
+    Manually pause execution for a session to take control.
+    """
+    from .plugins.browser_use.agent import pause_execution_manually, PauseRequest
+    
+    try:
+        result = await pause_execution_manually(PauseRequest(session_id=session_id))
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/chat", tags=["Chat"])
 async def handle_chat(request: ChatRequest):
     """

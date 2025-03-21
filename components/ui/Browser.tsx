@@ -6,6 +6,8 @@ import Image from "next/image";
 
 import { Button } from "@/components/ui/button";
 
+import { useToast } from "@/hooks/use-toast";
+
 import { cn } from "@/lib/utils";
 
 import { useSteelContext } from "@/app/contexts/SteelContext";
@@ -26,6 +28,7 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
   const [favicon, setFavicon] = useState<string | null>(null);
   const [isHovering, setIsHovering] = useState(false);
   const { currentSession, sessionTimeElapsed, isExpired, maxSessionDuration } = useSteelContext();
+  const { toast } = useToast();
 
   const debugUrl = currentSession?.debugUrl;
 
@@ -72,15 +75,42 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
     if (!currentSession?.id) return;
 
     try {
+      setIsLoading(true);
       const response = await fetch(`/api/sessions/${currentSession.id}/pause`, {
         method: "POST",
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Error taking control:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorText,
+        });
+        toast({
+          title: "Error",
+          description: "Failed to take control. Please try again.",
+          className: "border border-[--red-6] bg-[--red-3] text-[--red-11]",
+        });
         throw new Error("Failed to pause session");
       }
+
+      toast({
+        title: "Control Taken",
+        description: "You now have control of the browser",
+        className: "border border-[--green-6] bg-[--green-3] text-[--green-11]",
+      });
+
+      // Trigger a custom event that page.tsx can listen for
+      window.dispatchEvent(
+        new CustomEvent("browser-paused", {
+          detail: { sessionId: currentSession.id },
+        })
+      );
     } catch (error) {
       console.error("Error taking control:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -184,9 +214,17 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
                 >
                   <Button
                     onClick={handleTakeControl}
-                    className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
+                    disabled={isLoading}
+                    className={`rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1] ${isLoading ? "cursor-not-allowed opacity-50" : ""}`}
                   >
-                    Take Control
+                    {isLoading ? (
+                      <>
+                        <div className="mr-2 size-4 animate-spin rounded-full border-2 border-gray-800 border-t-transparent"></div>
+                        Taking Control...
+                      </>
+                    ) : (
+                      "Take Control"
+                    )}
                   </Button>
                 </div>
               )}
