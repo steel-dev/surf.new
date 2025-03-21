@@ -1120,11 +1120,6 @@ export default function ChatPage() {
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    {isPaused && (
-                      <div className="mb-2 rounded-md bg-[--yellow-3] px-3 py-1 text-xs text-[--yellow-11]">
-                        AI paused. You can type a message to continue.
-                      </div>
-                    )}
                     <ChatInput
                       value={input}
                       onChange={(value: string) => handleInputChange({ target: { value } } as any)}
