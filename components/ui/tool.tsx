@@ -29,7 +29,14 @@ function capitalizeAndReplaceUnderscores(str: string) {
   return str.replaceAll("_", " ").replace(/^./, match => match.toUpperCase());
 }
 
-export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderProps) {
+
+export const ToolInvocations = ({
+  toolInvocations,
+  onImageClick,
+}: {
+  toolInvocations: any[];
+  onImageClick?: (imageSrc: string) => void;
+}) => {
   if (!toolInvocations) {
     return null;
   }
@@ -128,4 +135,4 @@ export function ToolInvocations({ toolInvocations, onImageClick }: ToolRenderPro
       })}
     </div>
   );
-}
+};
