@@ -73,16 +73,12 @@ function updateElement(element: HTMLElement) {
 }
 
 // Subscribe to timer changes and update all elements directly
-useTimerStore.subscribe(
-  state => state.sessionTimeElapsed,
-  (currentTime, previousTime) => {
-    console.log(`[TIMER] Time changed from ${previousTime} to ${currentTime}`);
-
-    if (timerElements.length === 0) {
-      console.log("[TIMER] No elements registered for updates");
-    } else {
-      console.log(`[TIMER] Updating ${timerElements.length} elements`);
-      timerElements.forEach(updateElement);
-    }
+useTimerStore.subscribe((currentTime, previousTime) => {
+  console.log(`[TIMER] Time changed from ${previousTime} to ${currentTime}`);
+  if (timerElements.length === 0) {
+    console.log("[TIMER] No elements registered for updates");
+  } else {
+    console.log(`[TIMER] Updating ${timerElements.length} elements`);
+    timerElements.forEach(updateElement);
   }
-);
+});

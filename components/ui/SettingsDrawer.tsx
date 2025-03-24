@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Info, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -202,56 +202,68 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
   const { data: agents, isLoading: isLoadingAgents } = useAgents();
   const { data: ollamaData, isLoading: isLoadingOllama, error: ollamaError } = useOllamaModels();
 
-  if (agents && (!currentSettings?.selectedAgent || !agents[currentSettings.selectedAgent])) {
-    const firstAgentKey = Object.keys(agents)[0];
-    const defaultProvider = agents[firstAgentKey].supported_models[0].provider;
-    const defaultModel = agents[firstAgentKey].supported_models[0].models[0];
-    const defaultModelSettings = Object.entries(agents[firstAgentKey].model_settings).reduce(
-      (acc, [key, value]) => {
-        acc[key] = (value as SettingConfig).default as number | string;
-        return acc;
-      },
-      {} as ModelSettings
-    );
-    const defaultAgentSettings = Object.entries(agents[firstAgentKey].agent_settings).reduce(
-      (acc, [key, value]) => {
-        acc[key] = (value as SettingConfig).default as number | string;
-        return acc;
-      },
-      {} as AgentSettings
-    );
+  // Handle initial agent selection
+  useEffect(() => {
+    if (agents && (!currentSettings?.selectedAgent || !agents[currentSettings.selectedAgent])) {
+      const firstAgentKey = Object.keys(agents)[0];
+      const defaultProvider = agents[firstAgentKey].supported_models[0].provider;
+      const defaultModel = agents[firstAgentKey].supported_models[0].models[0];
+      const defaultModelSettings = Object.entries(agents[firstAgentKey].model_settings).reduce(
+        (acc, [key, value]) => {
+          acc[key] = (value as SettingConfig).default as number | string;
+          return acc;
+        },
+        {} as ModelSettings
+      );
+      const defaultAgentSettings = Object.entries(agents[firstAgentKey].agent_settings).reduce(
+        (acc, [key, value]) => {
+          acc[key] = (value as SettingConfig).default as number | string;
+          return acc;
+        },
+        {} as AgentSettings
+      );
 
-    updateSettings({
-      selectedAgent: firstAgentKey,
-      selectedProvider: defaultProvider,
-      selectedModel: defaultModel,
-      modelSettings: defaultModelSettings,
-      agentSettings: defaultAgentSettings,
-      providerApiKeys: currentSettings?.providerApiKeys || {},
-    });
-  }
-
-  if (
-    agents &&
-    currentSettings?.selectedAgent &&
-    currentSettings?.selectedProvider &&
-    agents[currentSettings.selectedAgent]
-  ) {
-    const providerModels = (agents[currentSettings.selectedAgent] as Agent).supported_models.find(
-      (m: SupportedModel) => m.provider === currentSettings.selectedProvider
-    );
-
-    if (
-      providerModels &&
-      providerModels.models.length > 0 &&
-      !providerModels.models.includes(currentSettings.selectedModel)
-    ) {
       updateSettings({
-        ...currentSettings,
-        selectedModel: providerModels.models[0],
+        selectedAgent: firstAgentKey,
+        selectedProvider: defaultProvider,
+        selectedModel: defaultModel,
+        modelSettings: defaultModelSettings,
+        agentSettings: defaultAgentSettings,
+        providerApiKeys: currentSettings?.providerApiKeys || {},
       });
     }
-  }
+  }, [agents, currentSettings?.selectedAgent, updateSettings]);
+
+  // Handle model selection validation
+  useEffect(() => {
+    if (
+      agents &&
+      currentSettings?.selectedAgent &&
+      currentSettings?.selectedProvider &&
+      agents[currentSettings.selectedAgent]
+    ) {
+      const providerModels = (agents[currentSettings.selectedAgent] as Agent).supported_models.find(
+        (m: SupportedModel) => m.provider === currentSettings.selectedProvider
+      );
+
+      if (
+        providerModels &&
+        providerModels.models.length > 0 &&
+        !providerModels.models.includes(currentSettings.selectedModel)
+      ) {
+        updateSettings({
+          ...currentSettings,
+          selectedModel: providerModels.models[0],
+        });
+      }
+    }
+  }, [
+    agents,
+    currentSettings?.selectedAgent,
+    currentSettings?.selectedProvider,
+    currentSettings?.selectedModel,
+    updateSettings,
+  ]);
 
   const handleSettingChange = (settingType: "model" | "agent", key: string, value: any) => {
     if (!currentSettings) return;
