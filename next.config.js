@@ -3,6 +3,11 @@ const nextConfig = {
   experimental: {
     reactCompiler: true,
   },
+  compiler: {
+    removeConsole: {
+      exclude: ["error"],
+    },
+  },
   reactStrictMode: false,
   images: {
     remotePatterns: [
