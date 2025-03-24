@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -23,10 +23,10 @@ import { useSettings } from "@/app/contexts/SettingsContext";
 import { useSteelContext } from "@/app/contexts/SteelContext";
 
 // UPDATED CodeBlock component for rendering code blocks with a copy button and language display.
-function CodeBlock({ code, language }: { code: string; language?: string }) {
+const CodeBlock = React.memo(({ code, language }: { code: string; language?: string }) => {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
@@ -34,7 +34,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
     } catch (err) {
       console.error("Failed to copy code:", err);
     }
-  };
+  }, [code]);
 
   if (language) {
     return (
@@ -78,12 +78,14 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
       </button>
     </div>
   );
-}
+});
+
+CodeBlock.displayName = "CodeBlock";
 
 // UPDATED MarkdownText component to support code blocks along with inline markdown
-function MarkdownText({ content }: { content: string }) {
+const MarkdownText = React.memo(({ content }: { content: string }) => {
   // Helper function to process inline markdown (links, bold, italics)
-  const parseInlineMarkdown = (text: string, keyOffset: number) => {
+  const parseInlineMarkdown = useCallback((text: string, keyOffset: number) => {
     const segments = text.split(/(\[.*?\]\(.*?\))|(\*.*?\*)|(_.*?_)/g).filter(Boolean);
     return segments.map((segment, index) => {
       const key = `${keyOffset}-${index}`;
@@ -121,38 +123,41 @@ function MarkdownText({ content }: { content: string }) {
       // Return plain text if no markdown matched
       return <span key={key}>{segment}</span>;
     });
-  };
+  }, []);
 
   // Main parser that first detects code blocks and falls back to inline markdown
-  const parseContent = (text: string) => {
-    const elements = [];
-    let lastIndex = 0;
-    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-    let match: RegExpExecArray | null;
-    let key = 0;
+  const parseContent = useCallback(
+    (text: string) => {
+      const elements = [];
+      let lastIndex = 0;
+      const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+      let match: RegExpExecArray | null;
+      let key = 0;
 
-    while ((match = codeBlockRegex.exec(text)) !== null) {
-      // Process any text before the code block as inline markdown
-      if (match.index > lastIndex) {
-        const inlineText = text.substring(lastIndex, match.index);
-        elements.push(...parseInlineMarkdown(inlineText, key));
+      while ((match = codeBlockRegex.exec(text)) !== null) {
+        // Process any text before the code block as inline markdown
+        if (match.index > lastIndex) {
+          const inlineText = text.substring(lastIndex, match.index);
+          elements.push(...parseInlineMarkdown(inlineText, key));
+          key++;
+        }
+        // Extract language (if provided) and code content, then render the CodeBlock
+        const language = match[1] || "";
+        const codeContent = match[2];
+        elements.push(<CodeBlock key={`code-${key}`} language={language} code={codeContent} />);
         key++;
+        lastIndex = codeBlockRegex.lastIndex;
       }
-      // Extract language (if provided) and code content, then render the CodeBlock
-      const language = match[1] || "";
-      const codeContent = match[2];
-      elements.push(<CodeBlock key={`code-${key}`} language={language} code={codeContent} />);
-      key++;
-      lastIndex = codeBlockRegex.lastIndex;
-    }
 
-    // Process any remaining text after the last code block
-    if (lastIndex < text.length) {
-      const inlineText = text.substring(lastIndex);
-      elements.push(...parseInlineMarkdown(inlineText, key));
-    }
-    return elements;
-  };
+      // Process any remaining text after the last code block
+      if (lastIndex < text.length) {
+        const inlineText = text.substring(lastIndex);
+        elements.push(...parseInlineMarkdown(inlineText, key));
+      }
+      return elements;
+    },
+    [parseInlineMarkdown]
+  );
 
   const isMemory = content.startsWith("*Memory*:");
   const isGoal = content.startsWith("*Next Goal*:") || content.startsWith("*Previous Goal*:");
@@ -185,13 +190,11 @@ function MarkdownText({ content }: { content: string }) {
   }
 
   return <>{parseContent(content)}</>;
-}
+});
 
-interface UserMessageProps {
-  content: string;
-}
+MarkdownText.displayName = "MarkdownText";
 
-function UserMessage({ content }: UserMessageProps) {
+const UserMessage = React.memo(({ content }: { content: string }) => {
   const hasLineBreaks = content.includes("\n");
   const longestLine = Math.max(...content.split("\n").map(line => line.length));
   const isLongMessage = longestLine > 60;
@@ -217,7 +220,9 @@ function UserMessage({ content }: UserMessageProps) {
       </div>
     </div>
   );
-}
+});
+
+UserMessage.displayName = "UserMessage";
 
 /**
  * ChatScrollAnchor:
@@ -225,285 +230,589 @@ function UserMessage({ content }: UserMessageProps) {
  * - If isAtBottom and trackVisibility are both true, it automatically scrolls
  *   the chat area to bottom whenever the anchor is out of view (new messages).
  */
-interface ChatScrollAnchorProps {
-  trackVisibility: boolean; // typically matches isLoading
+const ChatScrollAnchor = React.memo(
+  ({
+    trackVisibility,
+    isAtBottom,
+    scrollAreaRef,
+  }: {
+    trackVisibility: boolean;
+    isAtBottom: boolean;
+    scrollAreaRef: React.RefObject<HTMLDivElement>;
+  }) => {
+    const { ref, inView } = useInView({
+      trackVisibility,
+      delay: 100,
+    });
+
+    useEffect(() => {
+      if (isAtBottom && trackVisibility && !inView && scrollAreaRef.current?.children[0]) {
+        const messagesContainer = scrollAreaRef.current.children[0];
+        messagesContainer.scrollTop =
+          messagesContainer.scrollHeight - messagesContainer.clientHeight;
+      }
+    }, [inView, isAtBottom, trackVisibility, scrollAreaRef]);
+
+    return <div ref={ref} className="h-px w-full" />;
+  }
+);
+
+ChatScrollAnchor.displayName = "ChatScrollAnchor";
+
+// Create a completely isolated input container near the top of the file, after other component definitions
+const ChatInputContainer = React.memo(
+  ({
+    initialValue = "",
+    onSend,
+    disabled,
+    isLoading,
+    onStop,
+  }: {
+    initialValue?: string;
+    onSend: (messageText: string) => void;
+    disabled: boolean;
+    isLoading: boolean;
+    onStop: () => void;
+  }) => {
+    console.log("[RENDER] ChatInputContainer rendering");
+    const [inputValue, setInputValue] = useState(initialValue);
+
+    // Keep local input state synchronized with initial value
+    useEffect(() => {
+      if (initialValue !== inputValue) {
+        setInputValue(initialValue);
+      }
+    }, [initialValue]);
+
+    const handleChange = useCallback((value: string) => {
+      setInputValue(value);
+    }, []);
+
+    const handleSubmit = useCallback(
+      (e: React.FormEvent, messageText: string, attachments: File[]) => {
+        e.preventDefault();
+        onSend(messageText);
+        setInputValue("");
+      },
+      [onSend]
+    );
+
+    return (
+      <ChatInput
+        value={inputValue}
+        onChange={handleChange}
+        onSubmit={handleSubmit}
+        disabled={disabled}
+        isLoading={isLoading}
+        onStop={onStop}
+      />
+    );
+  }
+);
+
+ChatInputContainer.displayName = "ChatInputContainer";
+
+// Memoize the Browser component to prevent unnecessary re-renders
+const MemoizedBrowser = React.memo(Browser);
+MemoizedBrowser.displayName = "MemoizedBrowser";
+
+// Fix the linter errors in MemoizedMessageList by adding types
+const MemoizedMessageList = React.memo(
+  ({
+    messages,
+    isCreatingSession,
+    hasShownConnection,
+    currentSession,
+    onImageClick,
+  }: {
+    messages: any[];
+    isCreatingSession: boolean;
+    hasShownConnection: boolean;
+    currentSession: any;
+    onImageClick: (src: string) => void;
+  }) => {
+    console.log("[RENDER] MemoizedMessageList rendering");
+
+    return (
+      <>
+        {messages.map((message, index) => {
+          return (
+            <div key={message.id || index} className="flex w-full max-w-full flex-col gap-2">
+              {/* Force message content to respect container width */}
+              <div className="w-full max-w-full">
+                {message.role === "user" ? (
+                  <>
+                    <UserMessage content={message.content} />
+                    {index === 0 && isCreatingSession && (
+                      <div className="mx-auto mt-2 w-[85%] animate-pulse rounded-md border border-[--blue-3] bg-[--blue-2] px-4 py-2 font-geist text-sm text-[--blue-11]">
+                        Connecting to Steel Browser Session...
+                      </div>
+                    )}
+                    {index === 0 &&
+                      hasShownConnection &&
+                      !isCreatingSession &&
+                      currentSession?.id && (
+                        <div className="mx-auto mt-2 flex w-[85%] items-center gap-2 rounded-md border border-[--green-3] bg-[--green-2] px-4 py-2 font-geist text-sm text-[--green-11]">
+                          <CheckIcon className="size-4" />
+                          Steel Browser Session connected
+                        </div>
+                      )}
+                  </>
+                ) : (
+                  <div className="flex w-full max-w-full flex-col gap-4 break-words text-base text-[--gray-12]">
+                    {(() => {
+                      const isSpecialMessage =
+                        (message.content &&
+                          (message.content.includes("*Memory*:") ||
+                            message.content.includes("*Next Goal*:") ||
+                            message.content.includes("*Previous Goal*:"))) ||
+                        (message.toolInvocations && message.toolInvocations.length > 0);
+                      const hasToolInvocations =
+                        message.toolInvocations && message.toolInvocations.length > 0;
+                      const isSpecial = isSpecialMessage || hasToolInvocations;
+
+                      // Find consecutive special messages
+                      let specialMessagesGroup = [];
+                      if (isSpecial) {
+                        let i = index;
+                        while (i < messages.length) {
+                          const nextMessage = messages[i];
+                          const isNextSpecial =
+                            (nextMessage.content &&
+                              (nextMessage.content.includes("*Memory*:") ||
+                                nextMessage.content.includes("*Next Goal*:") ||
+                                nextMessage.content.includes("*Previous Goal*:"))) ||
+                            (nextMessage.toolInvocations && nextMessage.toolInvocations.length > 0);
+
+                          if (!isNextSpecial) break;
+                          specialMessagesGroup.push(nextMessage);
+                          i++;
+                        }
+                      }
+
+                      // Skip if this message is part of a group but not the first one
+                      if (isSpecial && index > 0) {
+                        const prevMessage = messages[index - 1];
+                        const isPrevSpecial =
+                          (prevMessage.content &&
+                            (prevMessage.content.includes("*Memory*:") ||
+                              prevMessage.content.includes("*Next Goal*:") ||
+                              prevMessage.content.includes("*Previous Goal*:"))) ||
+                          (prevMessage.toolInvocations && prevMessage.toolInvocations.length > 0);
+                        if (isPrevSpecial) return null;
+                      }
+
+                      return isSpecial ? (
+                        <div className="flex w-full max-w-full flex-col gap-2 rounded-[1.25rem] border border-[--gray-3] bg-[--gray-1] p-2">
+                          <div className="flex flex-col gap-2">
+                            {specialMessagesGroup.map((groupMessage, groupIndex) => (
+                              <React.Fragment key={groupMessage.id}>
+                                {groupMessage.content && (
+                                  <div className="w-full">
+                                    <MarkdownText content={groupMessage.content} />
+                                  </div>
+                                )}
+                                {groupMessage.toolInvocations &&
+                                  groupMessage.toolInvocations.length > 0 && (
+                                    <div className="flex w-full flex-col gap-2">
+                                      {groupMessage.toolInvocations.map(
+                                        (tool: any, toolIndex: number) => (
+                                          <div
+                                            key={toolIndex}
+                                            className="flex w-full items-center justify-between rounded-2xl border border-[--gray-3] bg-[--gray-2] p-3"
+                                          >
+                                            <ToolInvocations
+                                              toolInvocations={[tool]}
+                                              onImageClick={onImageClick}
+                                            />
+                                          </div>
+                                        )
+                                      )}
+                                    </div>
+                                  )}
+                              </React.Fragment>
+                            ))}
+                          </div>
+                        </div>
+                      ) : message.content ? (
+                        <div className="w-full max-w-full whitespace-pre-wrap break-words">
+                          <MarkdownText content={message.content} />
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+              </div>
+              {message.experimental_attachments?.map((attachment: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="
+                    mt-1
+                    inline-flex
+                    h-8 items-center
+                    gap-2
+                    rounded-full
+                    border
+                    border-[--gray-3]
+                    bg-[--gray-2]
+                    px-2
+                  "
+                >
+                  <span className="font-geist text-sm font-normal leading-[18px] text-[--gray-11]">
+                    {attachment.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </>
+    );
+  }
+);
+
+MemoizedMessageList.displayName = "MemoizedMessageList";
+
+// Create a custom hook to isolate chat state
+function useChatState({
+  currentSession,
+  initialMessage,
+  chatBodyConfig,
+  toast,
+}: {
+  currentSession: any;
+  initialMessage: string | null;
+  chatBodyConfig: any;
+  toast: any;
+}) {
+  // Get chat functionality from useChat
+  return useChat({
+    api: "/api/chat",
+    id: currentSession?.id || undefined,
+    maxSteps: 10,
+    initialMessages: initialMessage
+      ? [{ id: "1", role: "user", content: initialMessage }]
+      : undefined,
+    body: chatBodyConfig,
+    onFinish: message => {
+      console.log("[CHAT] Chat finished message:", message.id);
+    },
+    onError: error => {
+      console.error("[CHAT] Chat error:", error);
+      toast({
+        title: "Error",
+        description: error?.message || "An unexpected error occurred",
+        className: "text-[var(--gray-12)] border border-[var(--red-11)] bg-[var(--red-2)] text-sm",
+      });
+    },
+    onToolCall: toolCallEvent => {
+      console.log("[CHAT] Tool call received:", toolCallEvent);
+    },
+  });
+}
+
+// Create a memoized component that holds the entire chat UI
+interface ChatPageContentProps {
+  messages: any[];
+  isLoading: boolean;
+  input: string;
+  handleInputChange: any;
+  handleSubmit: any;
+  handleStop: () => void;
+  reload: () => void;
+  isCreatingSession: boolean;
+  hasShownConnection: boolean;
+  currentSession: any;
+  isExpired: boolean;
+  handleNewChat: () => void;
+  handleImageClick: (src: string) => void;
+  setMessages: any;
   isAtBottom: boolean;
   scrollAreaRef: React.RefObject<HTMLDivElement>;
+  handleScroll: () => void;
+  removeIncompleteToolCalls: () => void;
+  stop: () => void;
+  handleSend: (e: React.FormEvent, messageText: string, attachments: File[]) => void;
 }
 
-function ChatScrollAnchor({ trackVisibility, isAtBottom, scrollAreaRef }: ChatScrollAnchorProps) {
-  const { ref, inView } = useInView({
-    trackVisibility,
-    delay: 100,
-  });
+const ChatPageContent = React.memo(
+  ({
+    messages,
+    isLoading,
+    input,
+    handleInputChange,
+    handleSubmit,
+    handleStop,
+    reload,
+    isCreatingSession,
+    hasShownConnection,
+    currentSession,
+    isExpired,
+    handleNewChat,
+    handleImageClick,
+    setMessages,
+    isAtBottom,
+    scrollAreaRef,
+    handleScroll,
+    removeIncompleteToolCalls,
+    stop,
+    handleSend,
+  }: ChatPageContentProps) => {
+    console.log("[RENDER] ChatPageContent rendering");
 
-  useEffect(() => {
-    if (isAtBottom && trackVisibility && !inView && scrollAreaRef.current?.children[0]) {
-      const messagesContainer = scrollAreaRef.current.children[0];
-      messagesContainer.scrollTop = messagesContainer.scrollHeight - messagesContainer.clientHeight;
-    }
-  }, [inView, isAtBottom, trackVisibility]);
+    return (
+      <>
+        <div className="flex h-[calc(100vh-3.5rem)] flex-col-reverse md:flex-row">
+          {/* Left (chat) - Fluid responsive width */}
+          <div
+            className="
+            flex h-[40vh] 
+            w-full flex-col border-t border-[--gray-3]
+            md:h-full md:w-[clamp(280px,30vw,460px)]
+            md:border-r md:border-t-0
+          "
+          >
+            <div className="flex-1 overflow-hidden" ref={scrollAreaRef} onScroll={handleScroll}>
+              <div
+                className="scrollbar-gutter-stable scrollbar-thin flex size-full flex-col gap-4 overflow-y-auto overflow-x-hidden
+                  p-4
+                  [&::-webkit-scrollbar-thumb]:rounded-full
+                  [&::-webkit-scrollbar-thumb]:border-4
+                  [&::-webkit-scrollbar-thumb]:bg-[--gray-3]
+                  [&::-webkit-scrollbar-thumb]:transition-colors
+                  [&::-webkit-scrollbar-thumb]:hover:bg-[--gray-3]
+                  [&::-webkit-scrollbar-track]:rounded-full
+                  [&::-webkit-scrollbar-track]:bg-[--gray-1]
+                  [&::-webkit-scrollbar]:w-1.5"
+              >
+                {/* Messages */}
+                <MemoizedMessageList
+                  messages={messages}
+                  isCreatingSession={isCreatingSession}
+                  hasShownConnection={hasShownConnection}
+                  currentSession={currentSession}
+                  onImageClick={handleImageClick}
+                />
+                {isLoading && (
+                  <div className="size-4 animate-spin rounded-full border-2 border-[--gray-12] border-t-transparent" />
+                )}
 
-  return <div ref={ref} className="h-px w-full" />;
-}
+                {/* Simplified scroll anchor */}
+                <ChatScrollAnchor
+                  scrollAreaRef={scrollAreaRef}
+                  isAtBottom={isAtBottom}
+                  trackVisibility={isLoading}
+                />
+              </div>
+            </div>
+
+            {/* Chat input or Expired State */}
+            <div className="border-t border-[--gray-3]" />
+            <div className="min-h-44 flex-none p-4 drop-shadow-md">
+              {isExpired ? (
+                <div className="flex flex-col items-center gap-4">
+                  <p className="text-sm font-medium text-[--gray-11]">
+                    Your browser session has expired
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 rounded-full border-[--gray-3] bg-[--gray-1] text-[--gray-11]"
+                    onClick={handleNewChat}
+                  >
+                    <Plus className="size-4" />
+                    <span className="px-1 font-geist">New Chat</span>
+                  </Button>
+                </div>
+              ) : (
+                <ChatInputContainer
+                  initialValue={input}
+                  onSend={messageText => {
+                    const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+                    handleSend(fakeEvent, messageText, []);
+                  }}
+                  disabled={isLoading}
+                  isLoading={isLoading}
+                  onStop={handleStop}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Right (browser) - Keep more prominent */}
+          <div
+            className="
+            h-[60vh] 
+            flex-1 border-b
+            border-[--gray-3] p-4 md:h-full 
+            md:border-b-0
+          "
+          >
+            <TimerDisplay />
+          </div>
+        </div>
+      </>
+    );
+  }
+);
+
+ChatPageContent.displayName = "ChatPageContent";
+
+// Update the TimerDisplay component to be completely isolated
+const TimerDisplay = React.memo(() => {
+  console.log("[RENDER] TimerDisplay rendering");
+
+  // No state, no store access here - completely isolated
+  return <MemoizedBrowser />;
+});
+
+TimerDisplay.displayName = "TimerDisplay";
 
 export default function ChatPage() {
-  console.info("🔄 Initializing ChatPage component");
+  console.log("[RENDER] ChatPage is rendering");
   const { currentSettings, updateSettings } = useSettings();
   const { currentSession, createSession, isCreatingSession, isExpired } = useSteelContext();
+  console.log("[DEBUG] ChatPage rendering");
   const { initialMessage, setInitialMessage } = useChatContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasShownConnection, setHasShownConnection] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   // Add API key modal state and handlers
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const pendingMessageRef = useRef<string>("");
 
-  const checkApiKey = () => {
-    // // For Ollama, we don't need an API key as it connects to a local instance
-    // if (currentSettings?.selectedProvider === 'ollama') {
-    //   return true;
-    // }
-
-    // // For other providers, check if API key exists
-    // const provider = currentSettings?.selectedProvider;
-    // if (!provider) return false;
-    // const hasKey = !!currentSettings?.providerApiKeys?.[provider];
-    // return hasKey;
-    return true;
-  };
-
-  const handleApiKeySubmit = (key: string) => {
-    console.info("🔑 Handling API key submission");
-    const provider = currentSettings?.selectedProvider;
-    if (!provider) return;
-
-    console.info("⚙️ Updating settings with new API key for provider:", provider);
-    const currentKeys = currentSettings?.providerApiKeys || {};
-    updateSettings({
-      ...currentSettings!,
-      providerApiKeys: {
-        ...currentKeys,
-        [provider]: key,
-      },
-    });
-    setShowApiKeyModal(false);
-
-    if (pendingMessageRef.current) {
-      console.info("📝 Setting initial message from pending ref:", pendingMessageRef.current);
-      setInitialMessage(pendingMessageRef.current);
-      pendingMessageRef.current = "";
-    }
-  };
-
-  const { messages, handleSubmit, isLoading, input, handleInputChange, setMessages, reload, stop } =
-    useChat({
-      api: "/api/chat",
-      id: currentSession?.id || undefined,
-      maxSteps: 10,
-      initialMessages: initialMessage
-        ? [{ id: "1", role: "user", content: initialMessage }]
-        : undefined,
-      body: {
-        session_id: currentSession?.id,
-        agent_type: currentSettings?.selectedAgent,
-        provider: currentSettings?.selectedProvider,
-        api_key: currentSettings?.providerApiKeys?.[currentSettings?.selectedProvider || ""] || "",
-        model_settings: {
-          model_choice: currentSettings?.selectedModel,
-          max_tokens: Number(currentSettings?.modelSettings.max_tokens),
-          temperature: Number(currentSettings?.modelSettings.temperature),
-          top_p: currentSettings?.modelSettings.top_p
-            ? Number(currentSettings?.modelSettings.top_p)
-            : undefined,
-          top_k: currentSettings?.modelSettings.top_k
-            ? Number(currentSettings?.modelSettings.top_k)
-            : undefined,
-          frequency_penalty: currentSettings?.modelSettings.frequency_penalty
-            ? Number(currentSettings?.modelSettings.frequency_penalty)
-            : undefined,
-          presence_penalty: currentSettings?.modelSettings.presence_penalty
-            ? Number(currentSettings?.modelSettings.presence_penalty)
-            : undefined,
-        },
-        agent_settings: Object.fromEntries(
-          Object.entries(currentSettings?.agentSettings ?? {})
-            .filter(([_, value]) => value !== undefined && !isSettingConfig(value))
-            .map(([key, value]) => [key, typeof value === "string" ? value : Number(value)])
-        ),
-      },
-      onFinish: message => {
-        console.info("✅ Chat finished:", message);
-      },
-      onError: error => {
-        console.error("❌ Chat error:", error);
-        toast({
-          title: "Error",
-          description: error?.message || "An unexpected error occurred",
-          className:
-            "text-[var(--gray-12)] border border-[var(--red-11)] bg-[var(--red-2)] text-sm",
-        });
-      },
-      onToolCall: toolCall => {
-        console.info("🛠️ Tool call received:", toolCall);
-      },
-    });
-
   // Track whether user is at the bottom
   const [isAtBottom, setIsAtBottom] = useState<boolean>(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  function handleScroll() {
+  // Utility functions that need to be defined before they're used
+  const checkApiKey = useCallback(() => {
+    return true;
+  }, []);
+
+  // Helper function to check if a value is a setting config object
+  const isSettingConfig = useCallback((value: any): boolean => {
+    return value && typeof value === "object" && "type" in value && "default" in value;
+  }, []);
+
+  // Memoize chatBody config
+  const chatBodyConfig = useMemo(
+    () => ({
+      session_id: currentSession?.id,
+      agent_type: currentSettings?.selectedAgent,
+      provider: currentSettings?.selectedProvider,
+      api_key: currentSettings?.providerApiKeys?.[currentSettings?.selectedProvider || ""] || "",
+      model_settings: {
+        model_choice: currentSettings?.selectedModel,
+        max_tokens: Number(currentSettings?.modelSettings.max_tokens),
+        temperature: Number(currentSettings?.modelSettings.temperature),
+        top_p: currentSettings?.modelSettings.top_p
+          ? Number(currentSettings?.modelSettings.top_p)
+          : undefined,
+        top_k: currentSettings?.modelSettings.top_k
+          ? Number(currentSettings?.modelSettings.top_k)
+          : undefined,
+        frequency_penalty: currentSettings?.modelSettings.frequency_penalty
+          ? Number(currentSettings?.modelSettings.frequency_penalty)
+          : undefined,
+        presence_penalty: currentSettings?.modelSettings.presence_penalty
+          ? Number(currentSettings?.modelSettings.presence_penalty)
+          : undefined,
+      },
+      agent_settings: Object.fromEntries(
+        Object.entries(currentSettings?.agentSettings ?? {})
+          .filter(([_, value]) => value !== undefined && !isSettingConfig(value))
+          .map(([key, value]) => [key, typeof value === "string" ? value : Number(value)])
+      ),
+    }),
+    [currentSession?.id, currentSettings, isSettingConfig]
+  );
+
+  // Use the custom hook instead of directly using useChat
+  const { messages, handleSubmit, isLoading, input, handleInputChange, setMessages, reload, stop } =
+    useChatState({
+      currentSession,
+      initialMessage,
+      chatBodyConfig,
+      toast,
+    });
+
+  // Near the beginning of the ChatPage function
+  const handleApiKeySubmit = useCallback(
+    (key: string) => {
+      const provider = currentSettings?.selectedProvider;
+      if (!provider) return;
+
+      const currentKeys = currentSettings?.providerApiKeys || {};
+      updateSettings({
+        ...currentSettings!,
+        providerApiKeys: {
+          ...currentKeys,
+          [provider]: key,
+        },
+      });
+      setShowApiKeyModal(false);
+
+      if (pendingMessageRef.current) {
+        setInitialMessage(pendingMessageRef.current);
+        pendingMessageRef.current = "";
+      }
+    },
+    [currentSettings, updateSettings, setInitialMessage]
+  );
+
+  const handleScroll = useCallback(() => {
     if (!scrollAreaRef.current) return;
 
     const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current.children[0];
     const atBottom = scrollHeight - clientHeight <= scrollTop + 1;
 
     if (atBottom !== isAtBottom) {
-      console.info("📜 Scroll position changed:", { atBottom });
       setIsAtBottom(atBottom);
     }
-  }
+  }, [isAtBottom]);
 
-  // If user is sending a message (isLoading = true), scroll to bottom
-  useEffect(() => {
-    console.info("📜 Loading state changed:", { isLoading });
-    if (isLoading) {
-      if (!scrollAreaRef.current?.children[0]) {
-        console.warn("⚠️ Messages container is null; cannot scroll");
-        return;
-      }
-      const messagesContainer = scrollAreaRef.current.children[0];
-      messagesContainer.scrollTop = messagesContainer.scrollHeight - messagesContainer.clientHeight;
-      setIsAtBottom(true);
-    }
-  }, [isLoading]);
-
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-
-  const handleImageClick = (imageSrc: string) => {
+  const handleImageClick = useCallback((imageSrc: string) => {
     setSelectedImage(imageSrc);
-  };
-
-  // Log key context and state changes
-  useEffect(() => {
-    console.info("📊 Current session state:", {
-      sessionId: currentSession?.id,
-      isCreating: isCreatingSession,
-      isExpired,
-      hasShownConnection,
-      isSubmitting,
-    });
-  }, [currentSession?.id, isCreatingSession, isExpired, hasShownConnection, isSubmitting]);
-
-  useEffect(() => {
-    console.info("⚙️ Current settings state:", {
-      provider: currentSettings?.selectedProvider,
-      model: currentSettings?.selectedModel,
-      agent: currentSettings?.selectedAgent,
-      hasApiKey: !!currentSettings?.providerApiKeys?.[currentSettings?.selectedProvider || ""],
-    });
-  }, [currentSettings]);
-
-  // Track message state changes
-  useEffect(() => {
-    if (messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      console.info("📥 New message received:", {
-        id: lastMessage.id,
-        role: lastMessage.role,
-        content: lastMessage.content,
-        toolInvocations: lastMessage.toolInvocations?.map(t => ({
-          name: t.toolName,
-          args: t.args,
-          state: t.state,
-        })),
-        totalMessages: messages.length,
-        messageHistory: messages.map(m => ({
-          id: m.id,
-          role: m.role,
-          hasContent: !!m.content,
-          toolCallsCount: m.toolInvocations?.length || 0,
-        })),
-      });
-    }
-  }, [messages]);
-
-  // Track loading and submission states
-  useEffect(() => {
-    console.info("🔄 Chat interaction state:", {
-      isLoading,
-      isSubmitting,
-      hasInput: !!input,
-      messagesCount: messages.length,
-    });
-  }, [isLoading, isSubmitting, input, messages.length]);
+  }, []);
 
   // Enhanced handleSend with more logging
-  async function handleSend(e: React.FormEvent, messageText: string, attachments: File[]) {
-    console.info("📤 Handling message send:", {
-      messageText,
-      attachments,
-      currentState: {
-        hasSession: !!currentSession?.id,
-        messagesCount: messages.length,
-        isFirstMessage: messages.length === 0,
-        isSubmitting,
-        hasApiKey: checkApiKey(),
-      },
-    });
+  const handleSend = useCallback(
+    async (e: React.FormEvent, messageText: string, attachments: File[]) => {
+      e.preventDefault();
 
-    e.preventDefault();
+      if (!checkApiKey()) {
+        pendingMessageRef.current = messageText;
+        setShowApiKeyModal(true);
+        return;
+      }
 
-    if (!checkApiKey()) {
-      console.info("🔑 No API key found, storing message and showing modal");
-      pendingMessageRef.current = messageText;
-      setShowApiKeyModal(true);
-      return;
-    }
+      setIsSubmitting(true);
+      if (messages.length === 0) {
+        setInitialMessage(messageText);
+        handleInputChange({ target: { value: "" } } as any);
+      } else {
+        handleSubmit(e);
+        return;
+      }
 
-    setIsSubmitting(true);
-    if (messages.length === 0) {
-      console.info("📝 Setting initial message with context:", {
-        messageText,
-        sessionId: currentSession?.id,
-        provider: currentSettings?.selectedProvider,
-        agent: currentSettings?.selectedAgent,
-      });
-      setInitialMessage(messageText);
-      handleInputChange({ target: { value: "" } } as any);
-    } else {
-      console.info("📤 Submitting message to existing chat:", {
-        messageText,
-        sessionId: currentSession?.id,
-        existingMessages: messages.length,
-      });
-      handleSubmit(e);
-      return;
-    }
-
-    let session = currentSession;
-    if (!session?.id) {
-      console.info("🔄 Creating new session for message");
-      session = await createSession();
-      console.info("✅ New session created:", session);
-    }
-  }
-
-  // Add new useEffect to handle initial message on mount
-  useEffect(() => {
-    async function handleInitialMessage() {
-      if (initialMessage && !currentSession?.id && !isSubmitting) {
-        setIsSubmitting(true);
-        // Create new session
+      if (!currentSession?.id) {
         await createSession();
       }
-    }
-
-    handleInitialMessage();
-  }, [initialMessage, currentSession?.id, isSubmitting]);
+    },
+    [
+      checkApiKey,
+      messages.length,
+      setInitialMessage,
+      handleInputChange,
+      handleSubmit,
+      currentSession?.id,
+      createSession,
+    ]
+  );
 
   // Modify the useEffect that handles session creation
   useEffect(() => {
@@ -514,22 +823,10 @@ export default function ChatPage() {
       setInitialMessage(null);
       setHasShownConnection(true);
     }
-  }, [currentSession?.id, hasShownConnection]);
+  }, [currentSession?.id, hasShownConnection, reload, setInitialMessage]);
 
   // Enhanced removeIncompleteToolCalls with more detailed logging
-  function removeIncompleteToolCalls() {
-    console.info("🧹 Starting cleanup of incomplete tool calls");
-    console.info(
-      "📊 Current messages state:",
-      messages.map(m => ({
-        id: m.id,
-        role: m.role,
-        toolCalls: m.toolInvocations?.map(t => ({
-          state: t.state,
-        })),
-      }))
-    );
-
+  const removeIncompleteToolCalls = useCallback(() => {
     setMessages(prev => {
       const updatedMessages = prev
         .map(msg => {
@@ -537,15 +834,6 @@ export default function ChatPage() {
             const filteredToolInvocations = msg.toolInvocations.filter(
               invocation => invocation.state === "result"
             );
-            console.info("🔍 Processing message tool calls:", {
-              messageId: msg.id,
-              before: msg.toolInvocations.length,
-              after: filteredToolInvocations.length,
-              removed: msg.toolInvocations.length - filteredToolInvocations.length,
-              removedStates: msg.toolInvocations
-                .filter(t => t.state !== "result")
-                .map(t => ({ state: t.state })),
-            });
             return {
               ...msg,
               toolInvocations: filteredToolInvocations,
@@ -559,261 +847,80 @@ export default function ChatPage() {
             !msg.content?.trim() &&
             (!msg.toolInvocations || msg.toolInvocations.length === 0)
           ) {
-            console.info("🗑️ Removing empty assistant message");
             return false;
           }
           return true;
         });
 
-      console.info("✅ Cleanup complete:", {
-        beforeCount: prev.length,
-        afterCount: updatedMessages.length,
-        removedCount: prev.length - updatedMessages.length,
-      });
-
       return updatedMessages;
     });
-  }
+  }, [setMessages]);
 
-  function handleStop() {
-    console.info("🛑 Stopping chat");
+  const handleStop = useCallback(() => {
     stop();
     removeIncompleteToolCalls();
-  }
-
-  // Helper function to check if a value is a setting config object
-  function isSettingConfig(value: any): boolean {
-    return value && typeof value === "object" && "type" in value && "default" in value;
-  }
+  }, [stop, removeIncompleteToolCalls]);
 
   // Reuse the same handler from NavBar for consistency
-  const handleNewChat = async () => {
-    console.info("🆕 Starting new chat");
+  const handleNewChat = useCallback(() => {
     router.push("/");
-  };
+  }, [router]);
+
+  // Effect for scrolling to bottom when isLoading changes
+  useEffect(() => {
+    if (isLoading && scrollAreaRef.current?.children[0]) {
+      const messagesContainer = scrollAreaRef.current.children[0];
+      messagesContainer.scrollTop = messagesContainer.scrollHeight - messagesContainer.clientHeight;
+      setIsAtBottom(true);
+    }
+  }, [isLoading]);
+
+  // Effect to handle initial message on mount
+  useEffect(() => {
+    async function handleInitialMessage() {
+      if (initialMessage && !currentSession?.id && !isSubmitting) {
+        setIsSubmitting(true);
+        // Create new session
+        await createSession();
+      }
+    }
+
+    handleInitialMessage();
+  }, [initialMessage, currentSession?.id, isSubmitting, createSession]);
 
   // Add effect to handle session expiration
   useEffect(() => {
-    console.info("⏰ Session expiration status changed:", { isExpired });
     if (isExpired) {
-      console.info("⚠️ Session expired, cleaning up");
       stop();
       removeIncompleteToolCalls();
     }
-  }, [isExpired]);
+  }, [isExpired, stop, removeIncompleteToolCalls]);
 
+  // Return the memoized content with the dialog
   return (
     <>
-      <div className="flex h-[calc(100vh-3.5rem)] flex-col-reverse md:flex-row">
-        {/* Left (chat) - Fluid responsive width */}
-        <div
-          className="
-          flex h-[40vh] 
-          w-full flex-col border-t border-[--gray-3]
-          md:h-full md:w-[clamp(280px,30vw,460px)]
-          md:border-r md:border-t-0
-        "
-        >
-          <div className="flex-1 overflow-hidden" ref={scrollAreaRef} onScroll={handleScroll}>
-            <div
-              className="scrollbar-gutter-stable scrollbar-thin flex size-full flex-col gap-4 overflow-y-auto overflow-x-hidden
-                p-4
-                [&::-webkit-scrollbar-thumb]:rounded-full
-                [&::-webkit-scrollbar-thumb]:border-4
-                [&::-webkit-scrollbar-thumb]:bg-[--gray-3]
-                [&::-webkit-scrollbar-thumb]:transition-colors
-                [&::-webkit-scrollbar-thumb]:hover:bg-[--gray-3]
-                [&::-webkit-scrollbar-track]:rounded-full
-                [&::-webkit-scrollbar-track]:bg-[--gray-1]
-                [&::-webkit-scrollbar]:w-1.5"
-            >
-              {messages.map((message, index) => {
-                return (
-                  <div key={message.id || index} className="flex w-full max-w-full flex-col gap-2">
-                    {/* Force message content to respect container width */}
-                    <div className="w-full max-w-full">
-                      {message.role === "user" ? (
-                        <>
-                          <UserMessage content={message.content} />
-                          {index === 0 && isCreatingSession && (
-                            <div className="mx-auto mt-2 w-[85%] animate-pulse rounded-md border border-[--blue-3] bg-[--blue-2] px-4 py-2 font-geist text-sm text-[--blue-11]">
-                              Connecting to Steel Browser Session...
-                            </div>
-                          )}
-                          {index === 0 &&
-                            hasShownConnection &&
-                            !isCreatingSession &&
-                            currentSession?.id && (
-                              <div className="mx-auto mt-2 flex w-[85%] items-center gap-2 rounded-md border border-[--green-3] bg-[--green-2] px-4 py-2 font-geist text-sm text-[--green-11]">
-                                <CheckIcon className="size-4" />
-                                Steel Browser Session connected
-                              </div>
-                            )}
-                        </>
-                      ) : (
-                        <div className="flex w-full max-w-full flex-col gap-4 break-words text-base text-[--gray-12]">
-                          {(() => {
-                            const isSpecialMessage =
-                              (message.content &&
-                                (message.content.includes("*Memory*:") ||
-                                  message.content.includes("*Next Goal*:") ||
-                                  message.content.includes("*Previous Goal*:"))) ||
-                              (message.toolInvocations && message.toolInvocations.length > 0);
-                            const hasToolInvocations =
-                              message.toolInvocations && message.toolInvocations.length > 0;
-                            const isSpecial = isSpecialMessage || hasToolInvocations;
-
-                            // Find consecutive special messages
-                            let specialMessagesGroup = [];
-                            if (isSpecial) {
-                              let i = index;
-                              while (i < messages.length) {
-                                const nextMessage = messages[i];
-                                const isNextSpecial =
-                                  (nextMessage.content &&
-                                    (nextMessage.content.includes("*Memory*:") ||
-                                      nextMessage.content.includes("*Next Goal*:") ||
-                                      nextMessage.content.includes("*Previous Goal*:"))) ||
-                                  (nextMessage.toolInvocations &&
-                                    nextMessage.toolInvocations.length > 0);
-
-                                if (!isNextSpecial) break;
-                                specialMessagesGroup.push(nextMessage);
-                                i++;
-                              }
-                            }
-
-                            // Skip if this message is part of a group but not the first one
-                            if (isSpecial && index > 0) {
-                              const prevMessage = messages[index - 1];
-                              const isPrevSpecial =
-                                (prevMessage.content &&
-                                  (prevMessage.content.includes("*Memory*:") ||
-                                    prevMessage.content.includes("*Next Goal*:") ||
-                                    prevMessage.content.includes("*Previous Goal*:"))) ||
-                                (prevMessage.toolInvocations &&
-                                  prevMessage.toolInvocations.length > 0);
-                              if (isPrevSpecial) return null;
-                            }
-
-                            return isSpecial ? (
-                              <div className="flex w-full max-w-full flex-col gap-2 rounded-[1.25rem] border border-[--gray-3] bg-[--gray-1] p-2">
-                                <div className="flex flex-col gap-2">
-                                  {specialMessagesGroup.map((groupMessage, groupIndex) => (
-                                    <React.Fragment key={groupMessage.id}>
-                                      {groupMessage.content && (
-                                        <div className="w-full">
-                                          <MarkdownText content={groupMessage.content} />
-                                        </div>
-                                      )}
-                                      {groupMessage.toolInvocations &&
-                                        groupMessage.toolInvocations.length > 0 && (
-                                          <div className="flex w-full flex-col gap-2">
-                                            {groupMessage.toolInvocations.map((tool, toolIndex) => (
-                                              <div
-                                                key={toolIndex}
-                                                className="flex w-full items-center justify-between rounded-2xl border border-[--gray-3] bg-[--gray-2] p-3"
-                                              >
-                                                <ToolInvocations
-                                                  toolInvocations={[tool]}
-                                                  onImageClick={handleImageClick}
-                                                />
-                                              </div>
-                                            ))}
-                                          </div>
-                                        )}
-                                    </React.Fragment>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : message.content ? (
-                              <div className="w-full max-w-full whitespace-pre-wrap break-words">
-                                <MarkdownText content={message.content} />
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                    {message.experimental_attachments?.map((attachment, idx) => (
-                      <div
-                        key={idx}
-                        className="
-                          mt-1
-                          inline-flex
-                          h-8 items-center
-                          gap-2
-                          rounded-full
-                          border
-                          border-[--gray-3]
-                          bg-[--gray-2]
-                          px-2
-                        "
-                      >
-                        <span className="font-geist text-sm font-normal leading-[18px] text-[--gray-11]">
-                          {attachment.name}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-              {isLoading && (
-                <div className="size-4 animate-spin rounded-full border-2 border-[--gray-12] border-t-transparent" />
-              )}
-
-              {/* Simplified scroll anchor */}
-              <ChatScrollAnchor
-                scrollAreaRef={scrollAreaRef}
-                isAtBottom={isAtBottom}
-                trackVisibility={isLoading}
-              />
-            </div>
-          </div>
-
-          {/* Chat input or Expired State */}
-          <div className="border-t border-[--gray-3]" />
-          <div className="min-h-44 flex-none p-4 drop-shadow-md">
-            {isExpired ? (
-              <div className="flex flex-col items-center gap-4">
-                <p className="text-sm font-medium text-[--gray-11]">
-                  Your browser session has expired
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 rounded-full border-[--gray-3] bg-[--gray-1] text-[--gray-11]"
-                  onClick={handleNewChat}
-                >
-                  <Plus className="size-4" />
-                  <span className="px-1 font-geist">New Chat</span>
-                </Button>
-              </div>
-            ) : (
-              <ChatInput
-                value={input}
-                onChange={(value: string) => handleInputChange({ target: { value } } as any)}
-                onSubmit={handleSend}
-                disabled={isLoading}
-                isLoading={isLoading}
-                onStop={handleStop}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Right (browser) - Keep more prominent */}
-        <div
-          className="
-          h-[60vh] 
-          flex-1 border-b
-          border-[--gray-3] p-4 md:h-full 
-          md:border-b-0
-        "
-        >
-          <Browser />
-        </div>
-      </div>
+      <ChatPageContent
+        messages={messages}
+        isLoading={isLoading}
+        input={input}
+        handleInputChange={handleInputChange}
+        handleSubmit={handleSubmit}
+        handleStop={handleStop}
+        reload={reload}
+        isCreatingSession={isCreatingSession}
+        hasShownConnection={hasShownConnection}
+        currentSession={currentSession}
+        isExpired={isExpired}
+        handleNewChat={handleNewChat}
+        handleImageClick={handleImageClick}
+        setMessages={setMessages}
+        isAtBottom={isAtBottom}
+        scrollAreaRef={scrollAreaRef}
+        handleScroll={handleScroll}
+        removeIncompleteToolCalls={removeIncompleteToolCalls}
+        stop={stop}
+        handleSend={handleSend}
+      />
 
       {/* Modal for expanded image */}
       <Dialog open={selectedImage !== null} onOpenChange={open => !open && setSelectedImage(null)}>

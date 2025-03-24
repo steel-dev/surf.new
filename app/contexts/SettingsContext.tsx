@@ -1,7 +1,6 @@
 "use client";
 
-import { createContext, useContext } from "react";
-import { useLocalStorage } from "usehooks-ts";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 export interface ModelSettings {
   max_tokens: number;
@@ -41,32 +40,101 @@ interface SettingsContextType {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
+let renderCount = 0;
+
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [currentSettings, setCurrentSettings] = useLocalStorage<SurfSettings | null>(
-    "chatSettings",
-    null
-  );
+  const renderIndex = ++renderCount;
+  console.log(`[RENDER] SettingsProvider rendering #${renderIndex}`);
 
-  const updateSettings = (newSettings: {
-    [key in keyof SurfSettings]: SurfSettings[key];
-  }) => {
-    if (currentSettings) {
-      setCurrentSettings(prev => ({ ...prev, ...newSettings }));
-    } else {
-      setCurrentSettings(newSettings);
+  const [settings, setSettings] = useState<SurfSettings | null>(null);
+
+  // Log settings changes
+  useEffect(() => {
+    if (settings) {
+      console.log("[SETTINGS] Current settings state:", {
+        agent: settings.selectedAgent,
+        provider: settings.selectedProvider,
+        model: settings.selectedModel,
+        hasApiKeys: Object.keys(settings.providerApiKeys || {}).length > 0,
+      });
     }
-  };
+  }, [settings]);
 
-  return (
-    <SettingsContext.Provider
-      value={{
-        currentSettings,
-        updateSettings,
-      }}
-    >
-      {children}
-    </SettingsContext.Provider>
-  );
+  // Load settings from localStorage
+  useEffect(() => {
+    console.log("[EFFECT] Initializing settings from localStorage");
+
+    // Initialize with default settings for SSR
+    const initialSettings = {
+      selectedAgent: "browser_use_agent",
+      selectedProvider: "openai",
+      selectedModel: "gpt-4-turbo",
+      modelSettings: {
+        max_tokens: 4096,
+        temperature: 0.7,
+        top_p: 1.0,
+        top_k: undefined,
+        frequency_penalty: undefined,
+        presence_penalty: undefined,
+      },
+      agentSettings: {},
+      providerApiKeys: {},
+    };
+    setSettings(initialSettings);
+    console.log("[SETTINGS] Applied default settings");
+
+    try {
+      // Then hydrate with localStorage values on client-side
+      const savedSettings = localStorage.getItem("settings");
+      if (savedSettings) {
+        console.log("[STORAGE] Found saved settings in localStorage");
+        const parsedSettings = JSON.parse(savedSettings);
+        setSettings(currentSettings => {
+          const mergedSettings = {
+            ...initialSettings,
+            ...parsedSettings,
+            // Always ensure selectedAgent is consistent to prevent hydration issues
+            selectedAgent: "browser_use_agent",
+          };
+          console.log("[SETTINGS] Merged settings from localStorage");
+          return mergedSettings;
+        });
+      }
+    } catch (error) {
+      console.error("[ERROR] Error loading settings:", error);
+    }
+  }, []);
+
+  // Save settings to localStorage
+  useEffect(() => {
+    if (settings) {
+      console.log("[STORAGE] Saving settings to localStorage");
+      localStorage.setItem("settings", JSON.stringify(settings));
+    }
+  }, [settings]);
+
+  // Define updateSettings function
+  const updateSettings = useMemo(() => {
+    console.log("[FUNCTION] Creating updateSettings function");
+    return (newSettings: Partial<SurfSettings>) => {
+      console.log("[UPDATE] Updating settings with:", newSettings);
+      setSettings(prev => {
+        if (!prev) return newSettings as SurfSettings;
+        return { ...prev, ...newSettings };
+      });
+    };
+  }, []);
+
+  // Context value
+  const contextValue = useMemo(() => {
+    console.log("[MEMO] Creating new SettingsContext value");
+    return {
+      currentSettings: settings,
+      updateSettings,
+    };
+  }, [settings, updateSettings]);
+
+  return <SettingsContext.Provider value={contextValue}>{children}</SettingsContext.Provider>;
 }
 
 export function useSettings() {

@@ -1,14 +1,44 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { GlobeIcon } from "lucide-react";
 import Image from "next/image";
 
 import { cn } from "@/lib/utils";
 
 import { useSteelContext } from "@/app/contexts/SteelContext";
+import { useTimerStore } from "@/app/stores/timerStore";
+
+import { DomTimer } from "./DomTimer";
+
+let renderCount = 0;
+
+// Format time as MM:SS
+const formatTime = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+};
+
+// Create a separate memoized component just for the timer display
+const SessionTimer = React.memo(({ maxDuration }: { maxDuration: number }) => {
+  console.log("[RENDER] SessionTimer rendering");
+  return (
+    <span className="flex items-center gap-2">
+      <span className="text-[--gray-12]">
+        <DomTimer />
+      </span>{" "}
+      /<span className="text-[--gray-11]">{formatTime(maxDuration)}</span>
+    </span>
+  );
+});
+
+SessionTimer.displayName = "SessionTimer";
 
 export function Browser() {
+  const renderIndex = ++renderCount;
+  console.log(`[RENDER] Browser component rendering #${renderIndex}`);
+
   // WebSocket and canvas state
   const parentRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -22,16 +52,38 @@ export function Browser() {
   const [isConnected, setIsConnected] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
   const [favicon, setFavicon] = useState<string | null>(null);
-  const { currentSession, sessionTimeElapsed, isExpired, maxSessionDuration } = useSteelContext();
+
+  // Get session from SteelContext but timer from Zustand
+  const { currentSession, isExpired, maxSessionDuration } = useSteelContext();
+
+  // Don't access sessionTimeElapsed here to avoid re-renders on timer change
+  // The TimerText component will access it directly
 
   const debugUrl = currentSession?.debugUrl;
 
-  // Format time as MM:SS
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
+  // Add detailed debugging
+  useEffect(() => {
+    console.log("[DEBUG] Browser session info:", {
+      hasSession: !!currentSession,
+      debugUrl,
+      sessionDetails: currentSession,
+    });
+  }, [currentSession, debugUrl]);
+
+  // Track prop changes that might cause re-renders
+  useEffect(() => {
+    console.log(`[CHANGE] Browser props changed:`, {
+      hasSession: !!currentSession,
+      sessionId: currentSession?.id,
+      isExpired,
+      debugUrl,
+    });
+  }, [currentSession, isExpired, debugUrl]);
+
+  // Track state changes
+  useEffect(() => {
+    console.log(`[STATE] Browser url/favicon changed:`, { url, favicon });
+  }, [url, favicon]);
 
   // Canvas rendering
   useEffect(() => {
@@ -48,21 +100,72 @@ export function Browser() {
 
   // Listen for messages from iframe
   useEffect(() => {
+    console.log(`[EFFECT] Browser message listener setup with debugUrl: ${debugUrl}`);
+
+    // Create a debounce function
+    let navigationDebounceTimer: NodeJS.Timeout | null = null;
+    let lastUrl: string | null = null;
+    let lastFavicon: string | null = null;
+
     const handleMessage = (event: MessageEvent) => {
       // Verify message origin matches debugUrl
-      const debugUrlOrigin = new URL(debugUrl || "").origin;
-      if (event.origin !== debugUrlOrigin) return;
+      if (!debugUrl) return;
 
-      // Handle different message types
-      if (event.data?.type === "navigation") {
-        setUrl(event.data.url);
-        setFavicon(event.data.favicon);
+      try {
+        const debugUrlOrigin = new URL(debugUrl).origin;
+        if (event.origin !== debugUrlOrigin) return;
+
+        // Handle different message types
+        if (event.data?.type === "navigation") {
+          const newUrl = event.data.url;
+          const newFavicon = event.data.favicon;
+
+          // Only process if URL or favicon has changed
+          if (newUrl !== lastUrl || newFavicon !== lastFavicon) {
+            lastUrl = newUrl;
+            lastFavicon = newFavicon;
+
+            // Clear any existing timer
+            if (navigationDebounceTimer) {
+              clearTimeout(navigationDebounceTimer);
+            }
+
+            // Set a new timer to update state after delay
+            navigationDebounceTimer = setTimeout(() => {
+              console.log(`[MESSAGE:DEBOUNCED] Browser received navigation:`, event.data);
+              setUrl(newUrl);
+              setFavicon(newFavicon);
+              navigationDebounceTimer = null;
+            }, 300); // 300ms debounce
+          }
+        }
+      } catch (error) {
+        console.error("Invalid URL in handleMessage:", error);
+        // Don't process the message if there's an error creating the URL
       }
     };
 
     window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      // Clear any pending timer on cleanup
+      if (navigationDebounceTimer) {
+        clearTimeout(navigationDebounceTimer);
+      }
+    };
   }, [debugUrl]);
+
+  // Add explicit logging for session time to help debug
+  useEffect(() => {
+    // Get time value for logging only
+    const timeValue = useTimerStore.getState().sessionTimeElapsed;
+    console.log("[TIME] Session time in Browser component:", {
+      sessionTimeElapsed: timeValue,
+      formattedTime: formatTime(timeValue),
+      hasCurrentSession: !!currentSession,
+      renderCount: renderIndex,
+    });
+  }, [currentSession, renderIndex]);
 
   return (
     <div
@@ -87,7 +190,18 @@ export function Browser() {
           <div className="mr-auto flex items-center justify-center">
             {favicon ? (
               <Image
-                src={favicon.startsWith("/") && url ? new URL(new URL(url), favicon).href : favicon}
+                src={(() => {
+                  try {
+                    // Handle relative favicons by combining with the URL
+                    if (favicon.startsWith("/") && url) {
+                      return new URL(favicon, url).href;
+                    }
+                    return favicon;
+                  } catch (error) {
+                    console.error("Error constructing favicon URL:", error);
+                    return "/fallback-favicon.svg"; // Use a fallback icon
+                  }
+                })()}
                 alt="Favicon"
                 width={24}
                 height={24}
@@ -137,12 +251,7 @@ export function Browser() {
                   : "Session Connected"
                 : "No Session"}
             </span>
-            <span className="flex items-center gap-2">
-              <span className="text-[--gray-12]">
-                {currentSession ? formatTime(sessionTimeElapsed) : "--:--"}
-              </span>{" "}
-              /<span className="text-[--gray-11]">{formatTime(maxSessionDuration)}</span>
-            </span>
+            <SessionTimer maxDuration={maxSessionDuration} />
           </div>
 
           <span className="mt-1 flex items-center gap-2 font-sans text-sm md:mt-0">
