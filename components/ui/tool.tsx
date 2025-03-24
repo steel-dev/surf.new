@@ -29,7 +29,6 @@ function capitalizeAndReplaceUnderscores(str: string) {
   return str.replaceAll("_", " ").replace(/^./, match => match.toUpperCase());
 }
 
-
 export const ToolInvocations = ({
   toolInvocations,
   onImageClick,

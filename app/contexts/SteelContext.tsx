@@ -28,8 +28,6 @@ const MAX_SESSION_DURATION = 15 * 60; // 15 minutes in seconds
 
 const SteelContext = createContext<SteelContextType | undefined>(undefined);
 
-let renderCount = 0;
-
 // Timer controller component that manages the timer without storing state
 function TimerController({
   session,
@@ -94,9 +92,6 @@ function TimerController({
 }
 
 export function SteelProvider({ children }: { children: React.ReactNode }) {
-  const renderIndex = ++renderCount;
-  console.log(`[RENDER] SteelProvider rendering #${renderIndex}`);
-
   const [currentSession, setCurrentSession] = useState<Steel.Session | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
@@ -110,23 +105,12 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
     setIsExpired(true);
   }, []);
 
-  // Track settings changes
-  useEffect(() => {
-    console.log("[CHANGE] SteelProvider settings changed:", {
-      provider: currentSettings?.selectedProvider,
-      agent: currentSettings?.selectedAgent,
-      model: currentSettings?.selectedModel,
-    });
-  }, [currentSettings]);
-
   // Helper function to release a session
   const releaseSession = useCallback(async (sessionId: string) => {
-    console.log("[ACTION] Releasing session:", sessionId);
     try {
       await fetch(`/api/sessions/${sessionId}/release`, {
         method: "POST",
       });
-      console.log("[ACTION] Session released successfully:", sessionId);
     } catch (error) {
       console.error("[ERROR] Failed to release session:", error);
     }
@@ -134,8 +118,6 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
 
   // Cleanup effect when page is closed/unloaded
   useEffect(() => {
-    console.log("[EFFECT] Setting up cleanup handlers");
-
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (currentSession?.id) {
         console.log("[UNLOAD] BeforeUnload triggered - releasing session:", currentSession.id);
@@ -156,11 +138,6 @@ export function SteelProvider({ children }: { children: React.ReactNode }) {
   }, [currentSession?.id, releaseSession]);
 
   const createSession = useCallback(async () => {
-    console.log("[ACTION] Creating new session with settings:", {
-      agent: currentSettings?.selectedAgent,
-      timeout: MAX_SESSION_DURATION,
-    });
-
     try {
       if (currentSettings) {
         setIsCreatingSession(true);

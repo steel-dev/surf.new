@@ -7,11 +7,8 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 import { useSteelContext } from "@/app/contexts/SteelContext";
-import { useTimerStore } from "@/app/stores/timerStore";
 
 import { DomTimer } from "./DomTimer";
-
-let renderCount = 0;
 
 // Format time as MM:SS
 const formatTime = (seconds: number) => {
@@ -36,9 +33,6 @@ const SessionTimer = React.memo(({ maxDuration }: { maxDuration: number }) => {
 SessionTimer.displayName = "SessionTimer";
 
 export function Browser() {
-  const renderIndex = ++renderCount;
-  console.log(`[RENDER] Browser component rendering #${renderIndex}`);
-
   // WebSocket and canvas state
   const parentRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -61,30 +55,6 @@ export function Browser() {
 
   const debugUrl = currentSession?.debugUrl;
 
-  // Add detailed debugging
-  useEffect(() => {
-    console.log("[DEBUG] Browser session info:", {
-      hasSession: !!currentSession,
-      debugUrl,
-      sessionDetails: currentSession,
-    });
-  }, [currentSession, debugUrl]);
-
-  // Track prop changes that might cause re-renders
-  useEffect(() => {
-    console.log(`[CHANGE] Browser props changed:`, {
-      hasSession: !!currentSession,
-      sessionId: currentSession?.id,
-      isExpired,
-      debugUrl,
-    });
-  }, [currentSession, isExpired, debugUrl]);
-
-  // Track state changes
-  useEffect(() => {
-    console.log(`[STATE] Browser url/favicon changed:`, { url, favicon });
-  }, [url, favicon]);
-
   // Canvas rendering
   useEffect(() => {
     const renderFrame = () => {
@@ -97,75 +67,6 @@ export function Browser() {
     };
     renderFrame();
   }, [latestImage, canvasSize]);
-
-  // Listen for messages from iframe
-  useEffect(() => {
-    console.log(`[EFFECT] Browser message listener setup with debugUrl: ${debugUrl}`);
-
-    // Create a debounce function
-    let navigationDebounceTimer: NodeJS.Timeout | null = null;
-    let lastUrl: string | null = null;
-    let lastFavicon: string | null = null;
-
-    const handleMessage = (event: MessageEvent) => {
-      // Verify message origin matches debugUrl
-      if (!debugUrl) return;
-
-      try {
-        const debugUrlOrigin = new URL(debugUrl).origin;
-        if (event.origin !== debugUrlOrigin) return;
-
-        // Handle different message types
-        if (event.data?.type === "navigation") {
-          const newUrl = event.data.url;
-          const newFavicon = event.data.favicon;
-
-          // Only process if URL or favicon has changed
-          if (newUrl !== lastUrl || newFavicon !== lastFavicon) {
-            lastUrl = newUrl;
-            lastFavicon = newFavicon;
-
-            // Clear any existing timer
-            if (navigationDebounceTimer) {
-              clearTimeout(navigationDebounceTimer);
-            }
-
-            // Set a new timer to update state after delay
-            navigationDebounceTimer = setTimeout(() => {
-              console.log(`[MESSAGE:DEBOUNCED] Browser received navigation:`, event.data);
-              setUrl(newUrl);
-              setFavicon(newFavicon);
-              navigationDebounceTimer = null;
-            }, 300); // 300ms debounce
-          }
-        }
-      } catch (error) {
-        console.error("Invalid URL in handleMessage:", error);
-        // Don't process the message if there's an error creating the URL
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => {
-      window.removeEventListener("message", handleMessage);
-      // Clear any pending timer on cleanup
-      if (navigationDebounceTimer) {
-        clearTimeout(navigationDebounceTimer);
-      }
-    };
-  }, [debugUrl]);
-
-  // Add explicit logging for session time to help debug
-  useEffect(() => {
-    // Get time value for logging only
-    const timeValue = useTimerStore.getState().sessionTimeElapsed;
-    console.log("[TIME] Session time in Browser component:", {
-      sessionTimeElapsed: timeValue,
-      formattedTime: formatTime(timeValue),
-      hasCurrentSession: !!currentSession,
-      renderCount: renderIndex,
-    });
-  }, [currentSession, renderIndex]);
 
   return (
     <div
