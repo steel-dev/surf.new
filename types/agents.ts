@@ -1,6 +1,6 @@
 export interface SettingConfig {
-  type: "integer" | "float" | "text" | "textarea";
-  default: number | string;
+  type: "integer" | "float" | "text" | "textarea" | "boolean";
+  default: number | string | boolean;
   min?: number;
   max?: number;
   step?: number;

@@ -17,6 +17,7 @@ class ClientMessage(BaseModel):
     content: str | List[str | Mapping[str, Any]]
     experimental_attachments: Optional[List[ClientAttachment]] = None
     toolInvocations: Optional[List[ToolInvocation]] = None
+    resume_agent: Optional[bool] = None
 
 
 def convert_to_chat_messages(messages: List[ClientMessage]):

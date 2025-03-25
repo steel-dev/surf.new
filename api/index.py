@@ -21,6 +21,13 @@ try:
 except ImportError:
     raise ImportError("Please install the steel package: pip install steel")
 
+# Import the agent manager from browser_use agent
+try:
+    from .plugins.browser_use.agent import agent_manager
+except ImportError:
+    print("Warning: Could not import agent_manager from browser_use")
+    agent_manager = None
+
 
 load_dotenv(".env.local")
 
@@ -97,6 +104,28 @@ async def handle_chat(request: ChatRequest):
                 content="Session ID is required",
                 media_type="text/plain",
             )
+            
+        # Check if there's a resume_agent message
+        for message in messages:
+            # Check if there's a resume_agent field in either dict or ClientMessage
+            has_resume_flag = (isinstance(message, dict) and message.get('resume_agent')) or \
+                              (hasattr(message, 'resume_agent') and message.resume_agent)
+            
+            if has_resume_flag:
+                # Try to directly send a resume command to the agent via agent_manager
+                if agent_manager and request.session_id:
+                    result = agent_manager.resume_agent(request.session_id)
+                    if result:
+                        print(f"🔄 Successfully sent resume command to agent {request.session_id}")
+                
+                # Also create a stream response with the resume command
+                async def resume_stream():
+                    yield {"resume_agent": True}
+                
+                streaming_response = stream_vercel_format(stream=resume_stream())
+                response = StreamingResponse(streaming_response)
+                response.headers["x-vercel-ai-data-stream"] = "v1"
+                return response
 
         model_config_args = {
             "provider": request.provider,

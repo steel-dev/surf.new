@@ -1,6 +1,6 @@
 import logging
 from browser_use import Agent, Browser, BrowserConfig, Controller
-from typing import Any, List, Mapping, AsyncIterator, Optional
+from typing import Any, List, Mapping, AsyncIterator, Optional, Dict
 from ...providers import create_llm
 from ...models import ModelConfig
 from langchain.schema import AIMessage
@@ -21,6 +21,8 @@ from browser_use.agent.views import (
 import asyncio
 from pydantic import ValidationError
 import uuid
+from queue import Queue, Empty
+import threading
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,6 +33,66 @@ os.environ["ANONYMIZED_TELEMETRY"] = "false"
 
 STEEL_API_KEY = os.getenv("STEEL_API_KEY")
 STEEL_CONNECT_URL = os.getenv("STEEL_CONNECT_URL")
+
+# Global agent manager to track active agents and their command queues
+class AgentManager:
+    def __init__(self):
+        self.command_queues: Dict[str, Queue] = {}
+        self.agents_paused: Dict[str, bool] = {}
+        
+    def register_agent(self, session_id: str, command_queue: Queue):
+        logger.info(f"Registering agent for session {session_id}")
+        self.command_queues[session_id] = command_queue
+        self.agents_paused[session_id] = False
+        
+    def _is_valid_session(self, session_id: str) -> bool:
+        """Helper method to check if a session ID is registered"""
+        return session_id in self.command_queues
+        
+    def set_agent_paused(self, session_id: str, paused: bool) -> bool:
+        """Update the pause state of an agent"""
+        if not self._is_valid_session(session_id):
+            return False
+            
+        logger.info(f"Setting agent {session_id} paused state to {paused}")
+        self.agents_paused[session_id] = paused
+        
+        # Send the appropriate command if we're changing to paused or resumed state
+        if paused:
+            return self._send_command(session_id, {"type": "pause"})
+        else:
+            return self._send_command(session_id, {"type": "resume"})
+        
+    def is_agent_paused(self, session_id: str) -> bool:
+        """Check if an agent is currently paused"""
+        return self.agents_paused.get(session_id, False)
+    
+    def _send_command(self, session_id: str, command: dict) -> bool:
+        """Helper method to send a command to an agent's queue"""
+        if not self._is_valid_session(session_id):
+            return False
+            
+        logger.info(f"Sending {command['type']} command to agent {session_id}")
+        self.command_queues[session_id].put(command)
+        return True
+        
+    def pause_agent(self, session_id: str) -> bool:
+        """Pause an agent by sending the pause command and updating state"""
+        return self.set_agent_paused(session_id, True)
+        
+    def resume_agent(self, session_id: str) -> bool:
+        """Resume an agent by sending the resume command and updating state"""
+        return self.set_agent_paused(session_id, False)
+        
+    def unregister_agent(self, session_id: str):
+        """Remove an agent from the manager"""
+        if session_id in self.command_queues:
+            del self.command_queues[session_id]
+        if session_id in self.agents_paused:
+            del self.agents_paused[session_id]
+
+# Create singleton instance
+agent_manager = AgentManager()
 
 async def browser_use_agent(
     model_config: ModelConfig,
@@ -49,6 +111,16 @@ async def browser_use_agent(
     controller = Controller(exclude_actions=["open_tab", "switch_tab"])
     browser = None
     queue = asyncio.Queue()
+    
+    # Debug mode flags
+    debug_mode = agent_settings.debug_mode or False
+    debug_page_urls = agent_settings.debug_page_urls or []
+    
+    # Add a command queue for resume commands
+    command_queue = Queue()
+    
+    # Register this agent with the global manager
+    agent_manager.register_agent(session_id, command_queue)
 
     def yield_data(
         browser_state: "BrowserState", agent_output: "AgentOutput", step_number: int
@@ -104,6 +176,29 @@ async def browser_use_agent(
         )
         for tool_output in tool_outputs:
             asyncio.get_event_loop().call_soon_threadsafe(queue.put_nowait, tool_output)
+            
+        # Check if debug mode is enabled and current URL matches any debug URL
+        if debug_mode and browser_state and browser_state.url:
+            current_url = browser_state.url
+            should_pause = False
+            
+            # Check if the current URL matches any of the debug URLs
+            for debug_url in debug_page_urls:
+                if debug_url.strip() in current_url:
+                    should_pause = True
+                    break
+                    
+            if should_pause and not agent_manager.is_agent_paused(session_id):
+                agent_manager.pause_agent(session_id)
+                
+                # Notify that the agent is paused
+                asyncio.get_event_loop().call_soon_threadsafe(
+                    queue.put_nowait,
+                    AIMessage(content=f"*Agent paused at URL*: {current_url}")
+                )
+                asyncio.get_event_loop().call_soon_threadsafe(
+                    queue.put_nowait, {"stop": True}
+                )
 
     def yield_done(history: "AgentHistoryList"):
         asyncio.get_event_loop().call_soon_threadsafe(queue.put_nowait, "END")
@@ -135,6 +230,29 @@ async def browser_use_agent(
     agent_task = asyncio.create_task(agent.run(steps))
     logger.info("▶️ Started agent task with %d steps", steps)
 
+    # Add a function to check for command queue messages
+    def start_command_handler():
+        while True:
+            try:
+                cmd = command_queue.get(timeout=0.5)
+                if cmd.get("type") == "resume" and agent_manager.is_agent_paused(session_id):
+                    agent.resume()
+                    logger.info(f"Agent {session_id} resumed via command handler")
+                elif cmd.get("type") == "pause" and not agent_manager.is_agent_paused(session_id):
+                    agent.pause()
+                    logger.info(f"Agent {session_id} paused via command handler")
+            except Empty:
+                # Check if we should exit the thread
+                if getattr(threading.current_thread(), "stop_requested", False):
+                    break
+            except Exception as e:
+                logger.error(f"Error in command handler: {e}")
+                
+    # Create and start the command handler thread
+    command_thread = threading.Thread(target=start_command_handler)
+    command_thread.daemon = True
+    command_thread.start()
+
     try:
         while True:
             if cancel_event and cancel_event.is_set():
@@ -149,6 +267,12 @@ async def browser_use_agent(
                 break
             yield data
     finally:
+        # Unregister the agent from the global manager
+        agent_manager.unregister_agent(session_id)
+        # Signal the command thread to stop
+        if command_thread and command_thread.is_alive():
+            setattr(command_thread, "stop_requested", True)
+        # Clean up resources as needed
         # if browser:
         #     print("Closing browser...")
         #     try:

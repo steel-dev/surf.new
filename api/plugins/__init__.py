@@ -31,6 +31,7 @@ class SettingType(Enum):
     FLOAT = "float"
     TEXT = "text"
     TEXTAREA = "textarea"
+    BOOLEAN = "boolean"
 
 
 class SettingConfig(TypedDict):
@@ -153,6 +154,17 @@ AGENT_CONFIGS = {
                 "min": 10,
                 "max": 125,
                 "description": "Max number of steps to take",
+            },
+            "debug_mode": {
+                "type": SettingType.BOOLEAN.value,
+                "default": False,
+                "description": "Enable debug pause on specific URLs",
+            },
+            "debug_page_urls": {
+                "type": SettingType.TEXTAREA.value,
+                "default": "",
+                "maxLength": 1000,
+                "description": "URLs to pause agent execution (comma-separated)",
             },
         },
     },

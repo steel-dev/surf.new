@@ -5,6 +5,7 @@ import { Info, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -120,6 +121,15 @@ function SettingInput({
           </TooltipProvider>
         )}
       </div>
+
+      {config.type === "boolean" && (
+        <Checkbox
+          id={`checkbox-${settingKey}`}
+          checked={currentValue === true}
+          onChange={e => onChange(e.target.checked)}
+          label={currentValue ? "Enabled" : "Disabled"}
+        />
+      )}
 
       {config.type === "float" && (
         <div className="flex flex-col gap-2">

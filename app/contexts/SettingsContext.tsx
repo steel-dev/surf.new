@@ -18,7 +18,9 @@ export interface AgentSettings {
   num_images_to_keep?: number;
   wait_time_between_steps?: number;
   steps?: number;
-  [key: string]: string | number | undefined;
+  debug_mode?: boolean;
+  debug_page_urls?: string[];
+  [key: string]: string | number | boolean | string[] | undefined;
 }
 
 export interface SurfSettings {

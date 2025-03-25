@@ -6,7 +6,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { CheckIcon, Crosshair2Icon, ReaderIcon } from "@radix-ui/react-icons";
 import { useChat } from "ai/react";
-import { Plus } from "lucide-react";
+import { Plus, PlayCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { AuthModal } from "@/components/ui/AuthModal";
@@ -254,6 +254,7 @@ export default function ChatPage() {
   const { initialMessage, setInitialMessage } = useChatContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasShownConnection, setHasShownConnection] = useState(false);
+  const [agentPaused, setAgentPaused] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -411,6 +412,14 @@ export default function ChatPage() {
   useEffect(() => {
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
+      
+      // Check for agent paused messages - minimal change
+      if (lastMessage.content && 
+          typeof lastMessage.content === 'string' &&
+          lastMessage.content.includes('*Agent paused at URL*')) {
+        setAgentPaused(true);
+      }
+      
       console.info("📥 New message received:", {
         id: lastMessage.id,
         role: lastMessage.role,
@@ -816,7 +825,7 @@ export default function ChatPage() {
       </div>
 
       {/* Modal for expanded image */}
-      <Dialog open={selectedImage !== null} onOpenChange={open => !open && setSelectedImage(null)}>
+      <Dialog open={selectedImage !== null} onOpenChange={(open: boolean) => !open && setSelectedImage(null)}>
         <DialogContent className="max-w-[90vw] border border-[#282828] bg-[--gray-1] p-0">
           <div className="flex items-center justify-between border-b border-[#282828] px-4 py-2">
             <DialogTitle className="text-base font-medium text-[--gray-12]">
@@ -847,6 +856,49 @@ export default function ChatPage() {
         isOpen={showApiKeyModal}
         onSubmit={handleApiKeySubmit}
       />
+
+      {/* Agent Paused Resume Button */}
+      {agentPaused && (
+        <div className="fixed bottom-24 right-4 z-50">
+          <button
+            onClick={() => {
+              // Send a resume command to the backend
+              fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  messages: [...messages, {
+                    id: Date.now().toString(),
+                    role: 'system',
+                    content: 'resume_agent',
+                    resume_agent: true
+                  }],
+                  session_id: currentSession?.id || "",
+                  agent_type: currentSettings?.selectedAgent || "browser_use_agent",
+                  provider: currentSettings?.selectedProvider || "anthropic",
+                  model_settings: {
+                    model_choice: currentSettings?.selectedModel || "claude-3-opus-20240229",
+                    ...(currentSettings?.modelSettings || {}),
+                  },
+                  agent_settings: {
+                    debug_mode: currentSettings?.agentSettings?.debug_mode || false,
+                    debug_page_urls: currentSettings?.agentSettings?.debug_page_urls || [],
+                    ...(currentSettings?.agentSettings || {}),
+                  },
+                  api_key: currentSettings?.providerApiKeys?.[currentSettings?.selectedProvider || ""] || "",
+                }),
+              });
+              setAgentPaused(false);
+            }}
+            className="flex items-center gap-2 rounded-full bg-[--accent-9] px-4 py-2 text-sm font-medium text-white shadow-lg hover:bg-[--accent-10]"
+          >
+            <PlayCircle size={16} />
+            Resume Agent
+          </button>
+        </div>
+      )}
     </>
   );
 }

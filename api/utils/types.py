@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing import List, Mapping, Any, Optional
 
 
@@ -14,7 +14,20 @@ class AgentSettings(BaseModel):
     system_prompt: Optional[str] = None
     num_images_to_keep: Optional[int] = Field(default=10, ge=1, le=50)
     wait_time_between_steps: Optional[int] = Field(default=1, ge=0, le=10)
-    steps: Optional[int] = None
+    debug_mode: Optional[bool] = False
+    debug_page_urls: Optional[List[str]] = []
+    
+    @validator('debug_page_urls', pre=True)
+    def parse_debug_urls(cls, value):
+        # If it's already a list, return it
+        if isinstance(value, list):
+            return value
+        # If it's a string, split on commas and strip whitespace
+        if isinstance(value, str):
+            if not value.strip():
+                return []
+            return [url.strip() for url in value.split(',') if url.strip()]
+        return value
 
 
 class ModelSettings(BaseModel):
