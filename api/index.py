@@ -9,11 +9,12 @@ from .plugins import WebAgentType, get_web_agent, AGENT_CONFIGS
 from .streamer import stream_vercel_format
 from api.middleware.profiling_middleware import ProfilingMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Dict
 import os
 import asyncio
 import subprocess
 import re
+import time
 
 # 1) Import the Steel client
 try:
@@ -33,6 +34,11 @@ STEEL_API_URL = os.getenv("STEEL_API_URL")
 # 2) Initialize the Steel client
 #    Make sure your STEEL_API_KEY is set as an environment variable
 steel_client = Steel(steel_api_key=STEEL_API_KEY, base_url=STEEL_API_URL)
+
+# Add a session locks mechanism to prevent multiple resume requests
+session_locks: Dict[str, asyncio.Lock] = {}
+session_last_resume: Dict[str, float] = {}
+RESUME_COOLDOWN = 1.0  # seconds
 
 origins = [
     "http://localhost",
@@ -80,6 +86,65 @@ async def release_session(session_id: str):
             return {"status": "success", "message": "Session released"}
         raise e
 
+@app.post("/api/sessions/{session_id}/resume", tags=["Sessions"])
+async def resume_session(session_id: str):
+    """
+    Resume execution for a paused session.
+    """
+    from .plugins.browser_use.agent import resume_execution, ResumeRequest
+
+    # Check if this session was recently resumed
+    now = time.time()
+    if session_id in session_last_resume:
+        time_since_last_resume = now - session_last_resume[session_id]
+        if time_since_last_resume < RESUME_COOLDOWN:
+            # Too soon - return success but don't actually resume again
+            return {"status": "success", "message": f"Resume already in progress"}
+
+    # Create a lock for this session if it doesn't exist
+    if session_id not in session_locks:
+        session_locks[session_id] = asyncio.Lock()
+    
+    # Try to acquire the lock with a timeout
+    try:
+        # Use a timeout to prevent deadlocks
+        lock_acquired = await asyncio.wait_for(
+            session_locks[session_id].acquire(), 
+            timeout=0.5
+        )
+        
+        if not lock_acquired:
+            # If we couldn't acquire the lock, someone else is already processing
+            return {"status": "success", "message": "Resume already in progress"}
+            
+        # Update last resume timestamp
+        session_last_resume[session_id] = now
+            
+        try:
+            result = await resume_execution(ResumeRequest(session_id=session_id))
+            return result
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            # Always release the lock
+            session_locks[session_id].release()
+    except asyncio.TimeoutError:
+        # If we timed out waiting for the lock
+        return {"status": "success", "message": "Resume already in progress"}
+
+
+@app.post("/api/sessions/{session_id}/pause", tags=["Sessions"])
+async def pause_session(session_id: str):
+    """
+    Manually pause execution for a session to take control.
+    """
+    from .plugins.browser_use.agent import pause_execution_manually, PauseRequest
+
+    try:
+        result = await pause_execution_manually(PauseRequest(session_id=session_id))
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/chat", tags=["Chat"])
 async def handle_chat(request: ChatRequest):

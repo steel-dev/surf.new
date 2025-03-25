@@ -4,6 +4,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { GlobeIcon } from "lucide-react";
 import Image from "next/image";
 
+import { Button } from "@/components/ui/button";
+
+import { useToast } from "@/hooks/use-toast";
+
 import { cn } from "@/lib/utils";
 
 import { useSteelContext } from "@/app/contexts/SteelContext";
@@ -32,7 +36,7 @@ const SessionTimer = React.memo(({ maxDuration }: { maxDuration: number }) => {
 
 SessionTimer.displayName = "SessionTimer";
 
-export function Browser() {
+export function Browser({ isPaused }: { isPaused?: boolean }) {
   // WebSocket and canvas state
   const parentRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -46,12 +50,10 @@ export function Browser() {
   const [isConnected, setIsConnected] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
   const [favicon, setFavicon] = useState<string | null>(null);
+  const [isHovering, setIsHovering] = useState(false);
 
-  // Get session from SteelContext but timer from Zustand
   const { currentSession, isExpired, maxSessionDuration } = useSteelContext();
-
-  // Don't access sessionTimeElapsed here to avoid re-renders on timer change
-  // The TimerText component will access it directly
+  const { toast } = useToast();
 
   const debugUrl = currentSession?.debugUrl;
 
@@ -68,12 +70,84 @@ export function Browser() {
     renderFrame();
   }, [latestImage, canvasSize]);
 
+  // Add function to handle taking control
+  const handleTakeControl = async () => {
+    if (!currentSession?.id) return;
+
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/sessions/${currentSession.id}/pause`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Error taking control:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorText,
+        });
+        toast({
+          title: "Error",
+          description: "Failed to take control. Please try again.",
+          className: "border border-[--red-6] bg-[--red-3] text-[--red-11]",
+        });
+        throw new Error("Failed to pause session");
+      }
+
+      toast({
+        title: "Control Taken",
+        description: "You now have control of the browser",
+        className: "border border-[--green-6] bg-[--green-3] text-[--green-11]",
+      });
+
+      // Trigger a custom event that page.tsx can listen for
+      window.dispatchEvent(
+        new CustomEvent("browser-paused", {
+          detail: { sessionId: currentSession.id },
+        })
+      );
+    } catch (error) {
+      console.error("Error taking control:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Add function to handle resuming AI control
+  const handleResume = async () => {
+    if (!currentSession?.id) return;
+
+    try {
+      setIsLoading(true);
+
+      // Trigger the event first, so page.tsx can handle state updates
+      window.dispatchEvent(
+        new CustomEvent("browser-resumed", {
+          detail: { sessionId: currentSession.id },
+        })
+      );
+
+      // The actual API call will be handled by page.tsx when it receives the browser-resumed event
+      // This avoids making the API call twice
+    } catch (error) {
+      console.error("Error resuming AI control:", error);
+      setIsLoading(false);
+      toast({
+        title: "Error",
+        description: "Failed to resume AI control. Please try again.",
+        className: "border border-[--red-6] bg-[--red-3] text-[--red-11]",
+      });
+    }
+  };
+
   return (
-    <div
-      className="
+    <>
+      <div
+        className="
         relative 
         flex 
-        aspect-[896/555] 
+        aspect-[16/8.5] 
         w-full 
         max-w-full 
         flex-col
@@ -84,90 +158,158 @@ export function Browser() {
         bg-[--gray-1] 
         shadow-[0px_8px_16px_0px_rgba(0,0,0,0.08)]
       "
-    >
-      {/* Top Bar */}
-      <div className="flex h-[60px] items-center justify-center border-b border-[--gray-3] bg-[--gray-1] p-2.5">
-        <div className="flex h-10 w-[360px] items-center justify-center rounded-[0.5rem] border border-[--gray-3] bg-[--gray-1] px-4 py-3">
-          <div className="mr-auto flex items-center justify-center">
-            {favicon ? (
-              <Image
-                src={(() => {
-                  try {
-                    // Handle relative favicons by combining with the URL
-                    if (favicon.startsWith("/") && url) {
-                      return new URL(favicon, url).href;
-                    }
-                    return favicon;
-                  } catch (error) {
-                    console.error("Error constructing favicon URL:", error);
-                    return "/fallback-favicon.svg"; // Use a fallback icon
+      >
+        {/* Top Bar */}
+        <div className="relative flex h-[60px] items-center justify-center border-b border-[--gray-3] bg-[--gray-1] p-2.5">
+          <div className="flex h-10 w-[360px] items-center justify-center rounded-[0.5rem] border border-[--gray-3] bg-[--gray-1] px-4 py-3">
+            <div className="flex items-center justify-center">
+              {favicon ? (
+                <Image
+                  src={
+                    favicon.startsWith("/") && url ? new URL(new URL(url), favicon).href : favicon
                   }
-                })()}
-                alt="Favicon"
-                width={24}
-                height={24}
-                className="mr-2 object-contain"
-              />
-            ) : (
-              <GlobeIcon className="mr-2 size-4" />
-            )}
+                  alt="Favicon"
+                  width={24}
+                  height={24}
+                  className="mr-2 object-contain"
+                />
+              ) : (
+                <GlobeIcon className="mr-2 size-4" />
+              )}
+              <span className="truncate font-geist text-base font-normal leading-normal text-[--gray-12]">
+                {url ? url : "Session not connected"}
+              </span>
+            </div>
           </div>
-          <span className="mr-auto truncate font-geist text-base font-normal leading-normal text-[--gray-12]">
-            {url ? url : "Session not connected"}
-          </span>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div ref={parentRef} className="relative flex-1">
-        {debugUrl ? (
-          <iframe
-            src={debugUrl + "?showControls=false"}
-            sandbox="allow-same-origin allow-scripts"
-            className="size-full border border-[--gray-3]"
-          />
-        ) : (
-          <div className="size-full" />
-        )}
-
-        <div className="absolute left-[372px] top-[236px] font-geist text-base font-normal leading-normal text-white opacity-0">
-          Awaiting your input...
-        </div>
-      </div>
-
-      {/* Status Bar */}
-      <div className="flex h-[40px] items-center border-t border-[--gray-3] bg-[--gray-1] p-1 px-3">
-        <div className="flex w-full justify-between font-ibm-plex-mono text-sm text-[--gray-11]">
-          <div className="flex gap-2 font-sans">
-            <span className="flex items-center gap-2">
-              <div
-                className={cn(
-                  "size-2 rounded-full",
-                  currentSession ? (isExpired ? "bg-[--red-9]" : "bg-[--green-9]") : "bg-[--gray-8]"
-                )}
+        {/* Main Content */}
+        <div
+          ref={parentRef}
+          className="relative flex-1"
+          onMouseEnter={() => setIsHovering(true)}
+          onMouseLeave={() => setIsHovering(false)}
+        >
+          {debugUrl ? (
+            <>
+              <iframe
+                src={`${debugUrl}?showControls=false&interactive=true&initialInteractive=true`}
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
+                className="size-full border border-[--gray-3]"
               />
-              {currentSession
-                ? isExpired
-                  ? "Session Expired"
-                  : "Session Connected"
-                : "No Session"}
+              {isPaused && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center transition-opacity duration-300"
+                  style={{
+                    background:
+                      "linear-gradient(0deg, rgba(23, 23, 23, 0.80) 0%, rgba(23, 23, 23, 0.80) 100%)",
+                    opacity: isHovering ? 0 : 1,
+                    pointerEvents: "none" /* Always allow clicks to pass through to iframe */,
+                  }}
+                >
+                  <span className="font-geist font-normal text-white">Awaiting your input...</span>
+                </div>
+              )}
+              {!isPaused && currentSession && !isExpired && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center transition-opacity duration-300"
+                  style={{
+                    background:
+                      "linear-gradient(0deg, rgba(23, 23, 23, 0.70) 0%, rgba(23, 23, 23, 0.70) 100%)",
+                    opacity: isHovering ? 1 : 0,
+                    pointerEvents: isHovering
+                      ? "auto"
+                      : "none" /* Only capture clicks when visible */,
+                  }}
+                >
+                  <Button
+                    onClick={handleTakeControl}
+                    disabled={isLoading}
+                    className={`rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1] ${isLoading ? "cursor-not-allowed opacity-50" : ""}`}
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="mr-2 size-4 animate-spin rounded-full border-2 border-gray-800 border-t-transparent"></div>
+                        Taking Control...
+                      </>
+                    ) : (
+                      "Take Control"
+                    )}
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="size-full" />
+          )}
+        </div>
+
+        {/* Status Bar */}
+        <div className="flex h-[40px] items-center border-t border-[--gray-3] bg-[--gray-1] p-1 px-3">
+          <div className="flex w-full justify-between font-ibm-plex-mono text-sm text-[--gray-11]">
+            <div className="flex gap-2 font-sans">
+              <span className="flex items-center gap-2">
+                <div
+                  className={cn(
+                    "size-2 rounded-full",
+                    currentSession
+                      ? isExpired
+                        ? "bg-[--red-9]"
+                        : "bg-[--green-9]"
+                      : "bg-[--gray-8]"
+                  )}
+                />
+                {currentSession
+                  ? isExpired
+                    ? "Session Expired"
+                    : isPaused
+                      ? "Interactive Mode"
+                      : "Session Connected"
+                  : "No Session"}
+              </span>
+              <SessionTimer maxDuration={maxSessionDuration} />
+            </div>
+
+            <span className="mt-1 flex items-center gap-2 font-sans text-sm md:mt-0">
+              Browser Powered by{" "}
+              <a
+                href="https://steel.dev"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-[--gray-12] underline transition-colors duration-200 hover:text-[--gray-11]"
+              >
+                Steel.dev
+              </a>
             </span>
-            <SessionTimer maxDuration={maxSessionDuration} />
           </div>
-
-          <span className="mt-1 flex items-center gap-2 font-sans text-sm md:mt-0">
-            Browser Powered by{" "}
-            <a
-              href="https://steel.dev"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-[--gray-12] underline transition-colors duration-200 hover:text-[--gray-11]"
-            >
-              Steel.dev
-            </a>
-          </span>
         </div>
       </div>
-    </div>
+
+      {isPaused && currentSession && !isExpired && (
+        <div className="mt-2 flex justify-center">
+          <div className="flex max-w-[90%] items-center justify-between gap-4 rounded-lg border border-[--gray-3] bg-[--gray-2] p-3 shadow-md">
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium text-[--gray-12]">You are in control</p>
+              <p className="text-xs text-[--gray-11]">No screenshots are being taken</p>
+            </div>
+            <Button
+              onClick={handleResume}
+              variant="secondary"
+              disabled={isLoading}
+              className={`rounded-full bg-white px-5 py-2 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1] ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              {isLoading ? (
+                <>
+                  <div className="mr-2 size-4 animate-spin rounded-full border-2 border-gray-800 border-t-transparent"></div>
+                  Resuming...
+                </>
+              ) : (
+                "Resume"
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

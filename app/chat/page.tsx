@@ -316,6 +316,23 @@ ChatInputContainer.displayName = "ChatInputContainer";
 const MemoizedBrowser = React.memo(Browser);
 MemoizedBrowser.displayName = "MemoizedBrowser";
 
+// Define proper types for messages and tool invocations
+interface ToolInvocation {
+  toolCallId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  state: "call" | "result" | "partial-call";
+  result?: unknown;
+}
+
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  toolInvocations?: ToolInvocation[];
+  experimental_attachments?: Array<{ name: string; [key: string]: unknown }>;
+}
+
 // Fix the linter errors in MemoizedMessageList by adding types
 const MemoizedMessageList = React.memo(
   ({
@@ -324,18 +341,32 @@ const MemoizedMessageList = React.memo(
     hasShownConnection,
     currentSession,
     onImageClick,
+    isPaused,
+    handleResume,
   }: {
-    messages: any[];
+    messages: ChatMessage[];
     isCreatingSession: boolean;
     hasShownConnection: boolean;
-    currentSession: any;
+    currentSession: { id: string; debugUrl?: string };
     onImageClick: (src: string) => void;
+    isPaused: boolean;
+    handleResume: () => void;
   }) => {
     console.log("[RENDER] MemoizedMessageList rendering");
 
     return (
       <>
         {messages.map((message, index) => {
+          // Group resume messages together - only render the most recent one
+          // with the same content if they appear consecutively
+          if (
+            message.content === "▶️ AI control has been resumed." &&
+            index > 0 &&
+            messages[index - 1].content === "▶️ AI control has been resumed."
+          ) {
+            return null;
+          }
+
           return (
             <div key={message.id || index} className="flex w-full max-w-full flex-col gap-2">
               {/* Force message content to respect container width */}
@@ -370,6 +401,132 @@ const MemoizedMessageList = React.memo(
                       const hasToolInvocations =
                         message.toolInvocations && message.toolInvocations.length > 0;
                       const isSpecial = isSpecialMessage || hasToolInvocations;
+
+                      // Check for pause message in content or tool calls
+                      const pauseToolCall = message.toolInvocations?.find(
+                        (tool: ToolInvocation) => tool.toolName === "pause_execution"
+                      );
+                      const isPauseToolCall = hasToolInvocations && !!pauseToolCall;
+                      const isPauseContentMessage =
+                        message.content?.includes("⏸️ Pausing execution") ||
+                        message.content?.includes("⏸️ You have taken control");
+                      const isPauseMessage = isPauseToolCall || isPauseContentMessage;
+
+                      // Get the pause reason from either source
+                      let pauseReason = "";
+                      if (isPauseToolCall && pauseToolCall) {
+                        // Clean up the reason - sometimes it includes the "⏸️" prefix which causes duplication
+                        const rawReason =
+                          typeof pauseToolCall.args.reason === "string"
+                            ? pauseToolCall.args.reason
+                            : "Unknown reason";
+                        pauseReason = rawReason.replace(/^⏸️\s*/, "");
+                      } else if (isPauseContentMessage && message.content) {
+                        if (message.content.includes("⏸️ Pausing execution:")) {
+                          const parts = message.content.split("⏸️ Pausing execution: ");
+                          pauseReason = parts[1]?.trim() || "Unknown reason";
+                        } else if (message.content.includes("⏸️ You have taken control")) {
+                          pauseReason = "You have taken control of the browser";
+                        }
+                      }
+
+                      // This is a critical check - if it's a pause message, we need to render it
+                      if (isPauseMessage) {
+                        // Check if this is the most recent pause message
+                        const isLatestPauseMessage = !messages.some((m, i) => {
+                          if (i <= index) return false; // Only check messages after this one
+
+                          // Check if there's a newer pause message
+                          return (
+                            m.content?.includes("⏸️ Pausing execution") ||
+                            m.toolInvocations?.some(
+                              (tool: ToolInvocation) => tool.toolName === "pause_execution"
+                            )
+                          );
+                        });
+
+                        // Check if the user has sent a message after this pause
+                        const userSentMessageAfterPause = messages.some((m, i) => {
+                          return i > index && m.role === "user";
+                        });
+
+                        // Only show buttons if this is the latest pause and no user message after it
+                        const showButtons = isLatestPauseMessage && !userSentMessageAfterPause;
+
+                        // Extract reason from the current message
+                        let displayReason = "";
+
+                        if (pauseToolCall) {
+                          displayReason =
+                            typeof pauseToolCall.args.reason === "string"
+                              ? pauseToolCall.args.reason
+                              : "Awaiting your confirmation";
+                        } else if (message.content) {
+                          if (message.content.includes("⏸️ Pausing execution:")) {
+                            const parts = message.content.split("⏸️ Pausing execution:");
+                            displayReason = parts[1]?.trim() || "Awaiting your confirmation";
+                          } else if (message.content.includes("⏸️ You have taken control")) {
+                            displayReason = "You have taken control of the browser";
+                          } else {
+                            displayReason = message.content.replace("⏸️ ", "").trim();
+                          }
+                        }
+
+                        if (!displayReason) {
+                          displayReason = "Awaiting your confirmation";
+                        }
+
+                        console.info("💬 Rendering pause message:", {
+                          index,
+                          isLatestPauseMessage,
+                          userSentMessageAfterPause,
+                          showButtons,
+                          pauseReason:
+                            pauseReason ||
+                            message.content ||
+                            (pauseToolCall?.args.reason as string),
+                        });
+
+                        return (
+                          <div
+                            className={`flex w-full max-w-full flex-col gap-4 ${!showButtons ? "opacity-80" : ""}`}
+                          >
+                            <div className="flex flex-col gap-4">
+                              <div className="font-normal text-[--gray-12]">
+                                <MarkdownText content={displayReason} />
+                                {!showButtons && (
+                                  <div className="mt-2 text-sm text-[--gray-10] italic">
+                                    (Confirmation no longer needed)
+                                  </div>
+                                )}
+                              </div>
+                              {showButtons && (
+                                <div className="flex gap-3">
+                                  <Button
+                                    onClick={() => {
+                                      console.info("🖱️ Take Control button clicked");
+                                      handleResume();
+                                    }}
+                                    className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
+                                  >
+                                    Take Control
+                                  </Button>
+                                  <Button
+                                    onClick={() => {
+                                      console.info("🖱️ Keep Going button clicked");
+                                      handleResume();
+                                    }}
+                                    variant="outline"
+                                    className="rounded-full bg-[--gray-3] px-6 py-3 text-base font-medium text-[--gray-11] transition-colors hover:bg-[--gray-4]"
+                                  >
+                                    Keep Going
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
 
                       // Find consecutive special messages
                       let specialMessagesGroup = [];
@@ -415,8 +572,24 @@ const MemoizedMessageList = React.memo(
                                 {groupMessage.toolInvocations &&
                                   groupMessage.toolInvocations.length > 0 && (
                                     <div className="flex w-full flex-col gap-2">
-                                      {groupMessage.toolInvocations.map(
-                                        (tool: any, toolIndex: number) => (
+                                      {groupMessage.toolInvocations
+                                        .filter(tool => {
+                                          // Filter out pause_execution tools
+                                          if (tool.toolName === "pause_execution") {
+                                            return false;
+                                          }
+
+                                          // Make sure print_call tools have a message
+                                          if (
+                                            tool.toolName === "print_call" &&
+                                            (!tool.args || !tool.args.message)
+                                          ) {
+                                            return false;
+                                          }
+
+                                          return true;
+                                        })
+                                        .map((tool: any, toolIndex: number) => (
                                           <div
                                             key={toolIndex}
                                             className="flex w-full items-center justify-between rounded-2xl border border-[--gray-3] bg-[--gray-2] p-3"
@@ -426,8 +599,7 @@ const MemoizedMessageList = React.memo(
                                               onImageClick={onImageClick}
                                             />
                                           </div>
-                                        )
-                                      )}
+                                        ))}
                                     </div>
                                   )}
                               </React.Fragment>
@@ -506,7 +678,8 @@ function useChatState({
       });
     },
     onToolCall: toolCallEvent => {
-      console.log("[CHAT] Tool call received:", toolCallEvent);
+      console.log("[CHAT] Tool call received:", JSON.stringify(toolCallEvent, null, 2));
+      // We'll implement more reliable message updates after understanding the structure
     },
   });
 }
@@ -533,6 +706,9 @@ interface ChatPageContentProps {
   removeIncompleteToolCalls: () => void;
   stop: () => void;
   handleSend: (e: React.FormEvent, messageText: string, attachments: File[]) => void;
+  isPaused: boolean;
+  resumeLoading: boolean;
+  handleResume: () => void;
 }
 
 const ChatPageContent = React.memo(
@@ -557,8 +733,14 @@ const ChatPageContent = React.memo(
     removeIncompleteToolCalls,
     stop,
     handleSend,
+    isPaused,
+    resumeLoading,
+    handleResume,
   }: ChatPageContentProps) => {
     console.log("[RENDER] ChatPageContent rendering");
+
+    // Determine if we should show the loading indicator
+    const showLoadingIndicator = isLoading || resumeLoading;
 
     return (
       <>
@@ -592,16 +774,25 @@ const ChatPageContent = React.memo(
                   hasShownConnection={hasShownConnection}
                   currentSession={currentSession}
                   onImageClick={handleImageClick}
+                  isPaused={isPaused}
+                  handleResume={handleResume}
                 />
-                {isLoading && (
-                  <div className="size-4 animate-spin rounded-full border-2 border-[--gray-12] border-t-transparent" />
+                {showLoadingIndicator && (
+                  <div className="flex items-center gap-2">
+                    <div className="size-4 animate-spin rounded-full border-2 border-[--gray-12] border-t-transparent" />
+                    {resumeLoading && (
+                      <span className="text-sm text-[--gray-10]">
+                        Waiting for agent to continue...
+                      </span>
+                    )}
+                  </div>
                 )}
 
                 {/* Simplified scroll anchor */}
                 <ChatScrollAnchor
                   scrollAreaRef={scrollAreaRef}
                   isAtBottom={isAtBottom}
-                  trackVisibility={isLoading}
+                  trackVisibility={showLoadingIndicator}
                 />
               </div>
             </div>
@@ -631,8 +822,8 @@ const ChatPageContent = React.memo(
                     const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
                     handleSend(fakeEvent, messageText, []);
                   }}
-                  disabled={isLoading}
-                  isLoading={isLoading}
+                  disabled={showLoadingIndicator}
+                  isLoading={showLoadingIndicator}
                   onStop={handleStop}
                 />
               )}
@@ -642,13 +833,15 @@ const ChatPageContent = React.memo(
           {/* Right (browser) - Keep more prominent */}
           <div
             className="
+              h-[60vh] 
+              flex-1 border-b
             h-[60vh] 
             flex-1 border-b
             border-[--gray-3] p-4 md:h-full 
             md:border-b-0
           "
           >
-            <TimerDisplay />
+            <TimerDisplay isPaused={isPaused} />
           </div>
         </div>
       </>
@@ -659,11 +852,11 @@ const ChatPageContent = React.memo(
 ChatPageContent.displayName = "ChatPageContent";
 
 // Update the TimerDisplay component to be completely isolated
-const TimerDisplay = React.memo(() => {
+const TimerDisplay = React.memo(({ isPaused }: { isPaused: boolean }) => {
   console.log("[RENDER] TimerDisplay rendering");
 
   // No state, no store access here - completely isolated
-  return <MemoizedBrowser />;
+  return <MemoizedBrowser isPaused={isPaused} />;
 });
 
 TimerDisplay.displayName = "TimerDisplay";
@@ -687,6 +880,17 @@ export default function ChatPage() {
   // Track whether user is at the bottom
   const [isAtBottom, setIsAtBottom] = useState<boolean>(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // After defining checkApiKey
+  const [isPaused, setIsPaused] = useState(false);
+  const [pauseReason, setPauseReason] = useState<string>("");
+  const [resumeLoading, setResumeLoading] = useState(false);
+
+  // Add a ref to track if a resume request is in progress
+  const resumeRequestInProgress = useRef(false);
+
+  // Add a ref for tracking the last resume timestamp
+  const lastResumeTimestamp = useRef(0);
 
   // Utility functions that need to be defined before they're used
   const checkApiKey = useCallback(() => {
@@ -780,39 +984,73 @@ export default function ChatPage() {
   }, []);
 
   // Enhanced handleSend with more logging
-  const handleSend = useCallback(
-    async (e: React.FormEvent, messageText: string, attachments: File[]) => {
-      e.preventDefault();
+  async function handleSend(e: React.FormEvent, messageText: string, attachments: File[]) {
+    console.info("📤 Handling message send:", {
+      messageText,
+      hasAttachments: attachments.length > 0,
+      attachmentsCount: attachments.length,
+      isFirstMessage: messages.length === 0,
+      isSubmitting,
+      hasApiKey: checkApiKey(),
+      isPaused,
+    });
 
-      if (!checkApiKey()) {
-        pendingMessageRef.current = messageText;
-        setShowApiKeyModal(true);
-        return;
-      }
+    e.preventDefault();
 
-      setIsSubmitting(true);
-      if (messages.length === 0) {
-        setInitialMessage(messageText);
-        handleInputChange({ target: { value: "" } } as any);
-      } else {
-        handleSubmit(e);
-        return;
-      }
+    if (!checkApiKey()) {
+      pendingMessageRef.current = messageText;
+      setShowApiKeyModal(true);
+      return;
+    }
 
+    setIsSubmitting(true);
+
+    // If we're paused, we need to resume first
+    if (isPaused) {
+      console.info("⏸️ Message sent while paused, resuming first");
+      await handleResume();
+      // Small delay to ensure the resume has taken effect
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // If we already have a session, use it regardless of message count
+    if (currentSession?.id) {
+      console.info("📤 Submitting message to existing chat session:", {
+        messageText,
+        sessionId: currentSession?.id,
+        existingMessages: messages.length,
+        wasPaused: isPaused,
+      });
+      handleSubmit(e);
+      return;
+    }
+
+    // No existing session - this is a new conversation
+    if (messages.length === 0) {
+      console.info("📝 Setting initial message with context:", {
+        messageText,
+        hasAttachments: attachments.length > 0,
+        attachmentsCount: attachments.length,
+      });
+      setInitialMessage(messageText);
+      handleInputChange({ target: { value: "" } } as any);
+
+      // Create a new session if needed
       if (!currentSession?.id) {
+        console.info("🔄 Creating new session for initial message");
         await createSession();
+        console.info("✅ New session created");
       }
-    },
-    [
-      checkApiKey,
-      messages.length,
-      setInitialMessage,
-      handleInputChange,
-      handleSubmit,
-      currentSession?.id,
-      createSession,
-    ]
-  );
+    } else {
+      // This case shouldn't normally happen (messages exist but no session)
+      // but we'll handle it just in case
+      console.info("📤 Submitting message to chat with no active session:", {
+        messageText,
+        existingMessages: messages.length,
+      });
+      handleSubmit(e);
+    }
+  }
 
   // Modify the useEffect that handles session creation
   useEffect(() => {
@@ -896,6 +1134,309 @@ export default function ChatPage() {
     }
   }, [isExpired, stop, removeIncompleteToolCalls]);
 
+  // Restore the watch for pause messages effect
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      console.info("🔍 Checking message for pause:", {
+        content: lastMessage.content,
+        role: lastMessage.role,
+        toolInvocations: lastMessage.toolInvocations,
+        isPausedState: isPaused,
+        currentReason: pauseReason,
+        totalMessages: messages.length,
+      });
+
+      // Log all tool calls for debugging
+      if (lastMessage.toolInvocations?.length) {
+        console.info(
+          "🛠️ All tool calls in last message:",
+          lastMessage.toolInvocations.map(tool => ({
+            toolName: tool.toolName,
+            args: tool.args,
+            state: tool.state,
+          }))
+        );
+      }
+
+      // Check if this is a pause message
+      if (lastMessage.role === "assistant") {
+        // Check for pause tool call
+        let foundPause = false;
+        let pauseReasonText = "";
+
+        if (lastMessage.toolInvocations?.length) {
+          const pauseToolCall = lastMessage.toolInvocations.find(
+            tool => tool.toolName === "pause_execution"
+          );
+
+          if (pauseToolCall) {
+            foundPause = true;
+            // If reason starts with emoji, keep it (improved extraction)
+            pauseReasonText =
+              typeof pauseToolCall.args.reason === "string"
+                ? pauseToolCall.args.reason
+                : "Unknown reason";
+
+            console.info("⏸️ Found pause tool call:", {
+              toolCall: pauseToolCall,
+              extractedReason: pauseReasonText,
+            });
+          }
+        }
+        // Also check for pause message in content
+        else if (lastMessage.content && lastMessage.content.includes("⏸️ Pausing execution")) {
+          foundPause = true;
+          if (lastMessage.content.includes("⏸️ Pausing execution:")) {
+            const parts = lastMessage.content.split("⏸️ Pausing execution:");
+            pauseReasonText = parts[1]?.trim() || "Unknown reason";
+          } else {
+            pauseReasonText = lastMessage.content.trim();
+          }
+          console.info("⏸️ Found pause message in content:", {
+            extractedReason: pauseReasonText,
+          });
+        }
+
+        if (foundPause) {
+          setIsPaused(true);
+          setPauseReason(pauseReasonText);
+
+          // Stop loading state when paused
+          if (isLoading) {
+            stop();
+            removeIncompleteToolCalls();
+          }
+
+          // Skip the type checking for this console.info call
+          (console.info as any)(
+            "🔍 Current pause messages:",
+            messages.filter(m => {
+              return (
+                m.content?.includes("⏸️ Pausing execution") ||
+                m.toolInvocations?.some(tool => tool.toolName === "pause_execution")
+              );
+            }).length
+          );
+
+          // Don't add an extra message - use the existing tool call message instead
+          console.info("⏸️ Using existing pause message from tool call");
+        }
+      }
+    }
+  }, [messages, isPaused, pauseReason, isLoading, stop, removeIncompleteToolCalls]);
+
+  // Restore the browser paused effect
+  useEffect(() => {
+    const handleBrowserPaused = (event: CustomEvent) => {
+      console.info("🖐️ Browser was manually paused by user:", event.detail);
+      setIsPaused(true);
+      setPauseReason("You have taken control of the browser");
+
+      // Make sure loading state is cleared if active
+      if (isLoading) {
+        stop();
+        removeIncompleteToolCalls();
+      }
+
+      // Add a message to the chat to indicate manual pause
+      setMessages(messages => [
+        ...messages,
+        {
+          id: `manual-pause-${Date.now()}`,
+          role: "assistant",
+          content: "⏸️ You have taken control of the browser.",
+        },
+      ]);
+    };
+
+    // Add browser-paused event listener
+    window.addEventListener("browser-paused", handleBrowserPaused as EventListener);
+
+    return () => {
+      window.removeEventListener("browser-paused", handleBrowserPaused as EventListener);
+    };
+  }, [isLoading, stop, removeIncompleteToolCalls, setMessages]);
+
+  // Add a function to handle message refreshing
+  const refreshMessages = useCallback(async () => {
+    if (!currentSession?.id) return;
+
+    try {
+      console.info("🔄 Refreshing messages for session:", currentSession.id);
+
+      // Use the reload function, which will fetch the latest messages
+      await reload();
+
+      // After reload completes, check for and handle any duplicate resume messages
+      setMessages(prev => {
+        // Find all resume messages
+        const resumeMessages = prev.filter(
+          m => m.role === "assistant" && m.content === "▶️ AI control has been resumed."
+        );
+
+        // If there are multiple resume messages in sequence, keep only the last one
+        if (resumeMessages.length > 1) {
+          console.info(`🔄 Found ${resumeMessages.length} resume messages, deduplicating...`);
+
+          let lastResumeIndex = -1;
+          const messagesToKeep = prev.filter((message, index) => {
+            const isResumeMessage =
+              message.role === "assistant" && message.content === "▶️ AI control has been resumed.";
+
+            if (isResumeMessage) {
+              if (lastResumeIndex !== -1 && index === lastResumeIndex + 1) {
+                // This is a consecutive resume message, skip it
+                lastResumeIndex = index;
+                return false;
+              }
+              lastResumeIndex = index;
+            }
+
+            return true;
+          });
+
+          return messagesToKeep;
+        }
+
+        return prev;
+      });
+    } catch (error) {
+      console.error("❌ Error refreshing messages:", error);
+    }
+  }, [currentSession?.id, reload, setMessages]);
+
+  // Update the handleResume function to use the refreshMessages function
+  const handleResume = useCallback(async () => {
+    if (!currentSession?.id) {
+      return;
+    }
+
+    // Prevent duplicate resume calls
+    const now = Date.now();
+    const timeSinceLastResume = now - lastResumeTimestamp.current;
+
+    // If less than 3 seconds since last resume, ignore this request
+    if (timeSinceLastResume < 3000) {
+      console.warn(
+        `🔒 Ignoring duplicate resume request (${timeSinceLastResume}ms since last resume)`
+      );
+      return;
+    }
+
+    // Check if a resume request is already in progress
+    if (resumeRequestInProgress.current || resumeLoading) {
+      console.warn("🔒 Resume request already in progress, ignoring duplicate request");
+      return;
+    }
+
+    try {
+      // Update the last resume timestamp
+      lastResumeTimestamp.current = now;
+
+      // Set the lock
+      resumeRequestInProgress.current = true;
+      setResumeLoading(true);
+      setIsPaused(false);
+      setPauseReason("");
+
+      console.info("▶️ Resuming session:", currentSession.id);
+
+      // Add a single resume message
+      setMessages(prev => {
+        // Check if the last message is already a resume message to avoid duplicates
+        const lastMessage = prev[prev.length - 1];
+        if (lastMessage && lastMessage.content === "▶️ AI control has been resumed.") {
+          return prev;
+        }
+        return [
+          ...prev,
+          {
+            id: `resume-${Date.now()}`,
+            role: "assistant",
+            content: "▶️ AI control has been resumed.",
+          },
+        ];
+      });
+
+      // Trigger a single browser-resumed event
+      window.dispatchEvent(
+        new CustomEvent("browser-resumed", {
+          detail: { sessionId: currentSession.id },
+        })
+      );
+
+      // Make a single API call to resume
+      console.info(`🔄 Sending resume request for session: ${currentSession.id}`);
+      const response = await fetch(`/api/sessions/${currentSession.id}/resume`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Resume API call failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorText,
+        });
+        throw new Error("Failed to resume execution");
+      }
+
+      // Success notification
+      toast({
+        title: "Resumed",
+        description: "Execution resumed",
+        className: "border border-[--green-6] bg-[--green-3] text-[--green-11]",
+      });
+
+      // Add a delayed refresh to get updated messages, but leave a buffer for the system to process
+      setTimeout(() => {
+        refreshMessages();
+
+        // Release the lock after refresh is triggered
+        setTimeout(() => {
+          setResumeLoading(false);
+          resumeRequestInProgress.current = false;
+        }, 500);
+      }, 1500);
+    } catch (error) {
+      console.error("❌ Error resuming execution:", error);
+
+      // Reset state on error
+      setIsPaused(true);
+      setPauseReason("Failed to resume. Try again.");
+      setResumeLoading(false);
+      resumeRequestInProgress.current = false;
+
+      toast({
+        title: "Error",
+        description: "Failed to resume execution",
+        className: "border border-[--red-6] bg-[--red-3] text-[--red-11]",
+      });
+    }
+  }, [currentSession?.id, toast, resumeLoading, setMessages, refreshMessages]);
+
+  // Now add the browser-resumed event listener after handleResume is defined
+  useEffect(() => {
+    const handleBrowserResumed = (event: CustomEvent) => {
+      console.info("▶️ Browser AI control was resumed by user:", event.detail);
+
+      // Only proceed if no resume is in progress
+      if (!resumeRequestInProgress.current) {
+        handleResume();
+      } else {
+        console.warn("🔒 Ignoring browser-resumed event: resume already in progress");
+      }
+    };
+
+    // Add event listeners for browser events
+    window.addEventListener("browser-resumed", handleBrowserResumed as EventListener);
+
+    return () => {
+      window.removeEventListener("browser-resumed", handleBrowserResumed as EventListener);
+    };
+  }, [handleResume]);
+
   // Return the memoized content with the dialog
   return (
     <>
@@ -920,6 +1461,9 @@ export default function ChatPage() {
         removeIncompleteToolCalls={removeIncompleteToolCalls}
         stop={stop}
         handleSend={handleSend}
+        isPaused={isPaused}
+        resumeLoading={resumeLoading}
+        handleResume={handleResume}
       />
 
       {/* Modal for expanded image */}
