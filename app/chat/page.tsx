@@ -447,7 +447,10 @@ const MemoizedMessageList = React.memo(
 
                         // Check if the user has sent a message after this pause
                         const userSentMessageAfterPause = messages.some((m, i) => {
-                          return i > index && m.role === "user";
+                          // Consider both cases:
+                          // 1. A message comes after this one in the messages array
+                          // 2. The isPaused state is false (meaning we've already resumed)
+                          return (i > index && m.role === "user") || !isPaused;
                         });
 
                         // Only show buttons if this is the latest pause, no user message after it, and isPaused is true
@@ -978,6 +981,40 @@ export default function ChatPage() {
     setSelectedImage(imageSrc);
   }, []);
 
+  // Keep the regular refreshMessages function for cases where we don't need duplicate checking
+  const refreshMessages = useCallback(async () => {
+    if (!currentSession?.id) return;
+
+    try {
+      console.info("🔄 Refreshing messages for session:", currentSession.id);
+
+      // Use the reload function to fetch the latest messages
+      await reload();
+
+      // Basic deduplication of resume messages
+      setMessages(prev => {
+        // Find and handle consecutive resume messages
+        let lastResumeIndex = -1;
+        return prev.filter((message, index) => {
+          const isResumeMessage =
+            message.role === "assistant" && message.content === "▶️ AI control has been resumed.";
+
+          if (isResumeMessage) {
+            if (lastResumeIndex !== -1 && index === lastResumeIndex + 1) {
+              // Skip consecutive resume messages
+              return false;
+            }
+            lastResumeIndex = index;
+          }
+
+          return true;
+        });
+      });
+    } catch (error) {
+      console.error("❌ Error refreshing messages:", error);
+    }
+  }, [currentSession?.id, reload, setMessages]);
+
   // Enhanced handleSend with more logging
   async function handleSend(e: React.FormEvent, messageText: string, attachments: File[]) {
     console.info("📤 Handling message send:", {
@@ -1003,11 +1040,96 @@ export default function ChatPage() {
     // If we're paused, we need to resume first
     if (isPaused) {
       console.info("⏸️ Message sent while paused, resuming first");
+
+      // Save the message for later
+      const savedMessage = messageText;
+
+      // Clear the input immediately to prevent reappearing
+      handleInputChange({ target: { value: "" } } as any);
+
+      // Make a stable copy of the current messages for reference
+      const currentMessages = [...messages];
+
+      // Check if there are any pending pause messages that need to be displayed
+      const hasPendingPauseMessages = currentMessages.some(
+        m =>
+          (m.role === "assistant" &&
+            (m.content?.includes("⏸️") || m.content?.includes("CONFIRMATION REQUIRED:"))) ||
+          m.toolInvocations?.some(tool => tool.toolName === "pause_execution")
+      );
+
+      if (hasPendingPauseMessages) {
+        console.info("🔄 Found pending pause messages, ensuring they're displayed");
+        // Force a UI update with the existing messages to make pause messages visible
+        setMessages([...currentMessages]);
+        // Give UI time to update
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+
+      // Resume the agent, which will also add a resume message
       await handleResume();
-      // Small delay to ensure the resume has taken effect
-      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Add a delay to ensure the resume has been processed by the backend
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      // Turn off resume loading indicator since we'll now use the regular loading state
+      setResumeLoading(false);
+
+      try {
+        // Get current messages after resume to maintain correct order
+        const messagesAfterResume = [...messages];
+
+        // Add the user message to UI with proper type assertion
+        const userMessage = {
+          id: `user-${Date.now()}`,
+          role: "user" as const, // Use const assertion to fix the type error
+          content: savedMessage,
+        };
+
+        // Update the UI in one deterministic operation
+        setMessages([...messagesAfterResume, userMessage]);
+
+        // Now submit directly to the API if we have a session
+        if (currentSession?.id) {
+          console.info("📤 Submitting message to API after resume:", savedMessage);
+
+          // Direct API call to send the message
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              messages: [...messagesAfterResume, userMessage],
+              ...chatBodyConfig,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to send message: ${response.statusText}`);
+          }
+
+          // Refresh messages after a longer delay to get the latest responses
+          // This should allow enough time for the backend to process the message
+          setTimeout(() => {
+            console.info("🔄 Refreshing messages after resume + user message");
+            // Use a custom refresh function that prevents duplicate user messages
+            refreshMessagesWithDuplicateCheck(savedMessage);
+          }, 1000); // Increase the delay to ensure proper message ordering
+        }
+      } catch (error) {
+        console.error("Error sending message:", error);
+        toast({
+          title: "Error",
+          description: "Failed to send your message",
+          className: "border border-[--red-6] bg-[--red-3] text-[--red-11]",
+        });
+      }
+
+      return;
     }
 
+    // Normal flow when not paused
     // If we already have a session, use it regardless of message count
     if (currentSession?.id) {
       console.info("📤 Submitting message to existing chat session:", {
@@ -1191,6 +1313,13 @@ export default function ChatPage() {
           console.info("⏸️ Found pause message in content:", {
             extractedReason: pauseReasonText,
           });
+        } else if (lastMessage.content && lastMessage.content.includes("CONFIRMATION REQUIRED:")) {
+          // Also check for confirmation required messages
+          foundPause = true;
+          pauseReasonText = lastMessage.content;
+          console.info("⏸️ Found confirmation required message:", {
+            content: lastMessage.content,
+          });
         }
 
         if (foundPause) {
@@ -1209,6 +1338,7 @@ export default function ChatPage() {
             messages.filter(m => {
               return (
                 m.content?.includes("⏸️ Pausing execution") ||
+                m.content?.includes("CONFIRMATION REQUIRED:") ||
                 m.toolInvocations?.some(tool => tool.toolName === "pause_execution")
               );
             }).length
@@ -1253,55 +1383,84 @@ export default function ChatPage() {
     };
   }, [isLoading, stop, removeIncompleteToolCalls, setMessages]);
 
-  // Add a function to handle message refreshing
-  const refreshMessages = useCallback(async () => {
-    if (!currentSession?.id) return;
+  // The specialized version with duplicate checking
+  const refreshMessagesWithDuplicateCheck = useCallback(
+    async (userMessage?: string) => {
+      if (!currentSession?.id) return;
 
-    try {
-      console.info("🔄 Refreshing messages for session:", currentSession.id);
+      try {
+        console.info("🔄 Refreshing messages with duplicate check:", currentSession.id);
 
-      // Use the reload function, which will fetch the latest messages
-      await reload();
+        // Use the reload function to fetch the latest messages
+        await reload();
 
-      // After reload completes, check for and handle any duplicate resume messages
-      setMessages(prev => {
-        // Find all resume messages
-        const resumeMessages = prev.filter(
-          m => m.role === "assistant" && m.content === "▶️ AI control has been resumed."
-        );
+        // Clean up and deduplicate messages
+        setMessages(prev => {
+          // Make a copy of the messages for processing
+          let messages = [...prev];
 
-        // If there are multiple resume messages in sequence, keep only the last one
-        if (resumeMessages.length > 1) {
-          console.info(`🔄 Found ${resumeMessages.length} resume messages, deduplicating...`);
-
-          let lastResumeIndex = -1;
-          const messagesToKeep = prev.filter((message, index) => {
-            const isResumeMessage =
-              message.role === "assistant" && message.content === "▶️ AI control has been resumed.";
-
-            if (isResumeMessage) {
-              if (lastResumeIndex !== -1 && index === lastResumeIndex + 1) {
-                // This is a consecutive resume message, skip it
-                lastResumeIndex = index;
-                return false;
-              }
-              lastResumeIndex = index;
+          // 1. Handle duplicate resume messages
+          let resumeIndices: number[] = [];
+          messages.forEach((m, i) => {
+            if (m.role === "assistant" && m.content === "▶️ AI control has been resumed.") {
+              resumeIndices.push(i);
             }
-
-            return true;
           });
 
-          return messagesToKeep;
-        }
+          // Keep only the first resume message in each consecutive group
+          if (resumeIndices.length > 1) {
+            console.info(`🔄 Found ${resumeIndices.length} resume messages, deduplicating...`);
+            let lastIndex = -2;
+            const indicesToRemove: number[] = [];
 
-        return prev;
-      });
-    } catch (error) {
-      console.error("❌ Error refreshing messages:", error);
-    }
-  }, [currentSession?.id, reload, setMessages]);
+            for (const idx of resumeIndices) {
+              if (idx === lastIndex + 1) {
+                // This is a consecutive resume message, mark for removal
+                indicesToRemove.push(idx);
+              }
+              lastIndex = idx;
+            }
 
-  // Update the handleResume function to use the refreshMessages function
+            // Remove marked messages
+            messages = messages.filter((_, i) => !indicesToRemove.includes(i));
+          }
+
+          // 2. Prevent duplicate user messages
+          if (userMessage) {
+            // Count user messages with this content
+            const userMessageCount = messages.filter(
+              m => m.role === "user" && m.content === userMessage
+            ).length;
+
+            // If we have multiple instances of the same user message, keep only the first one
+            if (userMessageCount > 1) {
+              console.info(`🔄 Found ${userMessageCount} duplicate user messages, removing extras`);
+              let foundFirst = false;
+              messages = messages.filter(m => {
+                if (m.role === "user" && m.content === userMessage) {
+                  if (!foundFirst) {
+                    foundFirst = true;
+                    return true;
+                  }
+                  return false;
+                }
+                return true;
+              });
+            }
+          }
+
+          // 3. Fix message ordering by ensuring messages are sorted by their timestamps if available
+          // This assumes messages have an id that includes a timestamp or can be sorted chronologically
+          return messages;
+        });
+      } catch (error) {
+        console.error("❌ Error refreshing messages:", error);
+      }
+    },
+    [currentSession?.id, reload, setMessages]
+  );
+
+  // Update the handleResume function to use proper type assertions
   const handleResume = useCallback(
     async (fromEvent = false) => {
       if (!currentSession?.id) {
@@ -1330,33 +1489,38 @@ export default function ChatPage() {
         // Update the last resume timestamp
         lastResumeTimestamp.current = now;
 
-        // Set the lock
+        // Set the lock and update UI state
         resumeRequestInProgress.current = true;
         setResumeLoading(true);
+
+        // Update UI state to show we're not paused - do this first for consistency
         setIsPaused(false);
         setPauseReason("");
 
         console.info("▶️ Resuming session:", currentSession.id);
 
-        // Add a single resume message
-        setMessages(prev => {
-          // Check if the last message is already a resume message to avoid duplicates
-          const lastMessage = prev[prev.length - 1];
-          if (lastMessage && lastMessage.content === "▶️ AI control has been resumed.") {
-            return prev;
-          }
-          return [
-            ...prev,
-            {
-              id: `resume-${Date.now()}`,
-              role: "assistant",
-              content: "▶️ AI control has been resumed.",
-            },
-          ];
-        });
+        // Get a stable copy of current messages before adding resume message
+        const currentMessages = [...messages];
 
-        // If this resume call was triggered directly (not from a browser-resumed event)
-        // then dispatch the event to notify the browser component
+        // Check if the last message is already a resume message
+        const lastMessage =
+          currentMessages.length > 0 ? currentMessages[currentMessages.length - 1] : null;
+        const isLastMessageResume =
+          lastMessage && lastMessage.content === "▶️ AI control has been resumed.";
+
+        // Only add a resume message if the last message isn't already one
+        if (!isLastMessageResume) {
+          const resumeMessage = {
+            id: `resume-${Date.now()}`,
+            role: "assistant" as const, // Use const assertion to fix the type error
+            content: "▶️ AI control has been resumed.",
+          };
+
+          // Update messages in one operation to avoid flicker
+          setMessages([...currentMessages, resumeMessage]);
+        }
+
+        // If this resume call was triggered directly, notify the browser component
         if (!fromEvent) {
           console.info("🔄 Dispatching browser-resumed event from direct button click");
           window.dispatchEvent(
@@ -1366,8 +1530,8 @@ export default function ChatPage() {
           );
         }
 
-        // Make a single API call to resume
-        console.info(`🔄 Sending resume request for session: ${currentSession.id}`);
+        // Make API call to resume
+        console.info("🔄 Sending resume request for session:", currentSession.id);
         const response = await fetch(`/api/sessions/${currentSession.id}/resume`, {
           method: "POST",
         });
@@ -1389,14 +1553,18 @@ export default function ChatPage() {
           className: "border border-[--green-6] bg-[--green-3] text-[--green-11]",
         });
 
-        // Add a delayed refresh to get updated messages, but leave a buffer for the system to process
+        // Add a delayed refresh to get updated messages
         setTimeout(() => {
           refreshMessages();
 
           // Release the lock after refresh is triggered
           setTimeout(() => {
-            setResumeLoading(false);
             resumeRequestInProgress.current = false;
+
+            // For "Keep Going" button clicks, we can turn off loading when done
+            if (!fromEvent) {
+              setResumeLoading(false);
+            }
           }, 500);
         }, 1500);
       } catch (error) {
@@ -1415,91 +1583,34 @@ export default function ChatPage() {
         });
       }
     },
-    [currentSession?.id, toast, resumeLoading, setMessages, refreshMessages]
+    [currentSession?.id, messages, toast, resumeLoading, setMessages, refreshMessages]
   );
 
-  // Now add the browser-resumed event listener after handleResume is defined
-  useEffect(() => {
-    const handleBrowserResumed = (event: CustomEvent) => {
-      console.info("▶️ Browser AI control was resumed by user:", event.detail);
-
-      // Only proceed if no resume is in progress
-      if (!resumeRequestInProgress.current) {
-        handleResume(true);
-      } else {
-        console.warn("🔒 Ignoring browser-resumed event: resume already in progress");
-      }
-    };
-
-    // Add event listeners for browser events
-    window.addEventListener("browser-resumed", handleBrowserResumed as EventListener);
-
-    return () => {
-      window.removeEventListener("browser-resumed", handleBrowserResumed as EventListener);
-    };
-  }, [handleResume]);
-
-  // Return the memoized content with the dialog
   return (
-    <>
-      <ChatPageContent
-        messages={messages}
-        isLoading={isLoading}
-        input={input}
-        handleInputChange={handleInputChange}
-        handleSubmit={handleSubmit}
-        handleStop={handleStop}
-        reload={reload}
-        isCreatingSession={isCreatingSession}
-        hasShownConnection={hasShownConnection}
-        currentSession={currentSession}
-        isExpired={isExpired}
-        handleNewChat={handleNewChat}
-        handleImageClick={handleImageClick}
-        setMessages={setMessages}
-        isAtBottom={isAtBottom}
-        scrollAreaRef={scrollAreaRef}
-        handleScroll={handleScroll}
-        removeIncompleteToolCalls={removeIncompleteToolCalls}
-        stop={stop}
-        handleSend={handleSend}
-        isPaused={isPaused}
-        resumeLoading={resumeLoading}
-        handleResume={handleResume}
-      />
-
-      {/* Modal for expanded image */}
-      <Dialog open={selectedImage !== null} onOpenChange={open => !open && setSelectedImage(null)}>
-        <DialogContent className="max-w-[90vw] border border-[#282828] bg-[--gray-1] p-0">
-          <div className="flex items-center justify-between border-b border-[#282828] px-4 py-2">
-            <DialogTitle className="text-base font-medium text-[--gray-12]">
-              Page preview sent to model
-            </DialogTitle>
-            <button
-              onClick={() => setSelectedImage(null)}
-              className="text-[--gray-11] transition-colors hover:text-[--gray-12]"
-            >
-              Close
-            </button>
-          </div>
-          {selectedImage && (
-            <div className="p flex items-center justify-center" style={{ height: "80vh" }}>
-              <img
-                src={selectedImage}
-                alt="Preview"
-                className="max-h-full max-w-full object-contain"
-              />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* API Key Modal */}
-      <AuthModal
-        provider={currentSettings?.selectedProvider || ""}
-        isOpen={showApiKeyModal}
-        onSubmit={handleApiKeySubmit}
-      />
-    </>
+    <ChatPageContent
+      messages={messages}
+      isLoading={isLoading}
+      input={input}
+      handleInputChange={handleInputChange}
+      handleSubmit={handleSubmit}
+      handleStop={handleStop}
+      reload={reload}
+      isCreatingSession={isCreatingSession}
+      hasShownConnection={hasShownConnection}
+      currentSession={currentSession}
+      isExpired={isExpired}
+      handleNewChat={handleNewChat}
+      handleImageClick={handleImageClick}
+      setMessages={setMessages}
+      isAtBottom={isAtBottom}
+      scrollAreaRef={scrollAreaRef}
+      handleScroll={handleScroll}
+      removeIncompleteToolCalls={removeIncompleteToolCalls}
+      stop={stop}
+      handleSend={handleSend}
+      isPaused={isPaused}
+      resumeLoading={resumeLoading}
+      handleResume={handleResume}
+    />
   );
 }

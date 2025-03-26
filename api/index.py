@@ -99,7 +99,12 @@ async def resume_session(session_id: str):
         time_since_last_resume = now - session_last_resume[session_id]
         if time_since_last_resume < RESUME_COOLDOWN:
             # Too soon - return success but don't actually resume again
-            return {"status": "success", "message": f"Resume already in progress"}
+            return {
+                "status": "success", 
+                "message": f"Resume already in progress", 
+                "is_resumed": True, 
+                "timestamp": now
+            }
 
     # Create a lock for this session if it doesn't exist
     if session_id not in session_locks:
@@ -115,14 +120,48 @@ async def resume_session(session_id: str):
         
         if not lock_acquired:
             # If we couldn't acquire the lock, someone else is already processing
-            return {"status": "success", "message": "Resume already in progress"}
+            return {
+                "status": "success", 
+                "message": "Resume already in progress", 
+                "is_resumed": True, 
+                "timestamp": now
+            }
             
         # Update last resume timestamp
         session_last_resume[session_id] = now
             
         try:
-            result = await resume_execution(ResumeRequest(session_id=session_id))
-            return result
+            # Make multiple attempts to resume the session in case the first one fails
+            max_attempts = 2
+            last_error = None
+            
+            for attempt in range(max_attempts):
+                try:
+                    result = await resume_execution(ResumeRequest(session_id=session_id))
+                    if result.get("status") == "success":
+                        result["is_resumed"] = True
+                        result["timestamp"] = now
+                        # If we were successful after a retry, log it
+                        if attempt > 0:
+                            print(f"Successfully resumed session {session_id} on attempt {attempt+1}")
+                        return result
+                    elif attempt < max_attempts - 1:
+                        # Wait briefly before retry
+                        await asyncio.sleep(0.2)
+                except Exception as e:
+                    last_error = e
+                    # Only sleep before retry if not the last attempt
+                    if attempt < max_attempts - 1:
+                        await asyncio.sleep(0.2)
+            
+            # If we got here, all attempts failed
+            if last_error:
+                raise last_error
+            return {
+                "status": "error",
+                "message": "Failed to resume session after multiple attempts",
+                "is_resumed": False
+            }
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
         finally:
@@ -130,7 +169,12 @@ async def resume_session(session_id: str):
             session_locks[session_id].release()
     except asyncio.TimeoutError:
         # If we timed out waiting for the lock
-        return {"status": "success", "message": "Resume already in progress"}
+        return {
+            "status": "success", 
+            "message": "Resume already in progress", 
+            "is_resumed": True, 
+            "timestamp": now
+        }
 
 
 @app.post("/api/sessions/{session_id}/pause", tags=["Sessions"])

@@ -60,10 +60,13 @@ def print_call(message: str) -> str:
 @controller.action('Pause execution')
 async def pause_execution(reason: str) -> str:
     """Pause execution using agent's pause mechanism."""
+    global _agent_resumed
+    
     if not controller.agent:
         raise ValueError("No agent set in controller")
         
     print(f"⏸️ Pausing execution: {reason}")
+    logger.info(f"⏸️ Pausing execution: {reason}")
     
     # Store current browser state before pausing (to prevent about:blank issue)
     browser_context = None
@@ -75,17 +78,29 @@ async def pause_execution(reason: str) -> str:
     
     # Log the current state for debugging
     if browser:
-        print(f"📊 Current browser state before pause - session_id: {controller.session_id}")
-        
+        logger.info(f"📊 Current browser state before pause - session_id: {controller.session_id}")
+    
+    # Set _agent_resumed to False to indicate we're paused
+    _agent_resumed = False
+    logger.info(f"⏸️ Set _agent_resumed = False for session: {controller.session_id}")
+    
+    # IMPORTANT: Make sure the message doesn't contain multiple pause prefixes
+    clean_reason = reason.replace("⏸️ ", "").strip()
+    if clean_reason.startswith("CONFIRMATION REQUIRED:"):
+        clean_reason = clean_reason.replace("CONFIRMATION REQUIRED:", "").strip()
+    formatted_reason = f"⏸️ {clean_reason}"
+    
     # Pause the agent but ensure browser state is preserved
     controller.agent.pause()
+    logger.info(f"⏸️ Agent paused for session: {controller.session_id}")
     
     # Make sure browser and context remain active and are not reset
     if controller.session_id:
         active_browser_contexts[controller.session_id] = browser_context
         active_browsers[controller.session_id] = browser
     
-    return "Agent paused"
+    # Return a clean message for the frontend
+    return formatted_reason
 
 class ResumeRequest(BaseModel):
     session_id: str
@@ -112,9 +127,29 @@ async def resume_execution(request: ResumeRequest) -> dict:
             logger.info(f"🔄 Restoring browser context for session: {session_id}")
             controller.agent.browser_context = browser_context
     
-    # Resume the agent
-    controller.agent.resume()
+    # First set the flag to true so ongoing processes know we're resumed
     _agent_resumed = True
+    logger.info(f"✅ Set _agent_resumed = True for session: {session_id}")
+    
+    # Then resume the agent
+    try:
+        logger.info(f"▶️ Resuming agent for session: {session_id}")
+        controller.agent.resume()
+        logger.info(f"✅ Agent resumed successfully for session: {session_id}")
+        
+        # Small delay to allow agent to process the resume
+        await asyncio.sleep(0.2)
+        
+        # Verify the agent is really resumed
+        if controller.agent._paused:
+            logger.warning(f"⚠️ Agent still shows as paused after resume for session: {session_id}")
+            # Force the paused state to false
+            controller.agent._paused = False
+            logger.info(f"🔧 Forced agent._paused = False for session: {session_id}")
+    except Exception as e:
+        logger.error(f"❌ Error resuming agent: {str(e)}")
+        # Even if resume fails, keep _agent_resumed = True so UI can recover
+        return {"status": "error", "message": f"Failed to resume agent: {str(e)}"}
     
     return {"status": "success", "message": "Agent resumed"}
 
@@ -123,6 +158,8 @@ class PauseRequest(BaseModel):
 
 async def pause_execution_manually(request: PauseRequest) -> dict:
     """API endpoint to manually pause agent execution."""
+    global _agent_resumed
+    
     logger.info(f"🖐️ Manual pause requested for session: {request.session_id}")
     
     if not controller.agent:
@@ -143,8 +180,13 @@ async def pause_execution_manually(request: PauseRequest) -> dict:
     if browser:
         logger.info(f"📊 Preserving browser state on manual pause - session_id: {controller.session_id}")
     
+    # Set _agent_resumed to false to indicate pause state
+    _agent_resumed = False
+    logger.info(f"⏸️ Set _agent_resumed = False for manual pause - session_id: {controller.session_id}")
+    
     # Pause the agent but ensure browser state is preserved
     controller.agent.pause()
+    logger.info(f"⏸️ Agent manually paused for session: {controller.session_id}")
     
     # Make sure browser and context remain active and are not reset
     if controller.session_id:
@@ -282,6 +324,9 @@ async def browser_use_agent(
     # Store special messages until agent is resumed
     pending_special_messages = []
     
+    # Add a flag to track whether we've stored messages while paused
+    has_pending_messages = False
+    
     try:
         while True:
             if cancel_event and cancel_event.is_set():
@@ -292,46 +337,54 @@ async def browser_use_agent(
                 break
                 
             # Wait for data from the queue
-            data = await queue.get()
+            try:
+                # Use a timeout to regularly check the _agent_resumed flag
+                data = await asyncio.wait_for(queue.get(), timeout=0.5)
+            except asyncio.TimeoutError:
+                # Check if agent was resumed while we were waiting
+                if _agent_resumed and has_pending_messages:
+                    logger.info("🔄 Agent was resumed while waiting for queue data, releasing pending messages")
+                    for msg in pending_special_messages:
+                        yield msg
+                    pending_special_messages = []
+                    has_pending_messages = False
+                continue
+                
             if data == "END":  # You'll need to send this when done
                 break
             
             # Check if agent was resumed - if so, release any pending special messages
             if _agent_resumed and pending_special_messages:
+                logger.info(f"🔄 Agent resumed, releasing {len(pending_special_messages)} pending messages")
                 # First yield all pending special messages
                 for msg in pending_special_messages:
                     yield msg
                 pending_special_messages = []  # Clear the pending messages
+                has_pending_messages = False
             
             # If this is a special message (Memory, Next Goal, etc)
-            if isinstance(data, AIMessage) and data.content and (
-                "*Memory*:" in data.content or 
-                "*Next Goal*:" in data.content or 
-                "*Previous Goal*:" in data.content
-            ):
-                if _agent_resumed:
-                    # If agent is resumed, send the message immediately
+            is_special_message = (
+                isinstance(data, AIMessage) and 
+                data.content and (
+                    "*Memory*:" in data.content or 
+                    "*Next Goal*:" in data.content or 
+                    "*Previous Goal*:" in data.content
+                )
+            )
+            
+            if is_special_message:
+                if _agent_resumed or agent._paused == False:
+                    # If agent is resumed or was never paused, send the message immediately
                     yield data
                 else:
                     # Otherwise, store it for later
+                    logger.info("📊 Storing special message for later delivery (agent is paused)")
                     pending_special_messages.append(data)
+                    has_pending_messages = True
             else:
-                # Always yield non-special messages
+                # For non-special messages, always yield them
                 yield data
     finally:
-        # if browser:
-        #     print("Closing browser...")
-        #     try:
-        #         await browser.close()
-        #         print("Browser closed.")
-        #     except Exception as e:
-        #         print(f"Error closing browser: {e}")
-        # # Cleanup code here
-        # pending_tasks = [t for t in asyncio.all_tasks(
-        # ) if t is not asyncio.current_task()]
-        # if pending_tasks:
-        #     print(f"Cancelling {len(pending_tasks)} pending tasks...")
-        #     for t in pending_tasks:
-        #         t.cancel()
-        #     await asyncio.gather(*pending_tasks, return_exceptions=True)
+        # We're intentionally not closing the browser instance here to allow for resuming
+        # The browser instances will be managed by the Steel API and cleaned up when the session expires
         pass
