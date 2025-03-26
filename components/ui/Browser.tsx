@@ -121,42 +121,35 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
     try {
       setIsLoading(true);
 
-      // Make the API call to resume execution
-      const response = await fetch(`/api/sessions/${currentSession.id}/resume`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Error resuming AI control:", {
-          status: response.status,
-          statusText: response.statusText,
-          errorText,
-        });
-        toast({
-          title: "Error",
-          description: "Failed to resume AI control. Please try again.",
-          className: "border border-[--red-6] bg-[--red-3] text-[--red-11]",
-        });
-        throw new Error("Failed to resume session");
-      }
-
-      toast({
-        title: "Control Released",
-        description: "AI is now back in control of the browser",
-        className: "border border-[--green-6] bg-[--green-3] text-[--green-11]",
-      });
-
-      // Trigger the event after successful API call, so page.tsx can handle state updates
+      // Instead of making our own API call, just dispatch the event
+      // to let page.tsx handle the actual API call
+      console.info("🔄 Dispatching browser-resumed event to let page.tsx handle the resume");
       window.dispatchEvent(
         new CustomEvent("browser-resumed", {
           detail: { sessionId: currentSession.id },
         })
       );
+
+      // Show a toast notification so user gets feedback
+      toast({
+        title: "Resuming Control",
+        description: "Returning control to AI...",
+        className: "border border-[--green-6] bg-[--green-3] text-[--green-11]",
+      });
+
+      // Add a timeout to turn off loading after a reasonable delay
+      // This will be overridden if the page.tsx handles it properly
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 2000);
     } catch (error) {
-      console.error("Error resuming AI control:", error);
-    } finally {
+      console.error("Error triggering resume:", error);
       setIsLoading(false);
+      toast({
+        title: "Error",
+        description: "Failed to resume AI control. Please try again.",
+        className: "border border-[--red-6] bg-[--red-3] text-[--red-11]",
+      });
     }
   };
 

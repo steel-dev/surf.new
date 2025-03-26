@@ -890,6 +890,10 @@ export default function ChatPage() {
   // Add a ref for tracking the last resume timestamp
   const lastResumeTimestamp = useRef(0);
 
+  // Add a ref to track processed messages for pause detection
+  const processedPauseMessagesRef = useRef<Set<string>>(new Set());
+  const lastResumeMessageIdRef = useRef<string | null>(null);
+
   // Utility functions that need to be defined before they're used
   const checkApiKey = useCallback(() => {
     return true;
@@ -1079,12 +1083,27 @@ export default function ChatPage() {
         // Get current messages after resume to maintain correct order
         const messagesAfterResume = [...messages];
 
-        // Add the user message to UI with proper type assertion
+        // Log messages for debugging
+        console.info(
+          "🔍 Messages after resume:",
+          messagesAfterResume.map(m => ({
+            role: m.role,
+            content: m.content.substring(0, 30) + (m.content.length > 30 ? "..." : ""),
+            id: m.id,
+          }))
+        );
+
+        // Create a unique ID for this user message to help with debugging and deduplication
+        const userMessageId = `user-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+        // Add the user message to UI with proper type assertion and unique ID
         const userMessage = {
-          id: `user-${Date.now()}`,
+          id: userMessageId,
           role: "user" as const, // Use const assertion to fix the type error
           content: savedMessage,
         };
+
+        console.info("📝 Adding user message with ID:", userMessageId);
 
         // Update the UI in one deterministic operation
         setMessages([...messagesAfterResume, userMessage]);
@@ -1093,6 +1112,16 @@ export default function ChatPage() {
         if (currentSession?.id) {
           console.info("📤 Submitting message to API after resume:", savedMessage);
 
+          // Create a copy of messages that ensures the user message has the correct role
+          const messagesToSend = [
+            ...messagesAfterResume,
+            {
+              id: userMessageId,
+              role: "user",
+              content: savedMessage,
+            },
+          ];
+
           // Direct API call to send the message
           const response = await fetch("/api/chat", {
             method: "POST",
@@ -1100,7 +1129,7 @@ export default function ChatPage() {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              messages: [...messagesAfterResume, userMessage],
+              messages: messagesToSend,
               ...chatBodyConfig,
             }),
           });
@@ -1255,13 +1284,33 @@ export default function ChatPage() {
   useEffect(() => {
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
+
+      // Skip if we've already processed this message
+      if (lastMessage.id && processedPauseMessagesRef.current.has(lastMessage.id)) {
+        return;
+      }
+
+      // Skip pause detection if we've recently resumed
+      if (lastResumeMessageIdRef.current) {
+        const resumeIndex = messages.findIndex(m => m.id === lastResumeMessageIdRef.current);
+        const lastMessageIndex = messages.length - 1;
+
+        // If the last resume message is after or the same as this message, skip
+        if (resumeIndex >= 0 && resumeIndex >= lastMessageIndex - 1) {
+          return;
+        }
+      }
+
       console.info("🔍 Checking message for pause:", {
-        content: lastMessage.content,
+        id: lastMessage.id,
+        content: lastMessage.content?.substring(0, 30),
         role: lastMessage.role,
-        toolInvocations: lastMessage.toolInvocations,
         isPausedState: isPaused,
         currentReason: pauseReason,
-        totalMessages: messages.length,
+        messagesLength: messages.length,
+        alreadyProcessed: lastMessage.id
+          ? processedPauseMessagesRef.current.has(lastMessage.id)
+          : false,
       });
 
       // Log all tool calls for debugging
@@ -1320,9 +1369,23 @@ export default function ChatPage() {
           console.info("⏸️ Found confirmation required message:", {
             content: lastMessage.content,
           });
+        } else if (
+          lastMessage.content &&
+          lastMessage.content.includes("⏸️ You have taken control")
+        ) {
+          foundPause = true;
+          pauseReasonText = "You have taken control of the browser";
+          console.info("⏸️ Found manual pause message:", {
+            content: lastMessage.content,
+          });
         }
 
         if (foundPause) {
+          // Mark this message as processed
+          if (lastMessage.id) {
+            processedPauseMessagesRef.current.add(lastMessage.id);
+          }
+
           setIsPaused(true);
           setPauseReason(pauseReasonText);
 
@@ -1332,24 +1395,25 @@ export default function ChatPage() {
             removeIncompleteToolCalls();
           }
 
-          // Skip the type checking for this console.info call
-          (console.info as any)(
-            "🔍 Current pause messages:",
-            messages.filter(m => {
-              return (
-                m.content?.includes("⏸️ Pausing execution") ||
-                m.content?.includes("CONFIRMATION REQUIRED:") ||
-                m.toolInvocations?.some(tool => tool.toolName === "pause_execution")
-              );
-            }).length
-          );
-
           // Don't add an extra message - use the existing tool call message instead
           console.info("⏸️ Using existing pause message from tool call");
         }
+        // Check if this is a resume message
+        else if (lastMessage.content === "▶️ AI control has been resumed.") {
+          // Mark as processed and remember as the last resume message
+          if (lastMessage.id) {
+            processedPauseMessagesRef.current.add(lastMessage.id);
+            lastResumeMessageIdRef.current = lastMessage.id;
+          }
+
+          // Reset pause state
+          setIsPaused(false);
+          setPauseReason("");
+          console.info("▶️ Resume message detected, reset pause state");
+        }
       }
     }
-  }, [messages, isPaused, pauseReason, isLoading, stop, removeIncompleteToolCalls]);
+  }, [messages, isLoading, stop, removeIncompleteToolCalls]);
 
   // Restore the browser paused effect
   useEffect(() => {
@@ -1399,6 +1463,16 @@ export default function ChatPage() {
           // Make a copy of the messages for processing
           let messages = [...prev];
 
+          // Log current message state for debugging
+          console.info(
+            "🔍 Messages before cleanup:",
+            messages.map(m => ({
+              role: m.role,
+              content: m.content.substring(0, 30) + (m.content.length > 30 ? "..." : ""),
+              id: m.id,
+            }))
+          );
+
           // 1. Handle duplicate resume messages
           let resumeIndices: number[] = [];
           messages.forEach((m, i) => {
@@ -1425,32 +1499,85 @@ export default function ChatPage() {
             messages = messages.filter((_, i) => !indicesToRemove.includes(i));
           }
 
-          // 2. Prevent duplicate user messages
+          // 2. Prevent duplicate user messages and fix any messages with the wrong role
           if (userMessage) {
-            // Count user messages with this content
-            const userMessageCount = messages.filter(
-              m => m.role === "user" && m.content === userMessage
-            ).length;
+            // Find all messages with this content regardless of role
+            const messagesWithSameContent = messages.filter(m => m.content === userMessage);
 
-            // If we have multiple instances of the same user message, keep only the first one
-            if (userMessageCount > 1) {
-              console.info(`🔄 Found ${userMessageCount} duplicate user messages, removing extras`);
-              let foundFirst = false;
-              messages = messages.filter(m => {
-                if (m.role === "user" && m.content === userMessage) {
-                  if (!foundFirst) {
-                    foundFirst = true;
-                    return true;
+            console.info(
+              `🔍 Found ${messagesWithSameContent.length} messages with content "${userMessage.substring(0, 30)}..."`
+            );
+
+            if (messagesWithSameContent.length > 0) {
+              // Check if any of them have the wrong role (assistant instead of user)
+              const wrongRoleMessages = messagesWithSameContent.filter(m => m.role === "assistant");
+
+              if (wrongRoleMessages.length > 0) {
+                console.info(
+                  `⚠️ Found ${wrongRoleMessages.length} messages with wrong role (assistant instead of user)`
+                );
+
+                // Fix roles: ensure the latest message with this content has role "user"
+                let foundUserMessage = false;
+
+                // First pass: check if we already have a proper user message
+                for (const m of messagesWithSameContent) {
+                  if (m.role === "user") {
+                    foundUserMessage = true;
+                    break;
                   }
-                  return false;
+                }
+
+                // Second pass: if no user message exists, convert the latest one
+                if (!foundUserMessage && wrongRoleMessages.length > 0) {
+                  const latestWrongMessage = wrongRoleMessages[wrongRoleMessages.length - 1];
+                  const index = messages.findIndex(m => m.id === latestWrongMessage.id);
+
+                  if (index !== -1) {
+                    console.info(
+                      `🔧 Converting message at index ${index} from assistant to user role`
+                    );
+                    messages[index] = {
+                      ...messages[index],
+                      role: "user",
+                      id: `user-${Date.now()}-fixed`,
+                    };
+                  }
+                }
+              }
+
+              // Now handle duplicates - keep only one user message with this content
+              let foundUserMessage = false;
+              messages = messages.filter(m => {
+                if (m.content === userMessage) {
+                  if (m.role === "user") {
+                    if (!foundUserMessage) {
+                      foundUserMessage = true;
+                      return true;
+                    }
+                    return false; // Remove duplicate user messages
+                  }
                 }
                 return true;
               });
+            } else {
+              // If no messages with this content exist yet, we might need to add it
+              console.info(
+                `ℹ️ No messages found with content "${userMessage.substring(0, 30)}..."`
+              );
             }
           }
 
-          // 3. Fix message ordering by ensuring messages are sorted by their timestamps if available
-          // This assumes messages have an id that includes a timestamp or can be sorted chronologically
+          // Log final state after cleanup
+          console.info(
+            "🔍 Messages after cleanup:",
+            messages.map(m => ({
+              role: m.role,
+              content: m.content.substring(0, 30) + (m.content.length > 30 ? "..." : ""),
+              id: m.id,
+            }))
+          );
+
           return messages;
         });
       } catch (error) {
@@ -1460,7 +1587,7 @@ export default function ChatPage() {
     [currentSession?.id, reload, setMessages]
   );
 
-  // Update the handleResume function to use proper type assertions
+  // Update the handleResume function to clear processed messages on resume
   const handleResume = useCallback(
     async (fromEvent = false) => {
       if (!currentSession?.id) {
@@ -1515,6 +1642,9 @@ export default function ChatPage() {
             role: "assistant" as const, // Use const assertion to fix the type error
             content: "▶️ AI control has been resumed.",
           };
+
+          // Remember the resume message ID to prevent re-processing pause messages
+          lastResumeMessageIdRef.current = resumeMessage.id;
 
           // Update messages in one operation to avoid flicker
           setMessages([...currentMessages, resumeMessage]);
@@ -1614,6 +1744,67 @@ export default function ChatPage() {
       }, 300);
     }
   }, [isLoading, resumeLoading]);
+
+  // Add safety check to ensure messages have correct roles
+  useEffect(() => {
+    // Skip empty messages array
+    if (!messages.length) return;
+
+    // Check if any recent user messages were incorrectly relayed as assistant messages
+    const lastFewMessages = messages.slice(-5); // Check only the last 5 messages
+
+    let needsFix = false;
+    const knownUserTexts = new Map<string, number>(); // Track known user messages by content
+
+    // First pass: identify user messages
+    lastFewMessages.forEach((message, index) => {
+      if (message.role === "user") {
+        knownUserTexts.set(message.content, index);
+      }
+    });
+
+    // Second pass: check if any assistant messages contain exact user message content
+    lastFewMessages.forEach((message, index) => {
+      if (
+        message.role === "assistant" &&
+        knownUserTexts.has(message.content) &&
+        // Don't flag resume messages
+        message.content !== "▶️ AI control has been resumed." &&
+        !message.content.startsWith("⏸️") &&
+        !message.content.includes("CONFIRMATION REQUIRED:")
+      ) {
+        needsFix = true;
+        console.warn(
+          `⚠️ Found likely user message with incorrect role (assistant): "${message.content.substring(0, 30)}..."`
+        );
+      }
+    });
+
+    // If issues found, run the message sanitizer
+    if (needsFix) {
+      console.info("🔧 Fixing message roles");
+      setMessages(prev => {
+        return prev.map(message => {
+          // If this is an assistant message but matches a known user message content
+          if (
+            message.role === "assistant" &&
+            knownUserTexts.has(message.content) &&
+            message.content !== "▶️ AI control has been resumed." &&
+            !message.content.startsWith("⏸️") &&
+            !message.content.includes("CONFIRMATION REQUIRED:")
+          ) {
+            // Fix its role
+            return {
+              ...message,
+              role: "user" as const,
+              id: `user-${Date.now()}-fixed-${Math.random().toString(36).substring(2, 7)}`,
+            };
+          }
+          return message;
+        });
+      });
+    }
+  }, [messages]);
 
   return (
     <ChatPageContent
