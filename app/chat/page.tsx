@@ -504,15 +504,6 @@ const MemoizedMessageList = React.memo(
                                 <div className="flex gap-3">
                                   <Button
                                     onClick={() => {
-                                      console.info("🖱️ Take Control button clicked");
-                                      handleResume();
-                                    }}
-                                    className="rounded-full bg-white px-6 py-3 text-base font-medium text-black transition-colors hover:bg-[--gray-11] hover:text-[--gray-1]"
-                                  >
-                                    Take Control
-                                  </Button>
-                                  <Button
-                                    onClick={() => {
                                       console.info("🖱️ Keep Going button clicked");
                                       handleResume();
                                     }}
@@ -1307,114 +1298,121 @@ export default function ChatPage() {
   }, [currentSession?.id, reload, setMessages]);
 
   // Update the handleResume function to use the refreshMessages function
-  const handleResume = useCallback(async () => {
-    if (!currentSession?.id) {
-      return;
-    }
-
-    // Prevent duplicate resume calls
-    const now = Date.now();
-    const timeSinceLastResume = now - lastResumeTimestamp.current;
-
-    // If less than 3 seconds since last resume, ignore this request
-    if (timeSinceLastResume < 3000) {
-      console.warn(
-        `🔒 Ignoring duplicate resume request (${timeSinceLastResume}ms since last resume)`
-      );
-      return;
-    }
-
-    // Check if a resume request is already in progress
-    if (resumeRequestInProgress.current || resumeLoading) {
-      console.warn("🔒 Resume request already in progress, ignoring duplicate request");
-      return;
-    }
-
-    try {
-      // Update the last resume timestamp
-      lastResumeTimestamp.current = now;
-
-      // Set the lock
-      resumeRequestInProgress.current = true;
-      setResumeLoading(true);
-      setIsPaused(false);
-      setPauseReason("");
-
-      console.info("▶️ Resuming session:", currentSession.id);
-
-      // Add a single resume message
-      setMessages(prev => {
-        // Check if the last message is already a resume message to avoid duplicates
-        const lastMessage = prev[prev.length - 1];
-        if (lastMessage && lastMessage.content === "▶️ AI control has been resumed.") {
-          return prev;
-        }
-        return [
-          ...prev,
-          {
-            id: `resume-${Date.now()}`,
-            role: "assistant",
-            content: "▶️ AI control has been resumed.",
-          },
-        ];
-      });
-
-      // Trigger a single browser-resumed event
-      window.dispatchEvent(
-        new CustomEvent("browser-resumed", {
-          detail: { sessionId: currentSession.id },
-        })
-      );
-
-      // Make a single API call to resume
-      console.info(`🔄 Sending resume request for session: ${currentSession.id}`);
-      const response = await fetch(`/api/sessions/${currentSession.id}/resume`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("❌ Resume API call failed:", {
-          status: response.status,
-          statusText: response.statusText,
-          errorText,
-        });
-        throw new Error("Failed to resume execution");
+  const handleResume = useCallback(
+    async (fromEvent = false) => {
+      if (!currentSession?.id) {
+        return;
       }
 
-      // Success notification
-      toast({
-        title: "Resumed",
-        description: "Execution resumed",
-        className: "border border-[--green-6] bg-[--green-3] text-[--green-11]",
-      });
+      // Prevent duplicate resume calls
+      const now = Date.now();
+      const timeSinceLastResume = now - lastResumeTimestamp.current;
 
-      // Add a delayed refresh to get updated messages, but leave a buffer for the system to process
-      setTimeout(() => {
-        refreshMessages();
+      // If less than 3 seconds since last resume, ignore this request
+      if (timeSinceLastResume < 3000) {
+        console.warn(
+          `🔒 Ignoring duplicate resume request (${timeSinceLastResume}ms since last resume)`
+        );
+        return;
+      }
 
-        // Release the lock after refresh is triggered
+      // Check if a resume request is already in progress
+      if (resumeRequestInProgress.current || resumeLoading) {
+        console.warn("🔒 Resume request already in progress, ignoring duplicate request");
+        return;
+      }
+
+      try {
+        // Update the last resume timestamp
+        lastResumeTimestamp.current = now;
+
+        // Set the lock
+        resumeRequestInProgress.current = true;
+        setResumeLoading(true);
+        setIsPaused(false);
+        setPauseReason("");
+
+        console.info("▶️ Resuming session:", currentSession.id);
+
+        // Add a single resume message
+        setMessages(prev => {
+          // Check if the last message is already a resume message to avoid duplicates
+          const lastMessage = prev[prev.length - 1];
+          if (lastMessage && lastMessage.content === "▶️ AI control has been resumed.") {
+            return prev;
+          }
+          return [
+            ...prev,
+            {
+              id: `resume-${Date.now()}`,
+              role: "assistant",
+              content: "▶️ AI control has been resumed.",
+            },
+          ];
+        });
+
+        // If this resume call was triggered directly (not from a browser-resumed event)
+        // then dispatch the event to notify the browser component
+        if (!fromEvent) {
+          console.info("🔄 Dispatching browser-resumed event from direct button click");
+          window.dispatchEvent(
+            new CustomEvent("browser-resumed", {
+              detail: { sessionId: currentSession.id },
+            })
+          );
+        }
+
+        // Make a single API call to resume
+        console.info(`🔄 Sending resume request for session: ${currentSession.id}`);
+        const response = await fetch(`/api/sessions/${currentSession.id}/resume`, {
+          method: "POST",
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("❌ Resume API call failed:", {
+            status: response.status,
+            statusText: response.statusText,
+            errorText,
+          });
+          throw new Error("Failed to resume execution");
+        }
+
+        // Success notification
+        toast({
+          title: "Resumed",
+          description: "Execution resumed",
+          className: "border border-[--green-6] bg-[--green-3] text-[--green-11]",
+        });
+
+        // Add a delayed refresh to get updated messages, but leave a buffer for the system to process
         setTimeout(() => {
-          setResumeLoading(false);
-          resumeRequestInProgress.current = false;
-        }, 500);
-      }, 1500);
-    } catch (error) {
-      console.error("❌ Error resuming execution:", error);
+          refreshMessages();
 
-      // Reset state on error
-      setIsPaused(true);
-      setPauseReason("Failed to resume. Try again.");
-      setResumeLoading(false);
-      resumeRequestInProgress.current = false;
+          // Release the lock after refresh is triggered
+          setTimeout(() => {
+            setResumeLoading(false);
+            resumeRequestInProgress.current = false;
+          }, 500);
+        }, 1500);
+      } catch (error) {
+        console.error("❌ Error resuming execution:", error);
 
-      toast({
-        title: "Error",
-        description: "Failed to resume execution",
-        className: "border border-[--red-6] bg-[--red-3] text-[--red-11]",
-      });
-    }
-  }, [currentSession?.id, toast, resumeLoading, setMessages, refreshMessages]);
+        // Reset state on error
+        setIsPaused(true);
+        setPauseReason("Failed to resume. Try again.");
+        setResumeLoading(false);
+        resumeRequestInProgress.current = false;
+
+        toast({
+          title: "Error",
+          description: "Failed to resume execution",
+          className: "border border-[--red-6] bg-[--red-3] text-[--red-11]",
+        });
+      }
+    },
+    [currentSession?.id, toast, resumeLoading, setMessages, refreshMessages]
+  );
 
   // Now add the browser-resumed event listener after handleResume is defined
   useEffect(() => {
@@ -1423,7 +1421,7 @@ export default function ChatPage() {
 
       // Only proceed if no resume is in progress
       if (!resumeRequestInProgress.current) {
-        handleResume();
+        handleResume(true);
       } else {
         console.warn("🔒 Ignoring browser-resumed event: resume already in progress");
       }
