@@ -121,23 +121,42 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
     try {
       setIsLoading(true);
 
-      // Trigger the event first, so page.tsx can handle state updates
+      // Make the API call to resume execution
+      const response = await fetch(`/api/sessions/${currentSession.id}/resume`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Error resuming AI control:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorText,
+        });
+        toast({
+          title: "Error",
+          description: "Failed to resume AI control. Please try again.",
+          className: "border border-[--red-6] bg-[--red-3] text-[--red-11]",
+        });
+        throw new Error("Failed to resume session");
+      }
+
+      toast({
+        title: "Control Released",
+        description: "AI is now back in control of the browser",
+        className: "border border-[--green-6] bg-[--green-3] text-[--green-11]",
+      });
+
+      // Trigger the event after successful API call, so page.tsx can handle state updates
       window.dispatchEvent(
         new CustomEvent("browser-resumed", {
           detail: { sessionId: currentSession.id },
         })
       );
-
-      // The actual API call will be handled by page.tsx when it receives the browser-resumed event
-      // This avoids making the API call twice
     } catch (error) {
       console.error("Error resuming AI control:", error);
+    } finally {
       setIsLoading(false);
-      toast({
-        title: "Error",
-        description: "Failed to resume AI control. Please try again.",
-        className: "border border-[--red-6] bg-[--red-3] text-[--red-11]",
-      });
     }
   };
 

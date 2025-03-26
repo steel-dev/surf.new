@@ -1560,11 +1560,8 @@ export default function ChatPage() {
           // Release the lock after refresh is triggered
           setTimeout(() => {
             resumeRequestInProgress.current = false;
-
-            // For "Keep Going" button clicks, we can turn off loading when done
-            if (!fromEvent) {
-              setResumeLoading(false);
-            }
+            // Always turn off resumeLoading after a successful resume
+            setResumeLoading(false);
           }, 500);
         }, 1500);
       } catch (error) {
@@ -1585,6 +1582,38 @@ export default function ChatPage() {
     },
     [currentSession?.id, messages, toast, resumeLoading, setMessages, refreshMessages]
   );
+
+  // Add browser-resumed event listener after handleResume is defined
+  useEffect(() => {
+    const handleBrowserResumed = (event: CustomEvent) => {
+      console.info("🖐️ Browser was manually resumed by user:", event.detail);
+
+      // Call the handleResume function with fromEvent=true to indicate this came from Browser
+      handleResume(true);
+    };
+
+    // Add browser-resumed event listener
+    window.addEventListener("browser-resumed", handleBrowserResumed as EventListener);
+
+    return () => {
+      window.removeEventListener("browser-resumed", handleBrowserResumed as EventListener);
+    };
+  }, [handleResume]);
+
+  // Add effect to turn off resumeLoading when agent responds
+  useEffect(() => {
+    // If we were showing loading (isLoading=true) and then loading stops (isLoading=false)
+    // and resumeLoading is still true, it means we should turn off resumeLoading
+    if (!isLoading && resumeLoading) {
+      console.info("🔄 Agent has responded, turning off resumeLoading");
+
+      // Brief delay to make sure any UI updates from the response are rendered first
+      setTimeout(() => {
+        resumeRequestInProgress.current = false;
+        setResumeLoading(false);
+      }, 300);
+    }
+  }, [isLoading, resumeLoading]);
 
   return (
     <ChatPageContent
