@@ -450,8 +450,9 @@ const MemoizedMessageList = React.memo(
                           return i > index && m.role === "user";
                         });
 
-                        // Only show buttons if this is the latest pause and no user message after it
-                        const showButtons = isLatestPauseMessage && !userSentMessageAfterPause;
+                        // Only show buttons if this is the latest pause, no user message after it, and isPaused is true
+                        const showButtons =
+                          isLatestPauseMessage && !userSentMessageAfterPause && isPaused;
 
                         // Extract reason from the current message
                         let displayReason = "";
@@ -481,6 +482,7 @@ const MemoizedMessageList = React.memo(
                           isLatestPauseMessage,
                           userSentMessageAfterPause,
                           showButtons,
+                          globalIsPaused: isPaused,
                           pauseReason:
                             pauseReason ||
                             message.content ||
@@ -496,7 +498,9 @@ const MemoizedMessageList = React.memo(
                                 <MarkdownText content={displayReason} />
                                 {!showButtons && (
                                   <div className="mt-2 text-sm text-[--gray-10] italic">
-                                    (Confirmation no longer needed)
+                                    {isPaused
+                                      ? "(Confirmation no longer needed)"
+                                      : "(Action has been taken)"}
                                   </div>
                                 )}
                               </div>
