@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-sync-scripts */
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import { Metadata } from "next";
@@ -49,6 +50,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         ibmPlexMono.variable
       )}
     >
+      <head>
+        {/* {process.env.NODE_ENV === "development" && (
+          <script crossOrigin="anonymous" src="//unpkg.com/react-scan/dist/auto.global.js" />
+        )} */}
+      </head>
       <body className={inter.className}>
         <QueryProvider>
           <LayoutContent>{children}</LayoutContent>

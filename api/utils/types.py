@@ -6,7 +6,8 @@ class ToolInvocation(BaseModel):
     toolCallId: str
     toolName: str
     args: Mapping[str, Any]
-    result: str | List[Mapping[str, Any]]
+    result: Optional[str | List[Mapping[str, Any]]] = None
+    state: str = "call"  # "call" or "result"
 
 
 class AgentSettings(BaseModel):
