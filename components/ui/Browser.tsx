@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 
 import { useToast } from "@/hooks/use-toast";
 
-import { cn } from "@/lib/utils";
+import { cn, truncateUrl } from "@/lib/utils";
 
 import { useSteelContext } from "@/app/contexts/SteelContext";
 
@@ -47,7 +47,6 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
   const [latestImage, setLatestImage] = useState<HTMLImageElement | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
   const [favicon, setFavicon] = useState<string | null>(null);
   const [isHovering, setIsHovering] = useState(false);
@@ -56,6 +55,40 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
   const { toast } = useToast();
 
   const debugUrl = currentSession?.debugUrl;
+
+  // Listen for messages from the iframe to update URL
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Check if the message is from our iframe
+      if (event.data && event.data.type === "navigation") {
+        const navigationUrl = event.data.url;
+        // Only set the URL if it's not a Steel API backend URL
+        if (
+          navigationUrl &&
+          !navigationUrl.includes("steel-api") &&
+          !navigationUrl.includes("steel.dev")
+        ) {
+          // Handle special cases to avoid nullblank
+          if (
+            navigationUrl === "about:blank" ||
+            navigationUrl === "null" ||
+            navigationUrl === "undefined"
+          ) {
+            setUrl("about:blank");
+          } else {
+            setUrl(navigationUrl);
+          }
+
+          if (event.data.favicon) {
+            setFavicon(event.data.favicon);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
 
   // Canvas rendering
   useEffect(() => {
@@ -174,7 +207,7 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
         {/* Top Bar */}
         <div className="relative flex h-[60px] items-center justify-center border-b border-[--gray-3] bg-[--gray-1] p-2.5">
           <div className="flex h-10 w-[360px] items-center justify-center rounded-[0.5rem] border border-[--gray-3] bg-[--gray-1] px-4 py-3">
-            <div className="flex items-center justify-center">
+            <div className="flex w-full items-center justify-center overflow-hidden">
               {favicon ? (
                 <Image
                   src={
@@ -183,13 +216,21 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
                   alt="Favicon"
                   width={24}
                   height={24}
-                  className="mr-2 object-contain"
+                  className="mr-2 flex-shrink-0 object-contain"
                 />
               ) : (
-                <GlobeIcon className="mr-2 size-4" />
+                <GlobeIcon className="mr-2 size-4 flex-shrink-0" />
               )}
-              <span className="truncate font-geist text-base font-normal leading-normal text-[--gray-12]">
-                {url ? url : "Session not connected"}
+              <span className="truncate max-w-full font-geist text-base font-normal leading-normal text-[--gray-12]">
+                {!currentSession
+                  ? "Session not connected"
+                  : url
+                    ? url === "about:blank" || url === "null" || url === "undefined"
+                      ? "about:blank"
+                      : truncateUrl(url)
+                    : debugUrl
+                      ? "Loading..."
+                      : "Session not connected"}
               </span>
             </div>
           </div>
@@ -208,6 +249,32 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
                 src={`${debugUrl}?showControls=false&interactive=true&initialInteractive=true`}
                 sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
                 className="size-full border border-[--gray-3]"
+                onLoad={e => {
+                  // Try to update the URL when iframe loads
+                  const iframeEl = e.target as HTMLIFrameElement;
+                  try {
+                    // This might not work due to cross-origin restrictions
+                    if (iframeEl.contentWindow?.location?.href) {
+                      const iframeUrl = iframeEl.contentWindow.location.href;
+                      // Only update URL if it's not a Steel API backend URL
+                      if (!iframeUrl.includes("steel-api") && !iframeUrl.includes("steel.dev")) {
+                        // Handle special cases to avoid nullblank
+                        if (
+                          iframeUrl === "about:blank" ||
+                          iframeUrl === "null" ||
+                          iframeUrl === "undefined"
+                        ) {
+                          setUrl("about:blank");
+                        } else {
+                          setUrl(iframeUrl);
+                        }
+                      }
+                    }
+                  } catch (error) {
+                    // Cross-origin errors are expected and ignored
+                    console.debug("Could not access iframe location (expected for cross-origin)");
+                  }
+                }}
               />
               {isPaused && (
                 <div
@@ -276,7 +343,9 @@ export function Browser({ isPaused }: { isPaused?: boolean }) {
                     ? "Session Expired"
                     : isPaused
                       ? "Interactive Mode"
-                      : "Session Connected"
+                      : debugUrl
+                        ? "Session Connected"
+                        : "Connecting..."
                   : "No Session"}
               </span>
               <SessionTimer maxDuration={maxSessionDuration} />
