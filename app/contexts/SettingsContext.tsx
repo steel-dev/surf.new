@@ -1,7 +1,6 @@
 "use client";
 
-import { createContext, useContext } from "react";
-import { useLocalStorage } from "usehooks-ts";
+import React, { createContext, useContext, useMemo, useState } from "react";
 
 export interface ModelSettings {
   max_tokens: number;
@@ -42,31 +41,27 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [currentSettings, setCurrentSettings] = useLocalStorage<SurfSettings | null>(
-    "chatSettings",
-    null
-  );
+  const [settings, setSettings] = useState<SurfSettings | null>(null);
 
-  const updateSettings = (newSettings: {
-    [key in keyof SurfSettings]: SurfSettings[key];
-  }) => {
-    if (currentSettings) {
-      setCurrentSettings(prev => ({ ...prev, ...newSettings }));
-    } else {
-      setCurrentSettings(newSettings);
-    }
-  };
+  // Define updateSettings function
+  const updateSettings = useMemo(() => {
+    return (newSettings: Partial<SurfSettings>) => {
+      setSettings(prev => {
+        if (!prev) return newSettings as SurfSettings;
+        return { ...prev, ...newSettings };
+      });
+    };
+  }, []);
 
-  return (
-    <SettingsContext.Provider
-      value={{
-        currentSettings,
-        updateSettings,
-      }}
-    >
-      {children}
-    </SettingsContext.Provider>
-  );
+  // Context value
+  const contextValue = useMemo(() => {
+    return {
+      currentSettings: settings,
+      updateSettings,
+    };
+  }, [settings, updateSettings]);
+
+  return <SettingsContext.Provider value={contextValue}>{children}</SettingsContext.Provider>;
 }
 
 export function useSettings() {
