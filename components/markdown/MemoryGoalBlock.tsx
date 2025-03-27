@@ -1,6 +1,7 @@
-import React from 'react';
-import { parseContent } from './BlockParser';
+import React from "react";
 import { Crosshair2Icon, ReaderIcon } from "@radix-ui/react-icons";
+
+import { parseContent } from "./BlockParser";
 
 // Determine if content is a memory or goal block
 export const isMemoryOrGoalContent = (content: string) => {
@@ -23,9 +24,9 @@ export const extractMemoryOrGoalContent = (content: string) => {
 // Render memory or goal block
 export const renderMemoryOrGoalBlock = (content: string) => {
   const { isMemory, isGoal } = isMemoryOrGoalContent(content);
-  
+
   if (!isMemory && !isGoal) return null;
-  
+
   const title = extractMemoryOrGoalTitle(content);
   const strippedContent = extractMemoryOrGoalContent(content);
 
@@ -38,9 +39,11 @@ export const renderMemoryOrGoalBlock = (content: string) => {
       )}
       <div className="rounded-2xl border border-[--gray-3] bg-[--gray-2] p-4">
         <div className="pr-8">
-          <div className="mb-1 font-medium text-[--gray-12] text-sm">{title}</div>
+          <div className="mb-1 text-sm font-medium text-[--gray-12]">{title}</div>
           {strippedContent ? (
-            <div className="text-sm text-[--gray-10]">{parseContent(strippedContent, "memory-content")}</div>
+            <div className="text-sm text-[--gray-10]">
+              {parseContent(strippedContent, "memory-content")}
+            </div>
           ) : (
             <span className="text-sm text-[--gray-10]">Empty</span>
           )}
@@ -48,4 +51,4 @@ export const renderMemoryOrGoalBlock = (content: string) => {
       </div>
     </div>
   );
-}; 
+};

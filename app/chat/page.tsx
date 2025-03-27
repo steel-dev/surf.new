@@ -7,13 +7,13 @@ import { useChat } from "ai/react";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { MarkdownText } from "@/components/markdown";
 import { AuthModal } from "@/components/ui/AuthModal";
 import { Browser } from "@/components/ui/Browser";
 import { Button } from "@/components/ui/button";
 import { ChatInput } from "@/components/ui/ChatInput";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ToolInvocations } from "@/components/ui/tool";
-import { MarkdownText } from "@/components/markdown";
 
 import { useToast } from "@/hooks/use-toast";
 

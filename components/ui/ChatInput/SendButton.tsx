@@ -15,12 +15,12 @@ export function SendButton({ isLoading, onStop }: SendButtonProps) {
   return (
     <div className="flex w-full items-center justify-end gap-6">
       <div className="hidden items-center gap-2 md:flex">
-        <div className="font-geist text-xs font-normal text-[--gray-11] whitespace-nowrap">
+        <div className="whitespace-nowrap font-geist text-xs font-normal text-[--gray-11]">
           New Line
         </div>
         <div className="flex items-center gap-1.5 overflow-hidden rounded-full border border-[--gray-3] bg-[--gray-2] pl-2.5">
           <div
-            className={`font-geist text-xs font-normal leading-[14px] text-[--gray-11] whitespace-nowrap`}
+            className={`whitespace-nowrap font-geist text-xs font-normal leading-[14px] text-[--gray-11]`}
           >
             Shift
           </div>
