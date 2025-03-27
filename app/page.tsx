@@ -208,7 +208,7 @@ export default function Home() {
                     proceedToChat(button.text);
                   }
                 }}
-                className="flex-shrink-0 w-[250px] rounded-[20px] border border-[--gray-3] bg-[--gray-1] p-4 transition-colors hover:bg-[--gray-2] md:w-auto md:flex-shrink"
+                className="w-[250px] shrink-0 rounded-[20px] border border-[--gray-3] bg-[--gray-1] p-4 transition-colors hover:bg-[--gray-2] md:w-auto md:shrink"
               >
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center gap-2">

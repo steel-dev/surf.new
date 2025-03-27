@@ -2,18 +2,15 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInView } from "react-intersection-observer";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { CheckIcon, Crosshair2Icon, ReaderIcon } from "@radix-ui/react-icons";
+import { CheckIcon } from "@radix-ui/react-icons";
 import { useChat } from "ai/react";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { AuthModal } from "@/components/ui/AuthModal";
+import { MarkdownText } from "@/components/markdown";
 import { Browser } from "@/components/ui/Browser";
 import { Button } from "@/components/ui/button";
 import { ChatInput } from "@/components/ui/ChatInput";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ToolInvocations } from "@/components/ui/tool";
 
 import { useToast } from "@/hooks/use-toast";
@@ -21,178 +18,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useChatContext } from "@/app/contexts/ChatContext";
 import { useSettings } from "@/app/contexts/SettingsContext";
 import { useSteelContext } from "@/app/contexts/SteelContext";
-
-// UPDATED CodeBlock component for rendering code blocks with a copy button and language display.
-const CodeBlock = React.memo(({ code, language }: { code: string; language?: string }) => {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy code:", err);
-    }
-  }, [code]);
-
-  if (language) {
-    return (
-      <div className="my-4  overflow-hidden rounded">
-        {/* Header bar displaying the language (if provided) and the copy button */}
-        <div className="flex items-center justify-between bg-[--gray-1] px-3 py-1 text-xs text-[--gray-12]">
-          <span>{language.toUpperCase()}</span>
-          <button
-            onClick={handleCopy}
-            className="rounded border border-[--gray-3] bg-[--gray-1] px-2 py-1 text-xs transition-colors hover:bg-[--gray-2]"
-          >
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
-        <SyntaxHighlighter
-          language={language}
-          style={atomDark}
-          customStyle={{ padding: "1rem", margin: 0, borderRadius: "0.5rem" }}
-        >
-          {code}
-        </SyntaxHighlighter>
-      </div>
-    );
-  }
-
-  // Fallback if no language is provided: show the copy button as an overlay.
-  return (
-    <div className="group relative my-4">
-      <SyntaxHighlighter
-        language="text"
-        style={atomDark}
-        customStyle={{ padding: "1rem", borderRadius: "0.5rem" }}
-      >
-        {code}
-      </SyntaxHighlighter>
-      <button
-        onClick={handleCopy}
-        className="absolute right-2 top-2 hidden rounded bg-gray-700 px-2 py-1 text-xs text-white group-hover:block"
-      >
-        {copied ? "Copied" : "Copy"}
-      </button>
-    </div>
-  );
-});
-
-CodeBlock.displayName = "CodeBlock";
-
-// UPDATED MarkdownText component to support code blocks along with inline markdown
-const MarkdownText = React.memo(({ content }: { content: string }) => {
-  // Helper function to process inline markdown (links, bold, italics)
-  const parseInlineMarkdown = useCallback((text: string, keyOffset: number) => {
-    const segments = text.split(/(\[.*?\]\(.*?\))|(\*.*?\*)|(_.*?_)/g).filter(Boolean);
-    return segments.map((segment, index) => {
-      const key = `${keyOffset}-${index}`;
-      // Handle markdown links [text](url)
-      if (/^\[.*?\]\(.*?\)$/.test(segment)) {
-        const linkMatch = segment.match(/^\[(.*?)\]\((.*?)\)$/);
-        if (linkMatch) {
-          return (
-            <a
-              key={key}
-              href={linkMatch[2]}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[--blue-11] hover:underline"
-            >
-              {linkMatch[1]}
-            </a>
-          );
-        }
-      }
-      // Handle bold text *text*
-      if (/^\*.*\*$/.test(segment)) {
-        const boldMatch = segment.match(/^\*(.*?)\*$/);
-        if (boldMatch) {
-          return <strong key={key}>{boldMatch[1]}</strong>;
-        }
-      }
-      // Handle italics _text_
-      if (/^_.*_$/.test(segment)) {
-        const italicMatch = segment.match(/^_(.*?)_$/);
-        if (italicMatch) {
-          return <em key={key}>{italicMatch[1]}</em>;
-        }
-      }
-      // Return plain text if no markdown matched
-      return <span key={key}>{segment}</span>;
-    });
-  }, []);
-
-  // Main parser that first detects code blocks and falls back to inline markdown
-  const parseContent = useCallback(
-    (text: string) => {
-      const elements = [];
-      let lastIndex = 0;
-      const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-      let match: RegExpExecArray | null;
-      let key = 0;
-
-      while ((match = codeBlockRegex.exec(text)) !== null) {
-        // Process any text before the code block as inline markdown
-        if (match.index > lastIndex) {
-          const inlineText = text.substring(lastIndex, match.index);
-          elements.push(...parseInlineMarkdown(inlineText, key));
-          key++;
-        }
-        // Extract language (if provided) and code content, then render the CodeBlock
-        const language = match[1] || "";
-        const codeContent = match[2];
-        elements.push(<CodeBlock key={`code-${key}`} language={language} code={codeContent} />);
-        key++;
-        lastIndex = codeBlockRegex.lastIndex;
-      }
-
-      // Process any remaining text after the last code block
-      if (lastIndex < text.length) {
-        const inlineText = text.substring(lastIndex);
-        elements.push(...parseInlineMarkdown(inlineText, key));
-      }
-      return elements;
-    },
-    [parseInlineMarkdown]
-  );
-
-  const isMemory = content.startsWith("*Memory*:");
-  const isGoal = content.startsWith("*Next Goal*:") || content.startsWith("*Previous Goal*:");
-
-  if (isMemory || isGoal) {
-    // Extract the title and content
-    const titleMatch = content.match(/^\*(Memory|Next Goal|Previous Goal)\*:/);
-    const title = titleMatch ? titleMatch[1] : ""; // Remove the asterisks and colon
-    const strippedContent = content.replace(/^\*(Memory|Next Goal|Previous Goal)\*:/, "").trim();
-
-    return (
-      <div className="relative">
-        {isMemory ? (
-          <ReaderIcon className="absolute right-4 top-4 size-4 text-[--gray-11]" />
-        ) : (
-          <Crosshair2Icon className="absolute right-4 top-4 size-4 text-[--gray-11]" />
-        )}
-        <div className="rounded-2xl border border-[--gray-3] bg-[--gray-2] p-4">
-          <div className="pr-8">
-            <div className="mb-1 font-medium text-[--gray-12] text-sm">{title}</div>
-            {strippedContent ? (
-              <div className="text-sm text-[--gray-10]">{parseContent(strippedContent)}</div>
-            ) : (
-              <span className="text-sm text-[--gray-10]">Empty</span>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return <>{parseContent(content)}</>;
-});
-
-MarkdownText.displayName = "MarkdownText";
 
 const UserMessage = React.memo(({ content }: { content: string }) => {
   const hasLineBreaks = content.includes("\n");
