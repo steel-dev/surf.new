@@ -11,6 +11,7 @@ import { MarkdownText } from "@/components/markdown";
 import { Browser } from "@/components/ui/Browser";
 import { Button } from "@/components/ui/button";
 import { ChatInput } from "@/components/ui/ChatInput";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ToolInvocations } from "@/components/ui/tool";
 
 import { useToast } from "@/hooks/use-toast";
@@ -565,6 +566,15 @@ const ChatPageContent = React.memo(
     // Determine if we should show the loading indicator
     const showLoadingIndicator = isLoading || resumeLoading;
 
+    // State for image overlay dialog
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+    // Handle image click for dialog
+    const handleLocalImageClick = (src: string) => {
+      setSelectedImage(src);
+      handleImageClick(src);
+    };
+
     return (
       <>
         <div className="flex h-[calc(100vh-3.5rem)] flex-col-reverse md:flex-row">
@@ -596,7 +606,7 @@ const ChatPageContent = React.memo(
                   isCreatingSession={isCreatingSession}
                   hasShownConnection={hasShownConnection}
                   currentSession={currentSession}
-                  onImageClick={handleImageClick}
+                  onImageClick={handleLocalImageClick}
                   isPaused={isPaused}
                   handleResume={handleResume}
                 />
@@ -667,6 +677,29 @@ const ChatPageContent = React.memo(
             <TimerDisplay isPaused={isPaused} />
           </div>
         </div>
+
+        {/* Modal for expanded image */}
+        <Dialog
+          open={selectedImage !== null}
+          onOpenChange={open => !open && setSelectedImage(null)}
+        >
+          <DialogContent className="max-w-[90vw] border border-[#282828] bg-[--gray-1] p-0">
+            <div className="flex items-center justify-between border-b border-[#282828] px-4 py-2">
+              <DialogTitle className="text-base font-medium text-[--gray-12]">
+                Page preview sent to model
+              </DialogTitle>
+            </div>
+            {selectedImage && (
+              <div className="p flex items-center justify-center" style={{ height: "80vh" }}>
+                <img
+                  src={selectedImage}
+                  alt="Preview"
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </>
     );
   }
