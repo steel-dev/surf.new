@@ -117,8 +117,19 @@ const ChatInputContainer = React.memo(
     const handleSubmit = useCallback(
       (e: React.FormEvent, messageText: string, attachments: File[]) => {
         e.preventDefault();
-        onSend(messageText);
-        setInputValue("");
+
+        // Only send message if there's actual content
+        if (messageText && messageText.trim()) {
+          console.info(
+            "[INPUT] Submitting message:",
+            messageText.substring(0, 30) + (messageText.length > 30 ? "..." : "")
+          );
+          onSend(messageText);
+          // Clear input immediately after sending
+          setInputValue("");
+        } else {
+          console.info("[INPUT] Ignoring empty message submission");
+        }
       },
       [onSend]
     );
@@ -482,7 +493,7 @@ function useChatState({
   toast: any;
 }) {
   // Get chat functionality from useChat
-  return useChat({
+  const chatState = useChat({
     api: "/api/chat",
     id: currentSession?.id || undefined,
     maxSteps: 10,
@@ -506,6 +517,20 @@ function useChatState({
       // We'll implement more reliable message updates after understanding the structure
     },
   });
+
+  // Use an enhanced version of handleSubmit that logs better debugging info
+  const enhancedHandleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      console.info("[CHAT] Enhanced handleSubmit called with session:", currentSession?.id);
+      chatState.handleSubmit(e);
+    },
+    [chatState, currentSession?.id]
+  );
+
+  return {
+    ...chatState,
+    handleSubmit: enhancedHandleSubmit,
+  };
 }
 
 // Create a memoized component that holds the entire chat UI
@@ -1025,7 +1050,32 @@ export default function ChatPage() {
         existingMessages: messages.length,
         wasPaused: isPaused,
       });
+
+      // Ensure the input is cleared immediately to prevent flickering
+      handleInputChange({ target: { value: "" } } as any);
+
+      // Create a unique ID for this user message for better visibility in UI
+      const userMessageId = `user-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+      // Add the user message to UI first to ensure immediate feedback
+      const userMessage = {
+        id: userMessageId,
+        role: "user" as const,
+        content: messageText,
+      };
+
+      // Update messages array to include the new user message
+      setMessages(prev => [...prev, userMessage]);
+
+      // Submit message directly - this is the right path for 2nd turn messages
       handleSubmit(e);
+
+      // Set a timeout to refresh messages in case the message doesn't appear
+      setTimeout(() => {
+        console.info("🔄 Scheduled refresh to ensure message appears");
+        refreshMessagesWithDuplicateCheck(messageText);
+      }, 1500);
+
       return;
     }
 
@@ -1312,9 +1362,20 @@ export default function ChatPage() {
 
       try {
         console.info("🔄 Refreshing messages with duplicate check:", currentSession.id);
+        console.info("📊 Current message count before refresh:", messages.length);
+
+        if (userMessage) {
+          console.info(
+            "🔍 Looking for message:",
+            userMessage.substring(0, 30) + (userMessage.length > 30 ? "..." : "")
+          );
+          const hasUserMessage = messages.some(m => m.content === userMessage && m.role === "user");
+          console.info("✓ User message already present:", hasUserMessage);
+        }
 
         // Use the reload function to fetch the latest messages
         await reload();
+        console.info("📊 Messages loaded after reload:", messages.length);
 
         // Clean up and deduplicate messages
         setMessages(prev => {
