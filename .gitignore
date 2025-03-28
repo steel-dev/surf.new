@@ -42,3 +42,6 @@ next-env.d.ts
 
 node_modules
 .env
+
+# temp files
+temp/
