@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { isLocalhost } from "@/lib/utils";
 interface OllamaModel {
   tag: string;
   base_name: string;
@@ -20,7 +21,12 @@ async function fetchOllamaModels(): Promise<OllamaModelsResponse> {
 export function useOllamaModels() {
   return useQuery({
     queryKey: ["ollama-models"],
-    queryFn: fetchOllamaModels,
+    queryFn: () => {
+      if (isLocalhost()) {
+        return fetchOllamaModels();
+      }
+      return Promise.resolve({ models: [] });
+    },
     staleTime: 30 * 1000,
     retry: 2,
   });
