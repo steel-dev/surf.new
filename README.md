@@ -60,18 +60,18 @@ npm run dev
 ```
 
 > ### Windows Users
-> 
+>
 > If you're developing on Windows, you should use the Windows-specific command:
-> 
+>
 > ```bash
 > npm run dev:win
 > ```
-> 
+>
 > **Technical Reason:** Windows has two different asyncio event loop implementations:
-> 
+>
 > - **SelectorEventLoop** (default): Uses select-based I/O and doesn't support subprocesses properly
 > - **ProactorEventLoop**: Uses I/O completion ports and fully supports subprocesses
-> 
+>
 > Playwright requires subprocess support to launch browsers. When hot reloading is enabled, the default SelectorEventLoop is used, causing a `NotImplementedError` when Playwright tries to create a subprocess.
 > Reference Issue: https://github.com/steel-dev/surf.new/issues/32
 
@@ -109,6 +109,34 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Tailwind CSS](https://tailwindcss.com/) - Styling
 - [Vercel AI SDK](https://sdk.vercel.ai/) - AI Chat Interface
 - [Langchain](https://python.langchain.com/docs/introduction/) - Agent Framework
+
+## Code Style and Linting
+
+This project uses a consistent code style enforced by linters for both frontend and backend code.
+
+### Frontend (TypeScript/React)
+
+- **ESLint**: Enforces code quality and style rules
+- **Prettier**: Ensures consistent code formatting
+- **TypeScript**: Provides type checking
+
+### Backend (Python)
+
+- **Ruff**: A fast Python linter and formatter that combines functionality from multiple tools
+
+### Quick Commands
+
+```bash
+# Frontend
+npm run lint        # Check for issues
+npm run lint:fix    # Fix issues automatically
+npm run format      # Format code with Prettier
+
+# Backend
+npm run lint:py     # Check for issues
+npm run lint:py:fix # Fix issues automatically
+npm run format:py   # Format Python code
+```
 
 ---
 

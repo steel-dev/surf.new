@@ -1,0 +1,35 @@
+# Build outputs
+.next/
+out/
+build/
+dist/
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+
+# Python packages
+*.egg-info/
+site-packages/
+
+# Cache
+.cache/
+.ruff_cache/
+
+# Generated files
+*.min.js
+*.min.css
+
+# Large files
+*.lock
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Misc
+.git/
+.github/
+.husky/
+.DS_Store 
