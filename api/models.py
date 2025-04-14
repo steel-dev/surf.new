@@ -76,7 +76,7 @@ class ModelConfig:
         Returns a default model for each provider.
         """
         default_models = {
-            ModelProvider.OPENAI: "gpt-4o-mini",
+            ModelProvider.OPENAI: "gpt-4.1",
             ModelProvider.ANTHROPIC: "claude-3-7-sonnet-latest",
             ModelProvider.ANTHROPIC_COMPUTER_USE: "claude-3-5-sonnet-20241022",
             ModelProvider.GEMINI: "gemini-2.0-flash",
