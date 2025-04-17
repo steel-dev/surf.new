@@ -101,6 +101,7 @@ AGENT_CONFIGS = {
                 "provider": ModelProvider.GEMINI.value,
                 "models": [
                     "gemini-2.5-flash-preview-04-17",
+                    "gemini-2.5-pro-exp-03-25",
                     "gemini-1.5-pro"
                 ],
             },
