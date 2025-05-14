@@ -210,7 +210,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
     if (agents && (!currentSettings?.selectedAgent || !agents[currentSettings.selectedAgent])) {
       const firstAgentKey = Object.keys(agents)[0];
       if (!firstAgentKey) return; // No agents available yet
-      
+
       const defaultProvider = agents[firstAgentKey].supported_models[0].provider;
       const defaultModel = agents[firstAgentKey].supported_models[0].models[0];
       const defaultModelSettings = Object.entries(agents[firstAgentKey].model_settings).reduce(

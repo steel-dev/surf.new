@@ -173,7 +173,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
               "text-[var(--gray-12)]",
               "outline-none",
               "[&::placeholder]:text-[var(--gray-11)]",
-              "[&:focus::placeholder]:opacity-0"
+              "[&:focus::placeholder]:opacity-0",
             ].join(" ")}
             style={{ resize: "none" }}
           />
