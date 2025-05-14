@@ -163,18 +163,18 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
             onChange={e => onChange(e.target.value)}
             placeholder={placeholder}
             disabled={disabled}
-            className="
-            w-full
-            flex-1
-            overflow-auto
-            rounded-md
-            bg-muted
-            text-base
-            text-[var(--gray-12)]
-            outline-none
-            [&::placeholder]:text-[var(--gray-11)]
-            [&:focus::placeholder]:opacity-0
-          "
+            className={[
+              "w-full",
+              "flex-1",
+              "overflow-auto",
+              "rounded-md",
+              "bg-muted",
+              "text-base",
+              "text-[var(--gray-12)]",
+              "outline-none",
+              "[&::placeholder]:text-[var(--gray-11)]",
+              "[&:focus::placeholder]:opacity-0"
+            ].join(" ")}
             style={{ resize: "none" }}
           />
 

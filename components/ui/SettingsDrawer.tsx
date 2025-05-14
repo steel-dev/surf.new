@@ -42,6 +42,9 @@ export function SettingsButton() {
   const { currentSettings } = useSettings();
   const [showSettings, setShowSettings] = useState(false);
 
+  // Display a placeholder text until settings are fully loaded
+  const displayText = currentSettings?.selectedAgent || "Loading...";
+
   return (
     <Sheet open={showSettings} onOpenChange={setShowSettings}>
       <SheetTrigger asChild>
@@ -68,7 +71,7 @@ export function SettingsButton() {
             <Settings className="size-5" />
           </div>
           <div className="max-w-[60px] truncate md:max-w-[100px] lg:max-w-[160px]">
-            {currentSettings?.selectedAgent}
+            {displayText}
           </div>
         </Button>
       </SheetTrigger>
@@ -206,6 +209,8 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
   useEffect(() => {
     if (agents && (!currentSettings?.selectedAgent || !agents[currentSettings.selectedAgent])) {
       const firstAgentKey = Object.keys(agents)[0];
+      if (!firstAgentKey) return; // No agents available yet
+      
       const defaultProvider = agents[firstAgentKey].supported_models[0].provider;
       const defaultModel = agents[firstAgentKey].supported_models[0].models[0];
       const defaultModelSettings = Object.entries(agents[firstAgentKey].model_settings).reduce(
@@ -232,7 +237,7 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
         providerApiKeys: currentSettings?.providerApiKeys || {},
       });
     }
-  }, [agents, currentSettings?.selectedAgent, updateSettings]);
+  }, [agents, currentSettings?.selectedAgent, currentSettings?.providerApiKeys, updateSettings]);
 
   // Handle model selection validation
   useEffect(() => {
