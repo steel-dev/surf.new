@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from .schemas import ChatRequest, SessionRequest
 from .utils.prompt import convert_to_chat_messages
-from .models import ModelConfig
+from .models import ModelConfig, ModelProvider
 from .plugins import WebAgentType, get_web_agent, AGENT_CONFIGS
 from .streamer import stream_vercel_format
 from api.middleware.profiling_middleware import ProfilingMiddleware
@@ -229,6 +229,13 @@ async def handle_chat(request: ChatRequest):
             model_config_args["presence_penalty"] = (
                 request.model_settings.presence_penalty
             )
+        
+        # Add Azure OpenAI specific settings
+        if request.provider == ModelProvider.AZURE_OPENAI:
+            if hasattr(request.model_settings, "azure_endpoint") and request.model_settings.azure_endpoint:
+                model_config_args["azure_endpoint"] = request.model_settings.azure_endpoint
+            if hasattr(request.model_settings, "api_version") and request.model_settings.api_version:
+                model_config_args["api_version"] = request.model_settings.api_version
 
         model_config = ModelConfig(**model_config_args)
 

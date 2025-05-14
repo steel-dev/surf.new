@@ -1,7 +1,7 @@
 from typing import Any
 from anthropic import Client
 from langchain_anthropic import ChatAnthropic
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, AzureChatOpenAI
 from langchain_core.language_models.chat_models import BaseChatModel
 from .models import ModelConfig, ModelProvider
 from typing import Sequence, Union, Dict, Type, Callable, Any
@@ -64,6 +64,24 @@ def create_llm(config: ModelConfig) -> tuple[BaseChatModel | Client, bool]:
             max_tokens=config.max_tokens,
             api_key=(
                 os.getenv("OPENAI_API_KEY") if not config.api_key else config.api_key
+            ),
+            **config.extra_params,
+        ), True
+    elif config.provider == ModelProvider.AZURE_OPENAI:
+        # Get Azure-specific environment variables
+        azure_endpoint = config.azure_endpoint or os.getenv("AZURE_OPENAI_ENDPOINT")
+        # Always use model_name as the deployment name
+        azure_deployment = config.model_name
+        api_version = config.api_version or os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview")
+        
+        return AzureChatOpenAI(
+            azure_deployment=azure_deployment,
+            temperature=config.temperature,
+            max_tokens=config.max_tokens,
+            azure_endpoint=azure_endpoint,
+            api_version=api_version,
+            api_key=(
+                os.getenv("AZURE_OPENAI_API_KEY") if not config.api_key else config.api_key
             ),
             **config.extra_params,
         ), True

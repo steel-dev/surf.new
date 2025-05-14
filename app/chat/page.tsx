@@ -810,6 +810,9 @@ export default function ChatPage() {
         presence_penalty: currentSettings?.modelSettings.presence_penalty
           ? Number(currentSettings?.modelSettings.presence_penalty)
           : undefined,
+        // Add Azure OpenAI specific settings
+        azure_endpoint: currentSettings?.modelSettings.azure_endpoint,
+        api_version: currentSettings?.modelSettings.api_version,
       },
       agent_settings: Object.fromEntries(
         Object.entries(currentSettings?.agentSettings ?? {})

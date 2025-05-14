@@ -9,6 +9,9 @@ export interface ModelSettings {
   top_k?: number;
   frequency_penalty?: number;
   presence_penalty?: number;
+  // Azure OpenAI specific settings
+  azure_endpoint?: string;
+  api_version?: string;
   [key: string]: string | number | undefined;
 }
 

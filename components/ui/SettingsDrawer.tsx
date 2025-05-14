@@ -590,6 +590,33 @@ function SettingsContent({ closeSettings }: { closeSettings: () => void }) {
             </div>
           )}
 
+          {/* Azure OpenAI Settings */}
+          {currentSettings.selectedProvider === "azure_openai" && (
+            <div className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Azure OpenAI Endpoint</label>
+                <Input
+                  type="text"
+                  placeholder="https://your-resource.openai.azure.com/"
+                  value={currentSettings.modelSettings?.azure_endpoint || ""}
+                  onChange={e => handleSettingChange("model", "azure_endpoint", e.target.value)}
+                  className="settings-input"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">API Version</label>
+                <Input
+                  type="text"
+                  placeholder="2025-01-01-preview"
+                  value={currentSettings.modelSettings?.api_version || "2025-01-01-preview"}
+                  onChange={e => handleSettingChange("model", "api_version", e.target.value)}
+                  className="settings-input"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Ollama Instructions */}
           {currentSettings.selectedProvider === "ollama" && (
             <div className="space-y-2 pt-2">
