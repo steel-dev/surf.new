@@ -94,6 +94,10 @@ AGENT_CONFIGS = {
                 "models": ["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini", "o1"],
             },
             {
+                "provider": ModelProvider.AZURE_OPENAI.value,
+                "models": ["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini", "o1"],
+            },
+            {
                 "provider": ModelProvider.ANTHROPIC.value,
                 "models": ["claude-3-7-sonnet-latest", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"],
             },

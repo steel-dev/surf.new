@@ -4,6 +4,7 @@ from typing import Optional
 
 class ModelProvider(str, Enum):
     OPENAI = "openai"
+    AZURE_OPENAI = "azure_openai"
     ANTHROPIC = "anthropic"
     ANTHROPIC_COMPUTER_USE = "anthropic_computer_use"
     GEMINI = "gemini"
@@ -30,6 +31,9 @@ class ModelConfig:
         frequency_penalty: Optional[float] = None,
         presence_penalty: Optional[float] = None,
         api_key: Optional[str] = None,
+        # Azure OpenAI specific fields
+        azure_endpoint: Optional[str] = None,
+        api_version: Optional[str] = None,
         **kwargs,
     ):
         self.provider = provider
@@ -42,6 +46,9 @@ class ModelConfig:
         self.frequency_penalty = frequency_penalty
         self.presence_penalty = presence_penalty
         self.api_key = api_key
+        # Azure OpenAI specific fields
+        self.azure_endpoint = azure_endpoint
+        self.api_version = api_version
 
     def __repr__(self):
         return (
@@ -54,7 +61,9 @@ class ModelConfig:
             f"top_p={self.top_p}, "
             f"frequency_penalty={self.frequency_penalty}, "
             f"presence_penalty={self.presence_penalty}, "
-            f"api_key={'[SET]' if self.api_key else '[NOT SET]'})"
+            f"api_key={'[SET]' if self.api_key else '[NOT SET]'}, "
+            f"azure_endpoint={'[SET]' if self.azure_endpoint else '[NOT SET]'}, "
+            f"api_version={'[SET]' if self.api_version else '[NOT SET]'})"
         )
 
     def model_dump(self):
@@ -67,6 +76,8 @@ class ModelConfig:
             "top_p": self.top_p,
             "frequency_penalty": self.frequency_penalty,
             "presence_penalty": self.presence_penalty,
+            "azure_endpoint": self.azure_endpoint,
+            "api_version": self.api_version,
             **self.extra_params,
         }
 
@@ -77,6 +88,7 @@ class ModelConfig:
         """
         default_models = {
             ModelProvider.OPENAI: "gpt-4.1",
+            ModelProvider.AZURE_OPENAI: "gpt-4.1",
             ModelProvider.ANTHROPIC: "claude-3-7-sonnet-latest",
             ModelProvider.ANTHROPIC_COMPUTER_USE: "claude-3-5-sonnet-20241022",
             ModelProvider.GEMINI: "gemini-2.0-flash",

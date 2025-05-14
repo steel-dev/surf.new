@@ -26,3 +26,6 @@ class ModelSettings(BaseModel):
     top_k: Optional[int] = None
     frequency_penalty: Optional[float] = None
     presence_penalty: Optional[float] = None
+    # Azure OpenAI specific settings
+    azure_endpoint: Optional[str] = None
+    api_version: Optional[str] = None
