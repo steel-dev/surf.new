@@ -89,7 +89,7 @@ class ModelConfig:
         default_models = {
             ModelProvider.OPENAI: "gpt-4.1",
             ModelProvider.AZURE_OPENAI: "gpt-4.1",
-            ModelProvider.ANTHROPIC: "claude-3-7-sonnet-latest",
+            ModelProvider.ANTHROPIC: "claude-sonnet-4-20250514",
             ModelProvider.ANTHROPIC_COMPUTER_USE: "claude-3-5-sonnet-20241022",
             ModelProvider.GEMINI: "gemini-2.0-flash",
             ModelProvider.DEEPSEEK: "deepseek-chat",
