@@ -120,7 +120,7 @@ export default function Home() {
     {
       icon: "/icons/pixel_plane.svg",
       title: "Scrape & Compare",
-      text: "Find me the cheapest one-way flight from San Francisco to Tokyo next week.",
+      text: "Find me the cheapest one-way flight from YYZ to Malaga, Spain next week.",
       iconBgColor: "text-[--blue-9]",
     },
     {
