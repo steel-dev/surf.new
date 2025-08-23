@@ -11,7 +11,7 @@ backoff==2.2.1
 beautifulsoup4==4.12.3
 boto3==1.36.10
 botocore==1.36.10
-browser-use==0.1.30
+browser-use==0.6.1
 cachetools==5.5.1
 certifi==2024.12.14
 charset-normalizer==3.4.1
@@ -65,7 +65,6 @@ langchain-ollama==0.2.2
 langchain-openai==0.3.1
 langchain-text-splitters==0.3.5
 langsmith==0.2.11
-lmnr==0.4.56
 lxml==5.3.0
 lxml-html-clean==0.4.1
 maincontentextractor==0.0.4

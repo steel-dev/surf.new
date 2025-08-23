@@ -4,7 +4,19 @@ from typing import Any, List, Mapping, Optional
 from .types import ToolInvocation
 from langchain_core.messages import BaseMessage, ChatMessage
 from langchain_core.messages import ToolMessage, AIMessage, HumanMessage
-from langchain_core.tools.structured import ToolCall
+# ToolCall import updated for newer langchain versions
+try:
+    from langchain_core.messages import ToolCall
+except ImportError:
+    # Fallback for different langchain versions
+    try:
+        from langchain_core.messages.tool import ToolCall
+    except ImportError:
+        # Create a simple ToolCall class if not available
+        class ToolCall(BaseModel):
+            name: str
+            args: dict
+            id: Optional[str] = None
 
 
 class ClientAttachment(BaseModel):
