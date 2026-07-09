@@ -117,7 +117,7 @@ def create_llm(config: ModelConfig) -> tuple[BaseChatModel | Client, bool]:
         ), True
     elif config.provider == ModelProvider.DEEPSEEK:
         api_key = config.api_key or os.getenv("DEEPSEEK_API_KEY", "")
-        
+
         return ChatOpenAI(
             base_url="https://api.deepseek.com/v1",
             model_name=config.model_name or "deepseek-chat",
@@ -126,6 +126,17 @@ def create_llm(config: ModelConfig) -> tuple[BaseChatModel | Client, bool]:
             api_key=SecretStr(api_key),
             **config.extra_params,
         ), False
+    elif config.provider == ModelProvider.MINIMAX:
+        api_key = config.api_key or os.getenv("MINIMAX_API_KEY", "")
+
+        return ChatOpenAI(
+            base_url="https://api.minimax.io/v1",
+            model_name=config.model_name or "MiniMax-M3",
+            temperature=config.temperature,
+            max_tokens=config.max_tokens,
+            api_key=SecretStr(api_key),
+            **config.extra_params,
+        ), True
     elif config.provider == ModelProvider.OLLAMA:
         # Extract base model name if it contains a tag (e.g., "qwen2.5:32b" -> "qwen2.5")
         model_name = config.model_name or "llama3.3"
