@@ -51,6 +51,18 @@ cp .env.example .env.local
 
 Edit `.env.local` and add your Steel API key and other required variables.
 
+MiniMax uses its global OpenAI-compatible endpoint by default. To use a
+different API format or region, set `MINIMAX_API_FORMAT` and
+`MINIMAX_BASE_URL` to one of these pairs:
+
+| API format | Global base URL | China base URL |
+| --- | --- | --- |
+| `openai` | `https://api.minimax.io/v1` | `https://api.minimaxi.com/v1` |
+| `anthropic` | `https://api.minimax.io/anthropic` | `https://api.minimaxi.com/anthropic` |
+
+The Anthropic values are SDK base URLs. `ChatAnthropic` appends
+`/v1/messages` when sending requests.
+
 ### Running Locally
 
 Run the development server:

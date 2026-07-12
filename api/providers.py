@@ -128,15 +128,44 @@ def create_llm(config: ModelConfig) -> tuple[BaseChatModel | Client, bool]:
         ), False
     elif config.provider == ModelProvider.MINIMAX:
         api_key = config.api_key or os.getenv("MINIMAX_API_KEY", "")
+        model_name = config.model_name or "MiniMax-M3"
+        api_format = os.getenv("MINIMAX_API_FORMAT", "openai").lower()
+        use_vision = model_name == "MiniMax-M3"
+
+        base_urls = {
+            "openai": "https://api.minimax.io/v1",
+            "anthropic": "https://api.minimax.io/anthropic",
+        }
+        if api_format not in base_urls:
+            raise ValueError(
+                "MINIMAX_API_FORMAT must be either 'openai' or 'anthropic'."
+            )
+        base_url = (os.getenv("MINIMAX_BASE_URL") or base_urls[api_format]).rstrip(
+            "/"
+        )
+
+        if api_format == "anthropic":
+            if base_url.endswith("/v1"):
+                raise ValueError(
+                    "MINIMAX_BASE_URL must be an Anthropic SDK base URL without '/v1'."
+                )
+            return ChatAnthropic(
+                base_url=base_url,
+                model=model_name,
+                max_tokens_to_sample=config.max_tokens,
+                temperature=config.temperature,
+                api_key=api_key,
+                **config.extra_params,
+            ), use_vision
 
         return ChatOpenAI(
-            base_url="https://api.minimax.io/v1",
-            model_name=config.model_name or "MiniMax-M3",
+            base_url=base_url,
+            model_name=model_name,
             temperature=config.temperature,
             max_tokens=config.max_tokens,
             api_key=SecretStr(api_key),
             **config.extra_params,
-        ), True
+        ), use_vision
     elif config.provider == ModelProvider.OLLAMA:
         # Extract base model name if it contains a tag (e.g., "qwen2.5:32b" -> "qwen2.5")
         model_name = config.model_name or "llama3.3"
