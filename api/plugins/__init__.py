@@ -117,6 +117,13 @@ AGENT_CONFIGS = {
                 ],
             },
             {
+                "provider": ModelProvider.MINIMAX.value,
+                "models": [
+                    "MiniMax-M3",
+                    "MiniMax-M2.7",
+                ],
+            },
+            {
                 "provider": ModelProvider.OLLAMA.value,
                 "models": [
                     "llama3.3",
