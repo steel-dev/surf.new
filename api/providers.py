@@ -145,9 +145,9 @@ def create_llm(config: ModelConfig) -> tuple[BaseChatModel | Client, bool]:
         )
 
         if api_format == "anthropic":
-            if base_url.endswith("/v1"):
+            if not base_url.endswith("/anthropic"):
                 raise ValueError(
-                    "MINIMAX_BASE_URL must be an Anthropic SDK base URL without '/v1'."
+                    "MINIMAX_BASE_URL must end with '/anthropic' for Anthropic format."
                 )
             return ChatAnthropic(
                 base_url=base_url,
